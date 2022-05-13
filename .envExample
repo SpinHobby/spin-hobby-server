@@ -1,0 +1,5 @@
+host=localhost
+user=postgres
+database=spinhobby
+port=5432
+password=123

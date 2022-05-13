@@ -1,23 +1,9 @@
 import { Sequelize } from "sequelize";
 import bcrypt from "bcryptjs";
 import fs from "fs";
-import { Login, Account, LoginError, LoginCallback } from "../types";
-
-const localCredentials = {
-  host: "localhost",
-  user: "postgres",
-  database: "spinhobby",
-  port: 5432,
-  password: "123",
-};
-
-const prodCredentials = {
-  host: "ec2-54-164-40-66.compute-1.amazonaws.com",
-  user: "tfzdqksnnmvlqh",
-  database: "df5khkpeg0npqr",
-  port: 5432,
-  password: "8e6011d94df8f6725069b6cde989376c7fc7ab619bc3d9d23349cc8dbdfda0d6",
-};
+import { Login, Account, LoginError, LoginCallback } from "../../types";
+import { getLocalCredentials } from "./getLocalCredentials";
+import { getProdCredentials } from "./getProdCredentials";
 
 export class Sequelizer {
   private sequelize: Sequelize;
@@ -28,8 +14,8 @@ export class Sequelizer {
 
   private getSequelization(isProd: boolean) {
     const { host, user, database, port, password } = isProd
-      ? prodCredentials
-      : localCredentials;
+      ? getProdCredentials()
+      : getLocalCredentials();
     return new Sequelize(database, user, password, {
       host,
       dialect: "postgres",
@@ -39,7 +25,7 @@ export class Sequelizer {
 
   public init() {
     return new Promise((resolve, reject) =>
-      fs.readFile(__dirname + "/../../db/schema.sql", "utf8", (err, data) =>
+      fs.readFile(__dirname + "/../../../db/schema.sql", "utf8", (err, data) =>
         err
           ? reject(err)
           : this.sequelize

@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express from "express";
 import { Sequelizer } from "./utils/Sequelizer";
 import bodyParser from "body-parser";

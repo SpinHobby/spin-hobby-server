@@ -16,3 +16,11 @@ export type LoginCallback<Error extends LoginError | null> = (
   error: Error,
   userData: Error extends LoginError ? null : UserData
 ) => void;
+
+export interface SequelizeCredentials {
+  host: string;
+  user: string;
+  database: string;
+  port: number;
+  password: string;
+}
