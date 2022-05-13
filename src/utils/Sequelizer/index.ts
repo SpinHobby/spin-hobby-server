@@ -20,6 +20,8 @@ export class Sequelizer {
       host,
       dialect: "postgres",
       logging: false,
+      port,
+      dialectOptions: { ssl: { rejectUnauthorized: false } },
     });
   }
 

@@ -2,7 +2,7 @@ import "dotenv/config";
 import express from "express";
 import { Sequelizer } from "./utils/Sequelizer";
 import bodyParser from "body-parser";
-import { Login, LoginError, LoginCallback } from "./types";
+import { Login } from "./types";
 
 const PORT = process.env.PORT || 8080;
 
@@ -15,16 +15,15 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
 app.get("/", (req, res) => {
-  res.send("HELLO World");
+  res.send("Hello World at port " + process.env.PORT);
 });
 
 app.post("/login", (req, res) => {
   const login = req.body as Login;
-  const callback: LoginCallback<LoginError | null> = (error, userData) => {
+  sequelizer.validateLogin(login, (error, userData) => {
     if (error) res.json({ error });
     else res.json({ status: "valid" });
-  };
-  sequelizer.validateLogin(login, callback);
+  });
 });
 
 sequelizer
