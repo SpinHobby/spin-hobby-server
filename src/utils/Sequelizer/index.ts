@@ -1,7 +1,13 @@
 import { Sequelize } from "sequelize";
 import bcrypt from "bcryptjs";
 import fs from "fs";
-import { Login, Account, LoginError, LoginCallback } from "../../types";
+import {
+  Login,
+  Account,
+  LoginError,
+  LoginCallback,
+  UserCredentials,
+} from "../../types";
 import { getLocalCredentials } from "./getLocalCredentials";
 import { getProdCredentials } from "./getProdCredentials";
 
@@ -45,9 +51,9 @@ export class Sequelizer {
     const account = (await this.sequelize
       .query(
         `
-        select * from accounts
-        where username = '${login.username}';
-      `
+          select * from accounts
+          where username = '${login.username}';
+        `
       )
       .then((res) => res[0][0])) as Account | undefined;
     if (!account) return callback(LoginError.NoUsername, null);
@@ -55,5 +61,23 @@ export class Sequelizer {
     if (await bcrypt.compare(login.password, password))
       callback(null, userData);
     else callback(LoginError.WrongPassword, null);
+  }
+
+  public async addAccount({
+    fname,
+    lname,
+    phone,
+    username,
+    password,
+    email,
+    plan,
+  }: UserCredentials) {
+    const hash = await bcrypt.hash(password, 10);
+    await this.sequelize.query(`
+      insert into accounts
+        ( username, fname, lname, email, password, phone, plan)
+      values
+        ('${username}', '${fname}', '${lname}', '${email}', '${hash}', '${phone}', '${plan}');
+    `);
   }
 }
