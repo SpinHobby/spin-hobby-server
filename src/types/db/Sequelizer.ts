@@ -7,9 +7,16 @@ export interface Login {
 
 export type UserData = Omit<Account, "password">;
 
+export type UserCredentials = Omit<Account, "id">;
+
 export enum LoginError {
   NoUsername = "NoUsername",
   WrongPassword = "WrongPassword",
+}
+
+export enum RegisterError {
+  UsernameExists = "UsernameExists",
+  EmailExists = "EmailExists",
 }
 
 export type LoginCallback<Error extends LoginError | null> = (
