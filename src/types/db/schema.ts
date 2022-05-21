@@ -10,7 +10,13 @@ export interface Account {
   lname: string;
   email: string;
   password: string;
-  phone: number;
+  phone: string;
   plan: Plan;
   photo: string | null;
 }
+
+export interface Category {
+  id: number;
+  name: string;
+}
+
