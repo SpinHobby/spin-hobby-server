@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const { User } = require('../db/models');
+const multer  = require('multer');
 import { Plan, RegisterError } from "../types";
 import {
   Sequelizer,
@@ -16,11 +17,20 @@ import {
   UserCredentials,
 } from "../types";
 
-router.get('/', (req: any, res: any) => {
+const fileStorageEngine = multer.diskStorage({
+  destination: (req: any, file: any, callback: (arg0: null, arg1: string) => void) => {
 
-  res.json(User);
-  
-})
+    callback(null, "./images");
+
+  },
+  filename: (req: any, file: any, callback: (arg0: null, arg1: string) => void) => {
+
+    callback(null, "user" + req.body.userId + Date.now());
+    
+  }
+});
+
+const upload = multer({storage: fileStorageEngine});
 
 router.post("/login", (req: { body: Login; }, res: { sendStatus: (arg0: number) => any; json: (arg0: { error?: any; status?: string; }) => void; }) => {
   const login = getLoginRequestData(req.body);
@@ -31,7 +41,7 @@ router.post("/login", (req: { body: Login; }, res: { sendStatus: (arg0: number) 
   });
 });
 
-router.post("/register", (req: { body: any; }, res: { sendStatus: (arg0: number) => void; status: (arg0: number) => { (): any; new(): any; send: { (arg0: { message: RegisterError; }): void; new(): any; }; }; }) => {
+router.post("/register", upload.single("avatar"), (req: { body: any; }, res: { sendStatus: (arg0: number) => void; status: (arg0: number) => { (): any; new(): any; send: { (arg0: { message: RegisterError; }): void; new(): any; }; }; }) => {
   const credentials = getRegisterRequestData({
     ...req.body,
     plan: Plan.Standard,
