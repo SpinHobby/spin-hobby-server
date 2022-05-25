@@ -1,9 +1,9 @@
 const router = require('express').Router();
 const { User } = require('../db/models');
-const multer  = require('multer');
 import { Plan, RegisterError } from "../types";
+import upload from './multer';
 import {
-  Sequelizer,
+  sequelizer,
   getLoginRequestData,
   getRegisterRequestData,
 } from "../utils";
@@ -17,37 +17,47 @@ import {
   UserCredentials,
 } from "../types";
 
-const fileStorageEngine = multer.diskStorage({
-  destination: (req: any, file: any, callback: (arg0: null, arg1: string) => void) => {
+// router.get('/', (req: any, res: { send: (arg0: string) => void; }) => {
 
-    callback(null, "./images");
-
-  },
-  filename: (req: any, file: any, callback: (arg0: null, arg1: string) => void) => {
-
-    callback(null, "user" + req.body.userId + Date.now());
-    
-  }
-});
-
-const upload = multer({storage: fileStorageEngine});
+//   console.log('dfadsf')
+//   res.send('hell0')
+// })
 
 router.post("/login", (req: { body: Login; }, res: { sendStatus: (arg0: number) => any; json: (arg0: { error?: any; status?: string; }) => void; }) => {
   const login = getLoginRequestData(req.body);
   if (!login) return res.sendStatus(400);
-  User.validateLogin(login, (error: any, userData: any) => {
+
+  // const users = sequelizer.db.User.findAll();
+  // res.json(users);
+  // sequelizer.db.User.validateLogin();
+  sequelizer.db.User.validateLogin(login, (error: any, userData: any) => {
+
+    // if (error) {
+    //   console.log(error);
+    // } else {
+    //   console.log('ok');
+    // }
     if (error) res.json({ error });
     else res.json({ status: "valid" });
   });
 });
 
-router.post("/register", upload.single("avatar"), (req: { body: any; }, res: { sendStatus: (arg0: number) => void; status: (arg0: number) => { (): any; new(): any; send: { (arg0: { message: RegisterError; }): void; new(): any; }; }; }) => {
+router.post("/register", upload.single("avatar"), (req: { body: any; file: string | undefined; }, res: { sendStatus: (arg0: number) => void; status: (arg0: number) => { (): any; new(): any; send: { (arg0: { message: RegisterError; }): void; new(): any; }; }; }) => {
   const credentials = getRegisterRequestData({
     ...req.body,
     plan: Plan.Standard,
   });
-  if (!credentials) return res.sendStatus(400);
-  User
+  if (!credentials) {
+    return res.sendStatus(400)
+  };
+
+  if(req.file) {
+
+    credentials.avatar = req.file;
+
+  };
+
+  sequelizer.db.User
     .addAccount(credentials)
     .then(() => res.sendStatus(200))
     .catch((e: { errors: { message: any; }[]; }) => {

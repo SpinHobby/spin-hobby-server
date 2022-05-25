@@ -1,4 +1,4 @@
-import { Login, UserCredentials } from "../../types";
+import { Login, UserCredentials, Product } from "../../types";
 import { emailRegex } from "../../utils";
 
 export function getLoginRequestData(body: any): Login | null {
@@ -9,10 +9,26 @@ export function getLoginRequestData(body: any): Login | null {
 }
 
 export function getRegisterRequestData(body: any): UserCredentials | null {
-  const { fname, lname, phone, username, password, email, plan, photo } = body;
+  const { fname, lname, phone, username, password, email, plan } = body;
   const data = { fname, lname, phone, username, password, email, plan };
-  if (Object.values(data).some((val) => !val || typeof val !== "string"))
+  if (Object.values(data).some((val) => !val || typeof val !== "string")){
     return null;
-  if (!emailRegex.test(email)) return null;
-  return { ...data, photo: photo || null } as UserCredentials;
+  }  
+  if (!emailRegex.test(email)) {
+    return null
+  };
+  return { ...data } as UserCredentials;
+}
+
+export function getProductData(body: any): Omit<Product, "id"> | null {
+
+  const { name, description, category_id, inventory_id, price, discount_id } = body;
+  const data = { name, description, category_id, inventory_id, price, discount_id };
+
+  if (Object.values(data).some((val) => !val)){
+    return null;
+  }
+
+  return data;
+
 }

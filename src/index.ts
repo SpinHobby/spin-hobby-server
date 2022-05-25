@@ -1,7 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import {
-  Sequelizer,
+  sequelizer,
   getLoginRequestData,
   getRegisterRequestData,
 } from "./utils";
@@ -12,7 +12,7 @@ import api from "./api";
 
 const PORT = process.env.PORT || 8001;
 
-const sequelizer = new Sequelizer(!!process.env.PORT);
+//const sequelizer = new Sequelizer(!!process.env.PORT);
 
 const app = express();
 
@@ -45,10 +45,10 @@ async function assertDatabaseConnectionOk() {
 async function init() {
 	await assertDatabaseConnectionOk();
 
-	sequelizer.init();
+	//sequelizer.init();
 
 	console.log(`Starting Sequelize + Express example on port ${PORT}...`);
-	console.log('db', sequelizer.db);
+	//console.log('db', sequelizer.db);
 
 	app.listen(PORT, () => {
 		console.log(`Express server started on port ${PORT}. Try some routes, such as '/api/users'.`);

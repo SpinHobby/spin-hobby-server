@@ -15,7 +15,7 @@ const basename = path.basename(__filename);
 
 let db: any = {};
 
-export class Sequelizer {
+class Sequelizer {
   public sequelize: Sequelize;
 
   public db: any;
@@ -57,7 +57,9 @@ export class Sequelizer {
     });
 
     this.db = db;
-    this.db.sequelize = this.sequelize;
+
+    //this.sequelize.sync();
+    //this.db.sequelize = this.sequelize;
   }
 
   // public init() {
@@ -112,4 +114,7 @@ export class Sequelizer {
   // }
 }
 
+const sequelizer = new Sequelizer(!!process.env.PORT);
+sequelizer.init();
 
+export {sequelizer};

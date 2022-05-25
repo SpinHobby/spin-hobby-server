@@ -12,7 +12,7 @@ export interface Account {
   password: string;
   phone: string;
   plan: Plan;
-  photo: string | null;
+  avatar: string | null;
 }
 
 export interface Category {
@@ -20,3 +20,14 @@ export interface Category {
   name: string;
 }
 
+export interface Product {
+
+  id: number;
+  name: string;
+  description: string;
+  category_id: number;
+  inventory_id: number;
+  price: number;
+  discount_id:number;
+
+}
