@@ -3,6 +3,13 @@ export enum Plan {
   Standard = "standard",
 }
 
+export enum Operation {
+  ADD = "ADD",
+  REMOVE = "REMOVE",
+  SET = "SET",
+  CLEAR = "CLEAR",
+}
+
 export interface Account {
   id: number;
   username: string;
@@ -31,3 +38,5 @@ export interface Product {
   discount_id:number;
 
 }
+
+

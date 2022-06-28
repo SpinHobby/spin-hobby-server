@@ -116,5 +116,6 @@ class Sequelizer {
 
 const sequelizer = new Sequelizer(!!process.env.PORT);
 sequelizer.init();
+sequelizer.sequelize.sync();
 
 export {sequelizer};

@@ -17,23 +17,41 @@ module.exports = (sequelize: any, DataTypes: { STRING: any; TEXT: any; NUMBER: a
 
       const { name, description, category_id, inventory_id, price, discount_id } = product;
 
-      await sequelizer.sequelize.query(`
-      insert into products
-        ( name, description, category_id, inventory_id, price, discount_id)
-      values
-        ('${name}', '${description}', '${category_id}', '${inventory_id}', '${price}', '${discount_id}');
-    `).catch(err => {throw err;});
+        await sequelizer.sequelize.query(`
+        insert into "Products"
+          ( name, description, category_id, inventory_id, price, discount_id)
+        values
+          ('${name}', '${description}', '${category_id}', '${inventory_id}', '${price}', '${discount_id}');
+      `).catch(err => { throw err; });
+
+  //     await sequelizer.sequelize.query(`
+  //   insert into "Products"
+  //     ( name, description, inventory_id, price, discount_id)
+  //   values
+  //     ('${name}', '${description}', '${inventory_id}', '${price}', '${discount_id}');
+  // `).catch(err => { throw err; });
     }
 
     static associate(models: any) {
       // define association here
-      Product.belongsTo(models.Category);
+      Product.belongsTo(models.Category, {
+
+        foreignKey: 'category_id'
+      
+      });
+      Product.belongsToMany(models.Order, { 
+        through: 'Order_items',
+        foreignKey: 'product_id',
+        otherKey: 'order_id'
+      
+      });
+     //Product.hasOne(models.Order_items, { foreignKey: 'product_id' });
     }
   }
   Product.init({
     name: DataTypes.STRING,
     description: DataTypes.TEXT,
-    category_id: DataTypes.NUMBER,
+    //category_id: DataTypes.NUMBER,
     inventory_id: DataTypes.NUMBER,
     price: DataTypes.FLOAT,
     discount_id: DataTypes.NUMBER

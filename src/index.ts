@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cookie from 'cookie-session';
 import {
   sequelizer,
   getLoginRequestData,
@@ -22,13 +23,20 @@ app.use(bodyParser.json());
 
 app.use(express.static("./public/"));
 
+app.use(cookie({
+
+	name: "session",
+	keys: ["secret"]
+	
+}))
+
 app.use(cors());
 
 app.get("/", (req, res) => {
   res.send("Hello World at port " + process.env.PORT);
 });
 
-app.use("/api", api);
+app.use("/", api);
 
 async function assertDatabaseConnectionOk() {
 	console.log(`Checking database connection...`);
@@ -51,7 +59,7 @@ async function init() {
 	//console.log('db', sequelizer.db);
 
 	app.listen(PORT, () => {
-		console.log(`Express server started on port ${PORT}. Try some routes, such as '/api/users'.`);
+		console.log(`Express server started on port ${PORT}.`);
 	});
 }
 

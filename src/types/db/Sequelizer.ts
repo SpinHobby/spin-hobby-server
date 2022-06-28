@@ -31,3 +31,11 @@ export interface SequelizeCredentials {
   port: number;
   password: string;
 }
+
+export type Order = {
+
+  user_id: number,
+  payment_id: number,
+  address_id: number,
+  total: number
+}

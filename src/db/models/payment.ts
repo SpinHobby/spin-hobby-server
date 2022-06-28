@@ -9,11 +9,17 @@ module.exports = (sequelize: any, DataTypes: { NUMBER: any; STRING: any; DATE: a
      */
     static associate(models: any) {
       // define association here
-      Payment.belongsTo(models.User);
+      Payment.belongsTo(models.User, {
+
+        foreignKey: 'user_id'
+      
+      });
+
+      Payment.hasOne(models.Order, { foreignKey: 'payment_id' });
     }
   }
   Payment.init({
-    userId: DataTypes.NUMBER,
+    user_id: DataTypes.NUMBER,
     payment_type: DataTypes.STRING,
     provider: DataTypes.STRING,
     account_number: DataTypes.NUMBER,

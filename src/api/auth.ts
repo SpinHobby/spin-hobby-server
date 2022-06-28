@@ -1,6 +1,7 @@
 const router = require('express').Router();
-const { User } = require('../db/models');
+//const { User } = require('../db/models');
 import { Plan, RegisterError } from "../types";
+import jwt from 'jsonwebtoken';
 import upload from './multer';
 import {
   sequelizer,
@@ -17,41 +18,49 @@ import {
   UserCredentials,
 } from "../types";
 
-// router.get('/', (req: any, res: { send: (arg0: string) => void; }) => {
-
-//   console.log('dfadsf')
-//   res.send('hell0')
-// })
-
-router.post("/login", (req: { body: Login; }, res: { sendStatus: (arg0: number) => any; json: (arg0: { error?: any; status?: string; }) => void; }) => {
+router.post("/login", async (req: { body: Login; }, res: any) => {
   const login = getLoginRequestData(req.body);
   if (!login) return res.sendStatus(400);
 
-  // const users = sequelizer.db.User.findAll();
-  // res.json(users);
-  // sequelizer.db.User.validateLogin();
+  const user = await sequelizer.db.User.findOne({
+    where: {
+      username: login.username.toLowerCase(),
+    },
+  });
+
   sequelizer.db.User.validateLogin(login, (error: any, userData: any) => {
 
-    // if (error) {
-    //   console.log(error);
-    // } else {
-    //   console.log('ok');
-    // }
     if (error) res.json({ error });
-    else res.json({ status: "valid" });
-  });
+    else return;
+  })
+    .then(() => {
+
+      const token = jwt.sign(
+        { id: user.dataValues.id },
+        'secret',
+        { expiresIn: 86400 }
+      );
+
+      // res.json({ status: "valid" });
+      res.status(200).json({
+        ...user.dataValues,
+        token,
+      });
+
+    });
 });
 
-router.post("/register", upload.single("avatar"), (req: { body: any; file: string | undefined; }, res: { sendStatus: (arg0: number) => void; status: (arg0: number) => { (): any; new(): any; send: { (arg0: { message: RegisterError; }): void; new(): any; }; }; }) => {
+router.post("/register", upload.single("avatar"), (req: { body: any; file: string | undefined; }, res: any) => {
   const credentials = getRegisterRequestData({
     ...req.body,
     plan: Plan.Standard,
   });
+
   if (!credentials) {
     return res.sendStatus(400)
   };
 
-  if(req.file) {
+  if (req.file) {
 
     credentials.avatar = req.file;
 
@@ -59,8 +68,27 @@ router.post("/register", upload.single("avatar"), (req: { body: any; file: strin
 
   sequelizer.db.User
     .addAccount(credentials)
-    .then(() => res.sendStatus(200))
+    .then((user: any) => {
+      
+      console.log("here",user)
+      const token = jwt.sign(
+        { id: user.dataValues.id },
+        'secret',
+        { expiresIn: 86400 }
+      );
+
+      // res.json({ status: "valid" });
+
+      res.status(200).json({
+        ...user.dataValues,
+        token,
+      });
+
+      //res.sendStatus(200)
+    
+    })
     .catch((e: { errors: { message: any; }[]; }) => {
+      console.log(e);
       const message =
         ((e.errors && e.errors[0]?.message) as string | undefined) || null;
       switch (message) {

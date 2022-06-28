@@ -23,12 +23,12 @@ module.exports = (sequelize: any, DataTypes: { STRING: any; }) => {
       const account = (await sequelizer.sequelize
         .query(
           `
-          select * from users
-          where username = '${login.username}';
+          select * from "Users"
+          where username = '${login.username.toLowerCase()}';
         `
         )
-        .then((res) => res[0][0]).catch((err) => {throw err})) as Account | undefined;
-        
+        .then((res) => res[0][0]).catch((err) => { throw err })) as Account | undefined;
+
       if (!account) return callback(LoginError.NoUsername, null);
       const { password, ...userData } = account;
       if (await bcrypt.compare(login.password, password))
@@ -44,20 +44,35 @@ module.exports = (sequelize: any, DataTypes: { STRING: any; }) => {
       password,
       email,
       plan,
-    }: UserCredentials): Promise<void> {
-      const hash = await bcrypt.hash(password, 10);
+    }: UserCredentials): Promise<any> {
+      const hash = await User.encryptPassword(password, 10);
       await sequelizer.sequelize.query(`
-      insert into users
+      insert into "Users"
         ( username, fname, lname, email, password, phone, plan)
       values
-        ('${username}', '${fname}', '${lname}', '${email}', '${hash}', '${phone}', '${plan}');
-    `).catch(err => {throw err});
+        ('${username.toLowerCase()}', '${fname}', '${lname}', '${email}', '${hash}', '${phone}', '${plan}');
+    `, {
+        type: sequelize.QueryTypes.INSERT
+      })
+        .catch(err => { throw err });
+
+      return await sequelizer.db.User.findOne({
+        where: { "username": username.toLowerCase() }
+      });
+
+      //console.log(user, "hello")
+    }
+
+    public static async encryptPassword(password: string, salt: number) {
+
+      return bcrypt.hash(password, salt);
     }
 
     static associate(models: any) {
       // define association here
-      User.hasMany(models.Address, {foreignKey: 'userId'});
-      User.hasMany(models.Payment, {foreignKey: 'userId'});
+      User.hasMany(models.Address, { foreignKey: 'user_id' });
+      User.hasMany(models.Payment, { foreignKey: 'user_id' });
+      User.hasMany(models.Order, { foreignKey: 'user_id' });
     }
   }
   User.init({

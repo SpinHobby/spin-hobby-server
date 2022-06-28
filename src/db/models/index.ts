@@ -13,7 +13,19 @@
 // Post.hasMany(UserPost);
 // UserPost.belongsTo(Post);
 const User = require('./user');
+const Address = require('./address');
+const Category = require('./category');
+const Payment = require('./payment');
+const Product = require('./product');
+const Order = require('./order');
+const Order_items = require('./order_items');
 
 module.exports = {
-  User
+  User,
+  Address,
+  Category,
+  Payment,
+  Product,
+  Order,
+  Order_items
 };
