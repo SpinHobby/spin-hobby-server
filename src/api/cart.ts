@@ -20,9 +20,8 @@ import {
 
 router.get("/", async (req: any, res: any) => {
   let cartItems: any[] = [];
-
-  //req.session.cart = req.session.cart || {};
   console.log("get before", req.session);
+  req.session.cart = req.session.cart || {};
 
   for (const cartItem of Object.keys(req.session.cart)) {
     await sequelizer.db.Product.findAll({
@@ -43,7 +42,7 @@ router.get("/", async (req: any, res: any) => {
 router.post("/:id", async (req: any, res: any) => {
   const product_id = req.params.id;
 
-  console.log("before", req.session);
+  console.log("before", req.session, req.body);
   req.session.cart = req.session.cart || {};
 
   switch (req.body.operation) {

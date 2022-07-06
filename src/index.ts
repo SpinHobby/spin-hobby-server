@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express from "express";
-import cookie from 'cookie-session';
+import cookie from "cookie-session";
 import {
   sequelizer,
   getLoginRequestData,
@@ -16,6 +16,21 @@ const PORT = process.env.PORT || 8001;
 //const sequelizer = new Sequelizer(!!process.env.PORT);
 
 const app = express();
+app.use(
+  cookie({
+    name: "session",
+    keys: ["secret"],
+    maxAge: 24 * 60 * 60 * 1000,
+  })
+);
+app.use(cors(
+	{
+	origin: "http://localhost:3002",
+	methods:['GET', 'POST'],
+	credentials: true
+}
+
+));
 
 app.use(bodyParser.urlencoded({ extended: false }));
 
@@ -23,14 +38,6 @@ app.use(bodyParser.json());
 
 app.use(express.static("./public/"));
 
-app.use(cookie({
-
-	name: "session",
-	keys: ["secret"]
-	
-}))
-
-app.use(cors());
 
 app.get("/", (req, res) => {
   res.send("Hello World at port " + process.env.PORT);
@@ -39,28 +46,28 @@ app.get("/", (req, res) => {
 app.use("/", api);
 
 async function assertDatabaseConnectionOk() {
-	console.log(`Checking database connection...`);
-	try {
-		await sequelizer.sequelize.authenticate();
-		console.log('Database connection OK!');
-	} catch (error:any) {
-		console.log('Unable to connect to the database:');
-		console.log(error.message);
-		process.exit(1);
-	}
+  console.log(`Checking database connection...`);
+  try {
+    await sequelizer.sequelize.authenticate();
+    console.log("Database connection OK!");
+  } catch (error: any) {
+    console.log("Unable to connect to the database:");
+    console.log(error.message);
+    process.exit(1);
+  }
 }
 
 async function init() {
-	await assertDatabaseConnectionOk();
+  await assertDatabaseConnectionOk();
 
-	//sequelizer.init();
+  //sequelizer.init();
 
-	console.log(`Starting Sequelize + Express example on port ${PORT}...`);
-	//console.log('db', sequelizer.db);
+  console.log(`Starting Sequelize + Express example on port ${PORT}...`);
+  //console.log('db', sequelizer.db);
 
-	app.listen(PORT, () => {
-		console.log(`Express server started on port ${PORT}.`);
-	});
+  app.listen(PORT, () => {
+    console.log(`Express server started on port ${PORT}.`);
+  });
 }
 
 init();
@@ -80,8 +87,6 @@ init();
 //     console.error('Unable to connect to the database:', error);
 //   }
 // }
-
-
 
 // sequelizer.init();
 // app.listen(PORT, () => console.log("Running on port ", PORT));
