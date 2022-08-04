@@ -38,6 +38,25 @@ app.use(bodyParser.json());
 
 app.use(express.static("./public/"));
 
+app.get('/product/add', async (req, res) => {
+
+  res.send(`<form action="/product" method="post" enctype="multipart/form-data">
+  <label for="name">Product Name: </label>
+  <input type="text" id="names" name="name" ></input><br>
+  <label for="category_id">Category id: </label>
+  <input type="text" id="category_id" name="category_id" ></input><br>
+  <label for="Description: ">Description: </label>
+  <input type="text" id="description" name="description" ></input><br>
+  <label for="price">Price: </label>
+  <input type="text" id="price" name="price" ></input><br>
+  <label for="inventory_id">Inventory id: </label>
+  <input type="text" id="inventory_id" name="inventory_id" ></input><br>
+  <label for="discount_id">Discount id: </label>
+  <input type="text" id="discount_id" name="discount_id" ></input><br>
+  <label for="Pictures">Pictures: </label>
+  <input type="file" id="pictures" name="pictures" multiple><br>
+  <input type="submit"></form>`);
+});
 
 app.get("/", (req, res) => {
   res.send("Hello World at port " + process.env.PORT);

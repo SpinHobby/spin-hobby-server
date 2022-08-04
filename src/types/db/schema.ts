@@ -39,4 +39,16 @@ export interface Product {
 
 }
 
+export interface Image {
+  id: number;
+  product_id: number;
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  destination: string;
+  filename: string;
+  path: string;
+  size: number;
+}
 

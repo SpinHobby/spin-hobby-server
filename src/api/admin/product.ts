@@ -1,7 +1,8 @@
 const router = require('express').Router();
 const { User } = require('../../db/models');
 import { Plan, RegisterError } from "../../types";
-import upload from '../multer';
+const multer = require('multer');
+
 import {
   sequelizer,
   getProductData
@@ -15,6 +16,15 @@ import {
   LoginCallback,
   UserCredentials,
 } from "../../types";
+
+const storage = multer.diskStorage({
+  destination: './public/images',
+  filename: (req: any, file: any, cb: any) => {
+    cb(null, file.fieldname + '-' + Date.now() + file.originalname);
+  }
+})
+
+const upload = multer({ storage: storage });
 
 router.get('/', (req: any, res: { json: (arg0: any) => void; }) => {
 
@@ -36,16 +46,18 @@ router.get('/', (req: any, res: { json: (arg0: any) => void; }) => {
 })
 
 //add product
-router.post("/", upload.array('photos'), (req: { files: string[]; body: any; }, res: { sendStatus: (arg0: number) => any; json: (arg0: { error?: any; status?: string; }) => void; }) => {
-
-  const images = req.files?.join(',');
+router.post("/", upload.array('pictures'), (req: { files: string[]; body: any; }, res: { sendStatus: (arg0: number) => any; json: (arg0: { error?: any; status?: string; }) => void; }) => {
 
   const product = getProductData(req.body);
+
+  //req.files.forEach(file => {})
+
+  console.log(req.files)
 
   if (!product) return res.sendStatus(400);
 
   sequelizer.db.Product.addProduct(product)
-    .then(() => res.sendStatus(200))
+    .then((product:any) => console.log(product))
     .catch((err: any) => res.json({ error: err }));
 
 });

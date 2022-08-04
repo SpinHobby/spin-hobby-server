@@ -19,6 +19,7 @@ const Payment = require('./payment');
 const Product = require('./product');
 const Order = require('./order');
 const Order_items = require('./order_items');
+const Images = require('./image');
 
 module.exports = {
   User,
@@ -27,5 +28,6 @@ module.exports = {
   Payment,
   Product,
   Order,
-  Order_items
+  Order_items,
+  Images
 };
