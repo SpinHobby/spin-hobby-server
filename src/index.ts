@@ -23,14 +23,13 @@ app.use(
     maxAge: 24 * 60 * 60 * 1000,
   })
 );
-app.use(cors(
-	{
-	origin: "http://localhost:3002",
-	methods:['GET', 'POST'],
-	credentials: true
-}
-
-));
+app.use(
+  cors({
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+    credentials: true,
+  })
+);
 
 app.use(bodyParser.urlencoded({ extended: false }));
 
@@ -38,12 +37,39 @@ app.use(bodyParser.json());
 
 app.use(express.static("./public/"));
 
-
 app.get("/", (req, res) => {
   res.send("Hello World at port " + process.env.PORT);
 });
 
 app.use("/", api);
+
+app.get("/searching:keywords", (req, res) => {
+  res.send("hello world here");
+});
+
+// app.get("/test123", (req, res) => {
+//   console.log("communitecat!");
+
+//   console.log("test this!!!");
+
+//   res.send(200);
+// });
+
+// app.get('/afdjafdasfdasjfkjaslkfjas', (req, res)=> {
+//   // res.send(`<div>
+
+//   // </div>`)
+
+//   res.sendFile('whateverr.html')
+// })
+
+// app.post('/afdjafdasfdasjfkjaslkfjas', (req, res) => {
+//   res.sendFile
+
+//   // use multer here
+
+//   // add database here
+// })
 
 async function assertDatabaseConnectionOk() {
   console.log(`Checking database connection...`);

@@ -19,11 +19,13 @@ import {
   UserCredentials,
 } from "../types";
 
-router.get("/:page", async (req: any, res: any) => {
+router.get("/", async (req: any, res: any) => {
   try {
-    const page = req.params.page.split("&")[0].split("=")[1] as number;
+    const page = req.query.page as number;
 
-    const searchString = req.params.page.split("&")[1].split("=")[1] as string;
+    console.log("hello ++++++++++++++++++++++");
+
+    const searchString = req.query.keywords as string;
 
     const products = await sequelizer.db.Product.findAll({
       where: {
@@ -35,9 +37,10 @@ router.get("/:page", async (req: any, res: any) => {
       limit: 10,
     });
 
+    console.log(products);
     res.json(products);
   } catch (err) {
-    throw err;
+    console.log(err);
   }
 });
 

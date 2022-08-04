@@ -10,7 +10,7 @@ import fs from "fs";
 // } from "../../types";
 import { getLocalCredentials } from "./getLocalCredentials";
 import { getProdCredentials } from "./getProdCredentials";
-import path from 'path';
+import path from "path";
 const basename = path.basename(__filename);
 
 let db: any = {};
@@ -38,19 +38,24 @@ class Sequelizer {
   }
 
   public init() {
-
-    fs
-      .readdirSync('src/db/models')
+    fs.readdirSync("src/db/models")
       .filter((file: string) => {
-        return (file.indexOf('.') !== 0) && (file !== basename) && (file.slice(-3) === '.ts');
+        return (
+          file.indexOf(".") !== 0 &&
+          file !== basename &&
+          file.slice(-3) === ".ts"
+        );
       })
       .forEach((file: any) => {
-        const model = require(path.join('../../db/models', file))(this.sequelize, DataTypes);
+        const model = require(path.join("../../db/models", file))(
+          this.sequelize,
+          DataTypes
+        );
         db[model.name] = model;
       });
 
-      //console.log(db.Address.findAll());
-    Object.keys(db).forEach(modelName => {
+    //console.log(db.Address.findAll());
+    Object.keys(db).forEach((modelName) => {
       if (db[modelName].associate) {
         db[modelName].associate(db);
       }
@@ -74,7 +79,6 @@ class Sequelizer {
   //     )
   //   );
   // }
-
 
   // public async validateLogin(
   //   login: Login,
@@ -118,4 +122,4 @@ const sequelizer = new Sequelizer(!!process.env.PORT);
 sequelizer.init();
 sequelizer.sequelize.sync();
 
-export {sequelizer};
+export { sequelizer };
