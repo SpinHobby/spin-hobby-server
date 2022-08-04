@@ -5,7 +5,7 @@ import {
   InferCreationAttributes,
   CreationOptional,
 } from "sequelize";
-import { Product as ProductType } from "../../types";
+import { Product as ProductType, Image as ImageType} from "../../types";
 import { sequelizer } from "../../utils";
 
 module.exports = (
@@ -23,7 +23,8 @@ module.exports = (
      */
 
     public static async addProduct(
-      product: Omit<ProductType, "id">
+      product: Omit<ProductType, "id">,
+      images: Omit<ImageType, "id" | "product_id">[]
     ) {
       const {
         name,
@@ -35,25 +36,25 @@ module.exports = (
       } = product;
 
       try {
-        const prod = await sequelizer.sequelize.query(`
-        insert into "Products"
-          ( name, description, category_id, inventory_id, price, discount_id)
-        values
-          ('${name}', '${description}', '${category_id}', '${inventory_id}', '${price}', '${discount_id}');
-      `);
-
-        return prod;
-
-      } catch (e) {
-        throw e;
-      }
-
-      //     await sequelizer.sequelize.query(`
+      //   const prod = await sequelizer.sequelize.query(`
       //   insert into "Products"
-      //     ( name, description, inventory_id, price, discount_id)
+      //     ( name, description, category_id, inventory_id, price, discount_id)
       //   values
-      //     ('${name}', '${description}', '${inventory_id}', '${price}', '${discount_id}');
-      // `).catch(err => { throw err; });
+      //     ('${name}', '${description}', '${category_id}', '${inventory_id}', '${price}', '${discount_id}');
+      // `).then((res: any) => console.log(res.id))
+      console.log(images)
+
+      const newProduct = await sequelizer.db.Product.create({
+        name, description, category_id, inventory_id, price, discount_id, Images:images
+      }, {
+        include: [ sequelizer.db.Image ]
+      });
+
+      return newProduct;
+
+      } catch (err) {
+        throw err;
+      }
     }
 
     static associate(models: any) {

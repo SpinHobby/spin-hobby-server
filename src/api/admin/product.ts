@@ -50,14 +50,10 @@ router.post("/", upload.array('pictures'), (req: { files: string[]; body: any; }
 
   const product = getProductData(req.body);
 
-  //req.files.forEach(file => {})
-
-  console.log(req.files)
-
   if (!product) return res.sendStatus(400);
 
-  sequelizer.db.Product.addProduct(product)
-    .then((product:any) => console.log(product))
+  sequelizer.db.Product.addProduct(product, req.files)
+    .then((product:any) => res.sendStatus(200))
     .catch((err: any) => res.json({ error: err }));
 
 });
