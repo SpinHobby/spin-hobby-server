@@ -1,0 +1,496 @@
+[debug] [2023-09-23T03:14:26.127Z] ----------------------------------------------------------------------
+[debug] [2023-09-23T03:14:26.128Z] Command:       /home/vtranduc/.nvm/versions/node/v18.16.0/bin/node /home/vtranduc/.nvm/versions/node/v18.16.0/bin/firebase deploy --only functions:api
+[debug] [2023-09-23T03:14:26.129Z] CLI Version:   12.5.4
+[debug] [2023-09-23T03:14:26.129Z] Platform:      linux
+[debug] [2023-09-23T03:14:26.129Z] Node Version:  v18.16.0
+[debug] [2023-09-23T03:14:26.129Z] Time:          Fri Sep 22 2023 21:14:26 GMT-0600 (Mountain Daylight Time)
+[debug] [2023-09-23T03:14:26.129Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2023-09-23T03:14:26.187Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2023-09-23T03:14:26.187Z] > authorizing via signed-in user (spinhobby.com@gmail.com)
+[debug] [2023-09-23T03:14:26.188Z] [iam] checking project spin-hobby for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2023-09-23T03:14:26.189Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions [none]
+[debug] [2023-09-23T03:14:26.194Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:14:26.194Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2023-09-23T03:14:26.420Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions 200
+[debug] [2023-09-23T03:14:26.420Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2023-09-23T03:14:26.420Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/spin-hobby/serviceAccounts/spin-hobby@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2023-09-23T03:14:26.421Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/spin-hobby/serviceAccounts/spin-hobby@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2023-09-23T03:14:26.625Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/spin-hobby/serviceAccounts/spin-hobby@appspot.gserviceaccount.com:testIamPermissions 200
+[debug] [2023-09-23T03:14:26.625Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/spin-hobby/serviceAccounts/spin-hobby@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[info] 
+[info] === Deploying to 'spin-hobby'...
+[info] 
+[info] i  deploying functions 
+[info] Running command: npm --prefix "$RESOURCE_DIR" run build
+[info] ✔  functions: Finished running predeploy script. 
+[debug] [2023-09-23T03:14:28.205Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby [none]
+[debug] [2023-09-23T03:14:28.441Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby 200
+[debug] [2023-09-23T03:14:28.441Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby {"projectId":"spin-hobby","projectNumber":"677543213104","displayName":"spin-hobby","name":"projects/spin-hobby","resources":{"hostingSite":"spin-hobby"},"state":"ACTIVE","etag":"1_f8c2cf24-9f6f-4d44-807a-6c155df154d2"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2023-09-23T03:14:28.443Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudfunctions.googleapis.com [none]
+[debug] [2023-09-23T03:14:28.443Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:14:28.444Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/runtimeconfig.googleapis.com [none]
+[debug] [2023-09-23T03:14:28.444Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/runtimeconfig.googleapis.com x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:14:28.444Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudbuild.googleapis.com [none]
+[debug] [2023-09-23T03:14:28.445Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudbuild.googleapis.com x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:14:28.445Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/artifactregistry.googleapis.com [none]
+[debug] [2023-09-23T03:14:28.445Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/artifactregistry.googleapis.com x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:14:28.820Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/runtimeconfig.googleapis.com 200
+[debug] [2023-09-23T03:14:28.820Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/runtimeconfig.googleapis.com [omitted]
+[debug] [2023-09-23T03:14:28.823Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudbuild.googleapis.com 200
+[debug] [2023-09-23T03:14:28.823Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudbuild.googleapis.com [omitted]
+[info] ✔  functions: required API cloudbuild.googleapis.com is enabled 
+[debug] [2023-09-23T03:14:28.837Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/artifactregistry.googleapis.com 200
+[debug] [2023-09-23T03:14:28.837Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/artifactregistry.googleapis.com [omitted]
+[info] ✔  artifactregistry: required API artifactregistry.googleapis.com is enabled 
+[debug] [2023-09-23T03:14:29.076Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudfunctions.googleapis.com 200
+[debug] [2023-09-23T03:14:29.077Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudfunctions.googleapis.com [omitted]
+[info] ✔  functions: required API cloudfunctions.googleapis.com is enabled 
+[debug] [2023-09-23T03:14:29.077Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby/adminSdkConfig [none]
+[debug] [2023-09-23T03:14:29.318Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby/adminSdkConfig 200
+[debug] [2023-09-23T03:14:29.318Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby/adminSdkConfig {"projectId":"spin-hobby","storageBucket":"spin-hobby.appspot.com"}
+[debug] [2023-09-23T03:14:29.318Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/spin-hobby/configs [none]
+[debug] [2023-09-23T03:14:29.918Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/spin-hobby/configs 200
+[debug] [2023-09-23T03:14:29.918Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/spin-hobby/configs {}
+[debug] [2023-09-23T03:14:29.919Z] Validating nodejs source
+[debug] [2023-09-23T03:14:30.434Z] > [functions] package.json contents: {
+  "name": "spin-hobby-server",
+  "version": "1.0.0",
+  "description": "Express server deployable to firebase",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.2",
+    "@types/cors": "^2.8.12",
+    "@types/express": "^4.17.13",
+    "@types/node": "^17.0.35",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.20.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.1",
+    "express": "^4.18.1",
+    "firebase": "^10.4.0",
+    "firebase-admin": "^11.10.1",
+    "firebase-functions": "^4.4.1",
+    "fs": "^0.0.1-security",
+    "multer": "^1.4.4",
+    "nodemon": "^2.0.16",
+    "pg": "^8.7.3",
+    "sequelize": "^6.19.0",
+    "ts-node": "^10.7.0",
+    "typescript": "^4.6.4"
+  },
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "build": "tsc",
+    "deploy": "firebase deploy --only functions:api"
+  },
+  "engines": {
+    "node": "18"
+  }
+}
+[debug] [2023-09-23T03:14:30.434Z] Building nodejs source
+[info] i  functions: Loading and analyzing source code for codebase default to determine what to deploy 
+[debug] [2023-09-23T03:14:30.435Z] Could not find functions.yaml. Must use http discovery
+[debug] [2023-09-23T03:14:30.439Z] Found firebase-functions binary at '/home/vtranduc/code/sept/spin-hobby-server/node_modules/.bin/firebase-functions'
+[info] Serving at port 8182
+
+[debug] [2023-09-23T03:14:30.636Z] Got response from /__/functions.yaml {"endpoints":{"api":{"platform":"gcfv1","availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"serviceAccountEmail":null,"vpc":null,"httpsTrigger":{},"entryPoint":"api"}},"specVersion":"v1alpha1","requiredAPIs":[]}
+[info] shutdown requested via /__/quitquitquit
+
+[info] i  functions: preparing . directory for uploading... 
+[info] i  functions: packaged /home/vtranduc/code/sept/spin-hobby-server (84.27 KB) for uploading 
+[debug] [2023-09-23T03:14:30.746Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/-/functions [none]
+[debug] [2023-09-23T03:14:31.286Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/-/functions 200
+[debug] [2023-09-23T03:14:31.286Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/-/functions {}
+[debug] [2023-09-23T03:14:31.286Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v2/projects/spin-hobby/locations/-/functions filter=environment%3D%22GEN_2%22
+[debug] [2023-09-23T03:14:31.783Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v2/projects/spin-hobby/locations/-/functions 200
+[debug] [2023-09-23T03:14:31.783Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v2/projects/spin-hobby/locations/-/functions {}
+[debug] [2023-09-23T03:14:31.785Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby [none]
+[debug] [2023-09-23T03:14:32.001Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby 200
+[debug] [2023-09-23T03:14:32.001Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby {"projectId":"spin-hobby","projectNumber":"677543213104","displayName":"spin-hobby","name":"projects/spin-hobby","resources":{"hostingSite":"spin-hobby"},"state":"ACTIVE","etag":"1_f8c2cf24-9f6f-4d44-807a-6c155df154d2"}
+[debug] [2023-09-23T03:14:32.002Z] [functions] found 1 new HTTP functions, testing setIamPolicy permission...
+[debug] [2023-09-23T03:14:32.002Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions [none]
+[debug] [2023-09-23T03:14:32.002Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:14:32.002Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions {"permissions":["cloudfunctions.functions.setIamPolicy"]}
+[debug] [2023-09-23T03:14:32.154Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions 200
+[debug] [2023-09-23T03:14:32.154Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions {"permissions":["cloudfunctions.functions.setIamPolicy"]}
+[debug] [2023-09-23T03:14:32.154Z] [functions] found setIamPolicy permission, proceeding with deploy
+[debug] [2023-09-23T03:14:32.155Z] >>> [apiv2][query] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions:generateUploadUrl [none]
+[debug] [2023-09-23T03:14:32.155Z] >>> [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions:generateUploadUrl {}
+[debug] [2023-09-23T03:14:40.659Z] <<< [apiv2][status] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions:generateUploadUrl 200
+[debug] [2023-09-23T03:14:40.659Z] <<< [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions:generateUploadUrl {"uploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D"}
+[debug] [2023-09-23T03:14:40.660Z] >>> [apiv2][query] PUT https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip GoogleAccessId=service-677543213104%40gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D
+[debug] [2023-09-23T03:14:40.660Z] >>> [apiv2][body] PUT https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip [stream]
+[debug] [2023-09-23T03:14:41.099Z] <<< [apiv2][status] PUT https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip 200
+[debug] [2023-09-23T03:14:41.099Z] <<< [apiv2][body] PUT https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip [omitted]
+[info] ✔  functions: . folder uploaded successfully 
+[info] i  functions: creating Node.js 18 (1st Gen) function api(us-central1)... 
+[debug] [2023-09-23T03:14:41.102Z] >>> [apiv2][query] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions [none]
+[debug] [2023-09-23T03:14:41.102Z] >>> [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions {"name":"projects/spin-hobby/locations/us-central1/functions/api","sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","entryPoint":"api","runtime":"nodejs18","dockerRegistry":"ARTIFACT_REGISTRY","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"minInstances":null,"maxInstances":null,"ingressSettings":null,"environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"serviceAccountEmail":null,"availableMemoryMb":null,"timeout":null,"vpcConnector":null,"vpcConnectorEgressSettings":null,"buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""}}
+[debug] [2023-09-23T03:14:41.799Z] <<< [apiv2][status] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions 200
+[debug] [2023-09-23T03:14:41.799Z] <<< [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:41Z"}}
+[debug] [2023-09-23T03:14:41.800Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:14:42.024Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:14:42.025Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z"}}
+[debug] [2023-09-23T03:14:42.525Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:14:42.525Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:14:42.776Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:14:42.776Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z"}}
+[debug] [2023-09-23T03:14:43.778Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:14:43.778Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:14:44.135Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:14:44.135Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z"}}
+[debug] [2023-09-23T03:14:46.137Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:14:46.138Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:14:46.394Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:14:46.394Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z"}}
+[debug] [2023-09-23T03:14:50.396Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:14:50.397Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:14:50.626Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:14:50.626Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z"}}
+[debug] [2023-09-23T03:14:58.635Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:14:58.635Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:14:58.898Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:14:58.899Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0"}}
+[debug] [2023-09-23T03:15:08.909Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:15:08.909Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:15:09.153Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:15:09.153Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0"}}
+[debug] [2023-09-23T03:15:19.163Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:15:19.164Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:15:19.396Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:15:19.396Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0"}}
+[debug] [2023-09-23T03:15:29.407Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:15:29.407Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:15:29.648Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:15:29.649Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:14:42Z","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0"}}
+[debug] [2023-09-23T03:15:39.659Z] [create-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:15:39.660Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE [none]
+[debug] [2023-09-23T03:15:39.921Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE 200
+[debug] [2023-09-23T03:15:39.921Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvTUc4STU1VzViZlE","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"CREATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"entryPoint":"api","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695440680&Signature=Z4FxTBo%2Fu3EwTxEB2Tfi4WOKdlLnWbFx40jw5xAaqxXelwWQvcPZeNUTqTDRsbGzCoKpmaiOv2zbX6ovNYOP2t6VKiNXQhOqj%2FWsrHUMdYmt1uG1s1G%2BANWQojWuKCkm87r7Cnw6skP3h2HLnjNVciTS5qYEMvXNGRsoXH9sPie2aEeun6AUEZKvxRRGUnCZdIMp2vQQPowJO0AdKf35FZlIUGUMA1Kqczv36lrp5%2BLTvlYxGx5j9BlNJq%2BItOc0XfjzanHTHWc8gYFdS56wqYOfpBvDHGPg2SbzLsKGK4HFzfyCyMmL2tCZKBRp%2BUP0tltyrAVrxuqvbviH05fj9w%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"1","updateTime":"2023-09-23T03:15:30Z","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0"},"done":true,"error":{"code":3,"message":"Build failed: node:internal/errors:496\n    ErrorCaptureStackTrace(err);\n    ^\n\nTypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension \".ts\" for /workspace/src/index.ts\n    at new NodeError (node:internal/errors:405:5)\n    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:79:11)\n    at defaultGetFormat (node:internal/modules/esm/get_format:124:36)\n    at checkSyntax (node:internal/main/check_syntax:59:26) {\n  code: 'ERR_UNKNOWN_FILE_EXTENSION'\n}\n\nNode.js v18.17.1; Error ID: 037e0eb0"}}
+[debug] [2023-09-23T03:15:39.921Z] Got source token undefined for region us-central1
+[error] Build failed: node:internal/errors:496
+    ErrorCaptureStackTrace(err);
+    ^
+
+TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts" for /workspace/src/index.ts
+    at new NodeError (node:internal/errors:405:5)
+    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:79:11)
+    at defaultGetFormat (node:internal/modules/esm/get_format:124:36)
+    at checkSyntax (node:internal/main/check_syntax:59:26) {
+  code: 'ERR_UNKNOWN_FILE_EXTENSION'
+}
+
+Node.js v18.17.1; Error ID: 037e0eb0
+[debug] [2023-09-23T03:15:39.925Z] Total Function Deployment time: 58821
+[debug] [2023-09-23T03:15:39.925Z] 1 Functions Deployed
+[debug] [2023-09-23T03:15:39.925Z] 1 Functions Errored
+[debug] [2023-09-23T03:15:39.925Z] 0 Function Deployments Aborted
+[debug] [2023-09-23T03:15:39.925Z] Average Function Deployment time: 58820
+[info] 
+[info] Functions deploy had errors with the following functions:
+	api(us-central1)
+[debug] [2023-09-23T03:15:40.065Z] Not printing URL for HTTPS function. Typically this means it didn't match a filter or we failed deployment
+[info] i  functions: cleaning up build files... 
+[debug] [2023-09-23T03:15:40.066Z] >>> [apiv2][query] DELETE https://artifactregistry.googleapis.com/v1beta2/projects/spin-hobby/locations/us-central1/repositories/gcf-artifacts/packages/api [none]
+[debug] [2023-09-23T03:15:40.067Z] >>> [apiv2][query] GET https://us.gcr.io/v2/spin-hobby/gcf/us-central1/tags/list [none]
+[debug] [2023-09-23T03:15:40.493Z] <<< [apiv2][status] DELETE https://artifactregistry.googleapis.com/v1beta2/projects/spin-hobby/locations/us-central1/repositories/gcf-artifacts/packages/api 404
+[debug] [2023-09-23T03:15:40.493Z] <<< [apiv2][body] DELETE https://artifactregistry.googleapis.com/v1beta2/projects/spin-hobby/locations/us-central1/repositories/gcf-artifacts/packages/api {"error":{"code":404,"message":"Package \"projects/spin-hobby/locations/us-central1/repositories/gcf-artifacts/packages/api\" was not found.","status":"NOT_FOUND"}}
+[debug] [2023-09-23T03:15:41.465Z] <<< [apiv2][status] GET https://us.gcr.io/v2/spin-hobby/gcf/us-central1/tags/list 200
+[debug] [2023-09-23T03:15:41.465Z] <<< [apiv2][body] GET https://us.gcr.io/v2/spin-hobby/gcf/us-central1/tags/list {"child":[],"manifest":{},"name":"spin-hobby/gcf/us-central1","tags":[]}
+[debug] [2023-09-23T03:15:41.465Z] Could not find image for function projects/spin-hobby/locations/us-central1/functions/api
+[debug] [2023-09-23T03:15:41.465Z] Functions deploy failed.
+[debug] [2023-09-23T03:15:41.465Z] {
+  "endpoint": {
+    "id": "api",
+    "project": "spin-hobby",
+    "region": "us-central1",
+    "entryPoint": "api",
+    "platform": "gcfv1",
+    "runtime": "nodejs18",
+    "httpsTrigger": {},
+    "serviceAccount": null,
+    "ingressSettings": null,
+    "availableMemoryMb": null,
+    "timeoutSeconds": null,
+    "maxInstances": null,
+    "minInstances": null,
+    "vpc": null,
+    "environmentVariables": {
+      "FIREBASE_CONFIG": "{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}",
+      "GCLOUD_PROJECT": "spin-hobby",
+      "EVENTARC_CLOUD_EVENT_SOURCE": "projects/spin-hobby/locations/us-central1/functions/api"
+    },
+    "codebase": "default",
+    "targetedByOnly": true,
+    "hash": "cd851743e71bfb4665b6ca46c557492d91ce8f80",
+    "labels": {
+      "deployment-tool": "cli-firebase"
+    }
+  },
+  "op": "create",
+  "original": {
+    "name": "FirebaseError",
+    "children": [],
+    "exit": 1,
+    "message": "Build failed: node:internal/errors:496\n    ErrorCaptureStackTrace(err);\n    ^\n\nTypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension \".ts\" for /workspace/src/index.ts\n    at new NodeError (node:internal/errors:405:5)\n    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:79:11)\n    at defaultGetFormat (node:internal/modules/esm/get_format:124:36)\n    at checkSyntax (node:internal/main/check_syntax:59:26) {\n  code: 'ERR_UNKNOWN_FILE_EXTENSION'\n}\n\nNode.js v18.17.1; Error ID: 037e0eb0",
+    "status": 3,
+    "code": 3
+  }
+}
+[debug] [2023-09-23T03:15:41.580Z] Error: Failed to create function api in region us-central1
+    at /home/vtranduc/.nvm/versions/node/v18.16.0/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:51:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Fabricator.createV1Function (/home/vtranduc/.nvm/versions/node/v18.16.0/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:180:32)
+    at async Fabricator.createEndpoint (/home/vtranduc/.nvm/versions/node/v18.16.0/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:132:13)
+    at async handle (/home/vtranduc/.nvm/versions/node/v18.16.0/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:88:17)
+[error] 
+[error] Error: There was an error deploying functions
+[debug] [2023-09-23T03:21:55.974Z] ----------------------------------------------------------------------
+[debug] [2023-09-23T03:21:55.976Z] Command:       /home/vtranduc/.nvm/versions/node/v18.16.0/bin/node /home/vtranduc/.nvm/versions/node/v18.16.0/bin/firebase deploy --only functions:api
+[debug] [2023-09-23T03:21:55.976Z] CLI Version:   12.5.4
+[debug] [2023-09-23T03:21:55.977Z] Platform:      linux
+[debug] [2023-09-23T03:21:55.977Z] Node Version:  v18.16.0
+[debug] [2023-09-23T03:21:55.977Z] Time:          Fri Sep 22 2023 21:21:55 GMT-0600 (Mountain Daylight Time)
+[debug] [2023-09-23T03:21:55.977Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2023-09-23T03:21:56.034Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2023-09-23T03:21:56.034Z] > authorizing via signed-in user (spinhobby.com@gmail.com)
+[debug] [2023-09-23T03:21:56.034Z] [iam] checking project spin-hobby for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2023-09-23T03:21:56.036Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions [none]
+[debug] [2023-09-23T03:21:56.036Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:21:56.036Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2023-09-23T03:21:56.272Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions 200
+[debug] [2023-09-23T03:21:56.272Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/spin-hobby:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2023-09-23T03:21:56.272Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/spin-hobby/serviceAccounts/spin-hobby@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2023-09-23T03:21:56.272Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/spin-hobby/serviceAccounts/spin-hobby@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2023-09-23T03:21:56.472Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/spin-hobby/serviceAccounts/spin-hobby@appspot.gserviceaccount.com:testIamPermissions 200
+[debug] [2023-09-23T03:21:56.472Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/spin-hobby/serviceAccounts/spin-hobby@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[info] 
+[info] === Deploying to 'spin-hobby'...
+[info] 
+[info] i  deploying functions 
+[info] Running command: npm --prefix "$RESOURCE_DIR" run build
+[info] ✔  functions: Finished running predeploy script. 
+[debug] [2023-09-23T03:21:58.158Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby [none]
+[debug] [2023-09-23T03:21:58.420Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby 200
+[debug] [2023-09-23T03:21:58.420Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby {"projectId":"spin-hobby","projectNumber":"677543213104","displayName":"spin-hobby","name":"projects/spin-hobby","resources":{"hostingSite":"spin-hobby"},"state":"ACTIVE","etag":"1_f8c2cf24-9f6f-4d44-807a-6c155df154d2"}
+[info] i  functions: preparing codebase default for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2023-09-23T03:21:58.422Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudfunctions.googleapis.com [none]
+[debug] [2023-09-23T03:21:58.422Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudfunctions.googleapis.com x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:21:58.423Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/runtimeconfig.googleapis.com [none]
+[debug] [2023-09-23T03:21:58.423Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/runtimeconfig.googleapis.com x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:21:58.424Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudbuild.googleapis.com [none]
+[debug] [2023-09-23T03:21:58.424Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudbuild.googleapis.com x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:21:58.424Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/artifactregistry.googleapis.com [none]
+[debug] [2023-09-23T03:21:58.424Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/artifactregistry.googleapis.com x-goog-quota-user=projects/spin-hobby
+[debug] [2023-09-23T03:21:58.812Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudfunctions.googleapis.com 200
+[debug] [2023-09-23T03:21:58.812Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudfunctions.googleapis.com [omitted]
+[info] ✔  functions: required API cloudfunctions.googleapis.com is enabled 
+[debug] [2023-09-23T03:21:59.017Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/artifactregistry.googleapis.com 200
+[debug] [2023-09-23T03:21:59.017Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/artifactregistry.googleapis.com [omitted]
+[info] ✔  artifactregistry: required API artifactregistry.googleapis.com is enabled 
+[debug] [2023-09-23T03:21:59.023Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/runtimeconfig.googleapis.com 200
+[debug] [2023-09-23T03:21:59.023Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/runtimeconfig.googleapis.com [omitted]
+[debug] [2023-09-23T03:21:59.025Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudbuild.googleapis.com 200
+[debug] [2023-09-23T03:21:59.026Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/spin-hobby/services/cloudbuild.googleapis.com [omitted]
+[info] ✔  functions: required API cloudbuild.googleapis.com is enabled 
+[debug] [2023-09-23T03:21:59.026Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby/adminSdkConfig [none]
+[debug] [2023-09-23T03:21:59.313Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby/adminSdkConfig 200
+[debug] [2023-09-23T03:21:59.313Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby/adminSdkConfig {"projectId":"spin-hobby","storageBucket":"spin-hobby.appspot.com"}
+[debug] [2023-09-23T03:21:59.314Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/spin-hobby/configs [none]
+[debug] [2023-09-23T03:21:59.576Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/spin-hobby/configs 200
+[debug] [2023-09-23T03:21:59.576Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/spin-hobby/configs {}
+[debug] [2023-09-23T03:21:59.577Z] Validating nodejs source
+[debug] [2023-09-23T03:22:00.180Z] > [functions] package.json contents: {
+  "name": "spin-hobby-server",
+  "version": "1.0.0",
+  "description": "Express server deployable to firebase",
+  "main": "src/index.ts",
+  "dependencies": {
+    "@types/bcryptjs": "^2.4.2",
+    "@types/cors": "^2.8.12",
+    "@types/express": "^4.17.13",
+    "@types/node": "^17.0.35",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.20.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.1",
+    "express": "^4.18.1",
+    "firebase": "^10.4.0",
+    "firebase-admin": "^11.10.1",
+    "firebase-functions": "^4.4.1",
+    "fs": "^0.0.1-security",
+    "multer": "^1.4.4",
+    "nodemon": "^2.0.16",
+    "pg": "^8.7.3",
+    "sequelize": "^6.19.0",
+    "ts-node": "^10.7.0",
+    "typescript": "^4.6.4"
+  },
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "nodemon src/index.ts",
+    "build": "tsc",
+    "deploy": "firebase deploy --only functions:api"
+  },
+  "engines": {
+    "node": "18"
+  }
+}
+[debug] [2023-09-23T03:22:00.181Z] Building nodejs source
+[info] i  functions: Loading and analyzing source code for codebase default to determine what to deploy 
+[debug] [2023-09-23T03:22:00.182Z] Could not find functions.yaml. Must use http discovery
+[debug] [2023-09-23T03:22:00.185Z] Found firebase-functions binary at '/home/vtranduc/code/sept/spin-hobby-server/node_modules/.bin/firebase-functions'
+[info] Serving at port 8243
+
+[debug] [2023-09-23T03:22:00.406Z] Got response from /__/functions.yaml {"endpoints":{"api":{"platform":"gcfv1","availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"serviceAccountEmail":null,"vpc":null,"httpsTrigger":{},"entryPoint":"api"}},"specVersion":"v1alpha1","requiredAPIs":[]}
+[info] shutdown requested via /__/quitquitquit
+
+[info] i  functions: preparing . directory for uploading... 
+[info] i  functions: packaged /home/vtranduc/code/sept/spin-hobby-server (81.92 KB) for uploading 
+[debug] [2023-09-23T03:22:00.516Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/-/functions [none]
+[debug] [2023-09-23T03:22:01.063Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/-/functions 200
+[debug] [2023-09-23T03:22:01.063Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/-/functions {"functions":[{"name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","timeout":"60s","availableMemoryMb":256,"serviceAccountEmail":"spin-hobby@appspot.gserviceaccount.com","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"cd851743e71bfb4665b6ca46c557492d91ce8f80"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/29480b12-fb59-4cf2-a059-a437b03327c8.zip","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","ingressSettings":"ALLOW_ALL","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"}]}
+[debug] [2023-09-23T03:22:01.064Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v2/projects/spin-hobby/locations/-/functions filter=environment%3D%22GEN_2%22
+[debug] [2023-09-23T03:22:01.754Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v2/projects/spin-hobby/locations/-/functions 200
+[debug] [2023-09-23T03:22:01.754Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v2/projects/spin-hobby/locations/-/functions {}
+[debug] [2023-09-23T03:22:01.756Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby [none]
+[debug] [2023-09-23T03:22:01.973Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby 200
+[debug] [2023-09-23T03:22:01.973Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/spin-hobby {"projectId":"spin-hobby","projectNumber":"677543213104","displayName":"spin-hobby","name":"projects/spin-hobby","resources":{"hostingSite":"spin-hobby"},"state":"ACTIVE","etag":"1_f8c2cf24-9f6f-4d44-807a-6c155df154d2"}
+[debug] [2023-09-23T03:22:01.974Z] >>> [apiv2][query] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions:generateUploadUrl [none]
+[debug] [2023-09-23T03:22:01.974Z] >>> [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions:generateUploadUrl {}
+[debug] [2023-09-23T03:22:02.650Z] <<< [apiv2][status] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions:generateUploadUrl 200
+[debug] [2023-09-23T03:22:02.650Z] <<< [apiv2][body] POST https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions:generateUploadUrl {"uploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D"}
+[debug] [2023-09-23T03:22:02.651Z] >>> [apiv2][query] PUT https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip GoogleAccessId=service-677543213104%40gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D
+[debug] [2023-09-23T03:22:02.651Z] >>> [apiv2][body] PUT https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip [stream]
+[debug] [2023-09-23T03:22:03.012Z] <<< [apiv2][status] PUT https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip 200
+[debug] [2023-09-23T03:22:03.012Z] <<< [apiv2][body] PUT https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip [omitted]
+[info] ✔  functions: . folder uploaded successfully 
+[info] i  functions: updating Node.js 18 (1st Gen) function api(us-central1)... 
+[debug] [2023-09-23T03:22:03.015Z] >>> [apiv2][query] PATCH https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions/api updateMask=name%2CsourceUploadUrl%2CentryPoint%2Cruntime%2CdockerRegistry%2Clabels%2ChttpsTrigger.securityLevel%2CminInstances%2CmaxInstances%2CingressSettings%2CenvironmentVariables%2CserviceAccountEmail%2CavailableMemoryMb%2Ctimeout%2CvpcConnector%2CvpcConnectorEgressSettings%2CsourceToken%2CbuildEnvironmentVariables
+[debug] [2023-09-23T03:22:03.015Z] >>> [apiv2][body] PATCH https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions/api {"name":"projects/spin-hobby/locations/us-central1/functions/api","sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","entryPoint":"api","runtime":"nodejs18","dockerRegistry":"ARTIFACT_REGISTRY","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"httpsTrigger":{"securityLevel":"SECURE_ALWAYS"},"minInstances":null,"maxInstances":null,"ingressSettings":null,"environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"serviceAccountEmail":null,"availableMemoryMb":null,"timeout":null,"vpcConnector":null,"vpcConnectorEgressSettings":null,"buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""}}
+[debug] [2023-09-23T03:22:03.827Z] <<< [apiv2][status] PATCH https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions/api 200
+[debug] [2023-09-23T03:22:03.827Z] <<< [apiv2][body] PATCH https://cloudfunctions.googleapis.com/v1/projects/spin-hobby/locations/us-central1/functions/api {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:03Z"}}
+[debug] [2023-09-23T03:22:03.827Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:04.065Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:04.065Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:04Z"}}
+[debug] [2023-09-23T03:22:04.565Z] [update-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:22:04.566Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:04.829Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:04.829Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:04Z","buildId":"37e3a887-6e93-4ef8-99fe-60054da367aa","buildName":"projects/677543213104/locations/us-central1/builds/37e3a887-6e93-4ef8-99fe-60054da367aa"}}
+[debug] [2023-09-23T03:22:05.831Z] [update-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:22:05.831Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:06.096Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:06.096Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:04Z","buildId":"37e3a887-6e93-4ef8-99fe-60054da367aa","buildName":"projects/677543213104/locations/us-central1/builds/37e3a887-6e93-4ef8-99fe-60054da367aa"}}
+[debug] [2023-09-23T03:22:08.098Z] [update-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:22:08.099Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:08.358Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:08.358Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:04Z","buildId":"37e3a887-6e93-4ef8-99fe-60054da367aa","buildName":"projects/677543213104/locations/us-central1/builds/37e3a887-6e93-4ef8-99fe-60054da367aa"}}
+[debug] [2023-09-23T03:22:12.359Z] [update-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:22:12.359Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:12.588Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:12.588Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:04Z","buildId":"37e3a887-6e93-4ef8-99fe-60054da367aa","buildName":"projects/677543213104/locations/us-central1/builds/37e3a887-6e93-4ef8-99fe-60054da367aa"}}
+[debug] [2023-09-23T03:22:20.595Z] [update-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:22:20.596Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:20.865Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:20.865Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:04Z","buildId":"37e3a887-6e93-4ef8-99fe-60054da367aa","buildName":"projects/677543213104/locations/us-central1/builds/37e3a887-6e93-4ef8-99fe-60054da367aa"}}
+[debug] [2023-09-23T03:22:30.876Z] [update-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:22:30.877Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:31.099Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:31.099Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:04Z","buildId":"37e3a887-6e93-4ef8-99fe-60054da367aa","buildName":"projects/677543213104/locations/us-central1/builds/37e3a887-6e93-4ef8-99fe-60054da367aa"}}
+[debug] [2023-09-23T03:22:41.110Z] [update-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:22:41.110Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:41.350Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:41.350Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:04Z","buildId":"37e3a887-6e93-4ef8-99fe-60054da367aa","buildName":"projects/677543213104/locations/us-central1/builds/37e3a887-6e93-4ef8-99fe-60054da367aa"}}
+[debug] [2023-09-23T03:22:51.360Z] [update-default-us-central1-api] Retrying task index 0
+[debug] [2023-09-23T03:22:51.360Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ [none]
+[debug] [2023-09-23T03:22:51.578Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ 200
+[debug] [2023-09-23T03:22:51.579Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ {"name":"operations/c3Bpbi1ob2JieS91cy1jZW50cmFsMS9hcGkvVUNjdHlWWGNNZDQ","metadata":{"@type":"type.googleapis.com/google.cloud.functions.v1.OperationMetadataV1","target":"projects/spin-hobby/locations/us-central1/functions/api","type":"UPDATE_FUNCTION","request":{"@type":"type.googleapis.com/google.cloud.functions.v1.CloudFunction","name":"projects/spin-hobby/locations/us-central1/functions/api","httpsTrigger":{"url":"https://us-central1-spin-hobby.cloudfunctions.net/api","securityLevel":"SECURE_ALWAYS"},"status":"OFFLINE","entryPoint":"api","updateTime":"2023-09-23T03:15:30.260Z","versionId":"1","labels":{"deployment-tool":"cli-firebase","firebase-functions-hash":"fee91eded0e9170c9b04046c55bdfb9a8105e425"},"sourceUploadUrl":"https://storage.googleapis.com/uploads-141434284887.us-central1.cloudfunctions.appspot.com/2a2e542a-d845-429c-87a9-f74a862852f0.zip?GoogleAccessId=service-677543213104@gcf-admin-robot.iam.gserviceaccount.com&Expires=1695441122&Signature=zYAGmhID3YqEei2UsumccuKd6nPYHUAceCsO6ZGg7h%2FTdTVttH65Uv6CTd1wjMdEs27JZyD7HLgAY0DTgTLWVeb7FHZLBlcjZPx6lx%2BrticsGXIp4w6mhIDib42scN4NA5MA%2FFv8rz5kNk%2Fwb%2Fx5IPlz9WqVCPsjcffa491hR8MoNELjZqfEEyFX4nBTsQBK1FkgvZzOryJyzavp9IpIbknliJ5U9BSm%2FX2gZ3ZijPj5IHOlw547jnB9ckG1d23B8KqUV4I7lf%2Bvl6YW%2FKpunCi326uJhBbhB0oDLtIuOHliRQimGLcJiKtq%2Ffa7bAT65e3uGFWXTcd7Gdt%2FJzksow%3D%3D","environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}","GCLOUD_PROJECT":"spin-hobby","EVENTARC_CLOUD_EVENT_SOURCE":"projects/spin-hobby/locations/us-central1/functions/api"},"runtime":"nodejs18","buildId":"28defd55-ca6e-4302-88ee-0cca1c7376c0","buildEnvironmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""},"buildName":"projects/677543213104/locations/us-central1/builds/28defd55-ca6e-4302-88ee-0cca1c7376c0","dockerRegistry":"ARTIFACT_REGISTRY"},"versionId":"2","updateTime":"2023-09-23T03:22:44Z","buildId":"37e3a887-6e93-4ef8-99fe-60054da367aa","buildName":"projects/677543213104/locations/us-central1/builds/37e3a887-6e93-4ef8-99fe-60054da367aa"},"done":true,"error":{"code":3,"message":"Build failed: node:internal/errors:496\n    ErrorCaptureStackTrace(err);\n    ^\n\nTypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension \".ts\" for /workspace/src/index.ts\n    at new NodeError (node:internal/errors:405:5)\n    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:79:11)\n    at defaultGetFormat (node:internal/modules/esm/get_format:124:36)\n    at checkSyntax (node:internal/main/check_syntax:59:26) {\n  code: 'ERR_UNKNOWN_FILE_EXTENSION'\n}\n\nNode.js v18.17.1; Error ID: 037e0eb0"}}
+[debug] [2023-09-23T03:22:51.579Z] Got source token undefined for region us-central1
+[error] Build failed: node:internal/errors:496
+    ErrorCaptureStackTrace(err);
+    ^
+
+TypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension ".ts" for /workspace/src/index.ts
+    at new NodeError (node:internal/errors:405:5)
+    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:79:11)
+    at defaultGetFormat (node:internal/modules/esm/get_format:124:36)
+    at checkSyntax (node:internal/main/check_syntax:59:26) {
+  code: 'ERR_UNKNOWN_FILE_EXTENSION'
+}
+
+Node.js v18.17.1; Error ID: 037e0eb0
+[debug] [2023-09-23T03:22:51.582Z] Total Function Deployment time: 48566
+[debug] [2023-09-23T03:22:51.582Z] 1 Functions Deployed
+[debug] [2023-09-23T03:22:51.582Z] 1 Functions Errored
+[debug] [2023-09-23T03:22:51.582Z] 0 Function Deployments Aborted
+[debug] [2023-09-23T03:22:51.583Z] Average Function Deployment time: 48565
+[info] 
+[info] Functions deploy had errors with the following functions:
+	api(us-central1)
+[debug] [2023-09-23T03:22:51.726Z] Not printing URL for HTTPS function. Typically this means it didn't match a filter or we failed deployment
+[info] i  functions: cleaning up build files... 
+[debug] [2023-09-23T03:22:51.727Z] >>> [apiv2][query] DELETE https://artifactregistry.googleapis.com/v1beta2/projects/spin-hobby/locations/us-central1/repositories/gcf-artifacts/packages/api [none]
+[debug] [2023-09-23T03:22:51.728Z] >>> [apiv2][query] GET https://us.gcr.io/v2/spin-hobby/gcf/us-central1/tags/list [none]
+[debug] [2023-09-23T03:22:52.082Z] <<< [apiv2][status] GET https://us.gcr.io/v2/spin-hobby/gcf/us-central1/tags/list 200
+[debug] [2023-09-23T03:22:52.083Z] <<< [apiv2][body] GET https://us.gcr.io/v2/spin-hobby/gcf/us-central1/tags/list {"child":[],"manifest":{},"name":"spin-hobby/gcf/us-central1","tags":[]}
+[debug] [2023-09-23T03:22:52.083Z] Could not find image for function projects/spin-hobby/locations/us-central1/functions/api
+[debug] [2023-09-23T03:22:52.167Z] <<< [apiv2][status] DELETE https://artifactregistry.googleapis.com/v1beta2/projects/spin-hobby/locations/us-central1/repositories/gcf-artifacts/packages/api 404
+[debug] [2023-09-23T03:22:52.167Z] <<< [apiv2][body] DELETE https://artifactregistry.googleapis.com/v1beta2/projects/spin-hobby/locations/us-central1/repositories/gcf-artifacts/packages/api {"error":{"code":404,"message":"Package \"projects/spin-hobby/locations/us-central1/repositories/gcf-artifacts/packages/api\" was not found.","status":"NOT_FOUND"}}
+[debug] [2023-09-23T03:22:52.167Z] Functions deploy failed.
+[debug] [2023-09-23T03:22:52.167Z] {
+  "endpoint": {
+    "id": "api",
+    "project": "spin-hobby",
+    "region": "us-central1",
+    "entryPoint": "api",
+    "platform": "gcfv1",
+    "runtime": "nodejs18",
+    "httpsTrigger": {},
+    "serviceAccount": null,
+    "ingressSettings": null,
+    "availableMemoryMb": null,
+    "timeoutSeconds": null,
+    "maxInstances": null,
+    "minInstances": null,
+    "vpc": null,
+    "environmentVariables": {
+      "FIREBASE_CONFIG": "{\"projectId\":\"spin-hobby\",\"storageBucket\":\"spin-hobby.appspot.com\"}",
+      "GCLOUD_PROJECT": "spin-hobby",
+      "EVENTARC_CLOUD_EVENT_SOURCE": "projects/spin-hobby/locations/us-central1/functions/api"
+    },
+    "codebase": "default",
+    "securityLevel": "SECURE_ALWAYS",
+    "targetedByOnly": true,
+    "hash": "fee91eded0e9170c9b04046c55bdfb9a8105e425",
+    "labels": {
+      "deployment-tool": "cli-firebase"
+    }
+  },
+  "op": "update",
+  "original": {
+    "name": "FirebaseError",
+    "children": [],
+    "exit": 1,
+    "message": "Build failed: node:internal/errors:496\n    ErrorCaptureStackTrace(err);\n    ^\n\nTypeError [ERR_UNKNOWN_FILE_EXTENSION]: Unknown file extension \".ts\" for /workspace/src/index.ts\n    at new NodeError (node:internal/errors:405:5)\n    at Object.getFileProtocolModuleFormat [as file:] (node:internal/modules/esm/get_format:79:11)\n    at defaultGetFormat (node:internal/modules/esm/get_format:124:36)\n    at checkSyntax (node:internal/main/check_syntax:59:26) {\n  code: 'ERR_UNKNOWN_FILE_EXTENSION'\n}\n\nNode.js v18.17.1; Error ID: 037e0eb0",
+    "status": 3,
+    "code": 3
+  }
+}
+[debug] [2023-09-23T03:22:52.283Z] Error: Failed to update function api in region us-central1
+    at /home/vtranduc/.nvm/versions/node/v18.16.0/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:51:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)
+    at async Fabricator.updateV1Function (/home/vtranduc/.nvm/versions/node/v18.16.0/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:344:32)
+    at async Fabricator.updateEndpoint (/home/vtranduc/.nvm/versions/node/v18.16.0/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:150:13)
+    at async handle (/home/vtranduc/.nvm/versions/node/v18.16.0/lib/node_modules/firebase-tools/lib/deploy/functions/release/fabricator.js:88:17)
+[error] 
+[error] Error: There was an error deploying functions

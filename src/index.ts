@@ -1,15 +1,22 @@
-import "dotenv/config";
-import express from "express";
-import {
-  sequelizer,
-  getLoginRequestData,
-  getRegisterRequestData,
-} from "./utils";
-import bodyParser from "body-parser";
-import { Plan, RegisterError } from "./types";
-import cors from "cors";
-import api from "./api";
-import { compare, compareSync } from "bcryptjs";
+// import "dotenv/config";
+// import express from "express";
+
+const express = require("express");
+
+// // import {
+// //   sequelizer,
+// //   getLoginRequestData,
+// //   getRegisterRequestData,
+// // } from "./utils";
+// import bodyParser from "body-parser";
+// // import { Plan, RegisterError } from "./types";
+// import cors from "cors";
+// // import api from "./api";
+// import { compareSync } from "bcryptjs";
+
+const functions = require("firebase-functions");
+
+// const Test = require("../config");
 
 const PORT = process.env.PORT || 5000;
 
@@ -17,45 +24,49 @@ const PORT = process.env.PORT || 5000;
 
 const app = express();
 
-app.use(bodyParser.urlencoded({ extended: false }));
+// // app.use(bodyParser.urlencoded({ extended: false }));
 
-app.use(bodyParser.json());
+// // app.use(bodyParser.json());
 
-app.use(express.static("./public/"));
+// // app.use(express.static("./public/"));
 
-app.use(cors());
+// app.use(cors());
 
-app.get("/", (req, res) => {
-  res.send("Hello World at port " + PORT);
-});
+// app.get("/", (req, res) => {
+//   res.send("Hello World at port " + PORT);
+// });
 
-app.post("/loginBeta", (req, res) => {
-  // const username = req.body.username
-  // const password = req.body.password
+// app.post("/loginBeta", (req, res) => {
+//   // const username = req.body.username
+//   // const password = req.body.password
 
-  //   console.log("req body: ", req);
+//   //   console.log("req body: ", req);
 
-  const { username, password } = req.body;
+//   const { username, password } = req.body;
 
-  console.log("received: ", username, password);
+//   console.log("received: ", username, password);
 
-  res.send("SUCCESS");
-});
+//   res.send("SUCCESS");
+// });
 
-app.listen(PORT, () => {
-  //   console.log(
-  //     `Express server started on port ${PORT}. Try some routes, such as '/api/users'.`
-  //   );
+// app.listen(PORT, () => {
+//   //   console.log(
+//   //     `Express server started on port ${PORT}. Try some routes, such as '/api/users'.`
+//   //   );
 
-  console.log("Listening on port " + PORT);
+//   console.log("Listening on port " + PORT);
 
-  const match = compareSync(
-    "beta",
-    "$2a$10$UqutFHJydOIYkrW1HINpz.80TOzEE0uoECoydZ.P7VdtDL55Og4iO"
-  );
+//   const match = compareSync(
+//     "beta",
+//     "$2a$10$UqutFHJydOIYkrW1HINpz.80TOzEE0uoECoydZ.P7VdtDL55Og4iO"
+//   );
 
-  console.log("show match: ", match);
-});
+//   console.log("show match: ", match);
+// });
+
+// console.log("hello loading here!!!!!!!! ********");
+
+exports.api = functions.https.onRequest(app);
 
 // ---------------- Previous version. To be brought back. DO NOT DELETE-------------
 
