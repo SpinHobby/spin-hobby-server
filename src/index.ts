@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 5000;
 
 // const sequelizer = new Sequelizer(!!process.env.PORT);
 
-const app = express();
+export const app = express();
 
 app.use(bodyParser.urlencoded({ extended: false }));
 
@@ -56,6 +56,8 @@ app.listen(PORT, () => {
 
   console.log("show match: ", match);
 });
+
+// export
 
 // ---------------- Previous version. To be brought back. DO NOT DELETE-------------
 
