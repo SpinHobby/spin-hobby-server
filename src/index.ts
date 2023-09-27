@@ -1,118 +1,128 @@
-import "dotenv/config";
-import express from "express";
-import {
-  sequelizer,
-  getLoginRequestData,
-  getRegisterRequestData,
-} from "./utils";
-import bodyParser from "body-parser";
-import { Plan, RegisterError } from "./types";
-import cors from "cors";
-import api from "./api";
-import { compare, compareSync } from "bcryptjs";
+import { app } from "../functions/src/index";
 
 const PORT = process.env.PORT || 5000;
 
-// const sequelizer = new Sequelizer(!!process.env.PORT);
-
-const app = express();
-
-app.use(bodyParser.urlencoded({ extended: false }));
-
-app.use(bodyParser.json());
-
-app.use(express.static("./public/"));
-
-app.use(cors());
-
-app.get("/", (req, res) => {
-  res.send("Hello World at port " + PORT);
+app.listen(5000, () => {
+  console.log(`Express server started on port ${PORT}`);
 });
 
-app.post("/loginBeta", (req, res) => {
-  // const username = req.body.username
-  // const password = req.body.password
+// import "dotenv/config";
+// import express from "express";
+// import {
+//   sequelizer,
+//   getLoginRequestData,
+//   getRegisterRequestData,
+// } from "./utils";
+// import bodyParser from "body-parser";
+// import { Plan, RegisterError } from "./types";
+// import cors from "cors";
+// import api from "./api";
+// import { compare, compareSync } from "bcryptjs";
 
-  //   console.log("req body: ", req);
+// const PORT = process.env.PORT || 5000;
 
-  const { username, password } = req.body;
+// // const sequelizer = new Sequelizer(!!process.env.PORT);
 
-  console.log("received: ", username, password);
+// export const app = express();
 
-  res.send("SUCCESS");
-});
+// app.use(bodyParser.urlencoded({ extended: false }));
 
-app.listen(PORT, () => {
-  //   console.log(
-  //     `Express server started on port ${PORT}. Try some routes, such as '/api/users'.`
-  //   );
+// app.use(bodyParser.json());
 
-  console.log("Listening on port " + PORT);
+// app.use(express.static("./public/"));
 
-  const match = compareSync(
-    "beta",
-    "$2a$10$UqutFHJydOIYkrW1HINpz.80TOzEE0uoECoydZ.P7VdtDL55Og4iO"
-  );
+// app.use(cors());
 
-  console.log("show match: ", match);
-});
+// app.get("/", (req, res) => {
+//   res.send("Hello World at port " + PORT);
+// });
 
-// ---------------- Previous version. To be brought back. DO NOT DELETE-------------
+// app.post("/loginBeta", (req, res) => {
+//   // const username = req.body.username
+//   // const password = req.body.password
 
-// function main() {
-//   app.use("/api", api);
+//   //   console.log("req body: ", req);
 
-//   async function assertDatabaseConnectionOk() {
-//     console.log(`Checking database connection...`);
-//     try {
-//       await sequelizer.sequelize.authenticate();
-//       console.log("Database connection OK!");
-//     } catch (error: any) {
-//       console.log("Unable to connect to the database:");
-//       console.log(error.message);
-//       process.exit(1);
-//     }
-//   }
+//   const { username, password } = req.body;
 
-//   async function init() {
-//     await assertDatabaseConnectionOk();
+//   console.log("received: ", username, password);
 
-//     //sequelizer.init();
+//   res.send("SUCCESS");
+// });
 
-//     console.log(`Starting Sequelize + Express example on port ${PORT}...`);
-//     //console.log('db', sequelizer.db);
+// app.listen(PORT, () => {
+//   //   console.log(
+//   //     `Express server started on port ${PORT}. Try some routes, such as '/api/users'.`
+//   //   );
 
-//     app.listen(PORT, () => {
-//       console.log(
-//         `Express server started on port ${PORT}. Try some routes, such as '/api/users'.`
-//       );
-//     });
-//   }
+//   console.log("Listening on port " + PORT);
 
-//   init();
+//   const match = compareSync(
+//     "beta",
+//     "$2a$10$UqutFHJydOIYkrW1HINpz.80TOzEE0uoECoydZ.P7VdtDL55Og4iO"
+//   );
 
-//   // sequelizer.sequelize.sync()
-//   //   .then(() => {
-//   //     app.listen(PORT, () => console.log("Running on port ", PORT));
-//   //   })
-//   //   .catch(err => console.log(err));
+//   console.log("show match: ", match);
+// });
 
-//   // async () => {
-//   //   try {
-//   //     await sequelizer.sequelize.authenticate();
-//   //     console.log('Connection has been established successfully.');
-//   //     app.listen(PORT, () => console.log("Running on port ", PORT));
-//   //   } catch (error) {
-//   //     console.error('Unable to connect to the database:', error);
-//   //   }
-//   // }
+// // export
 
-//   // sequelizer.init();
-//   // app.listen(PORT, () => console.log("Running on port ", PORT));
+// // ---------------- Previous version. To be brought back. DO NOT DELETE-------------
 
-//   // console.log(Sequelizer.db)
-//   // sequelizer
-//   //   .init()
-//   //   .then(() => app.listen(PORT, () => console.log("Running on port ", PORT)))
-//   //   .catch(err => console.log(err));
-// }
+// // function main() {
+// //   app.use("/api", api);
+
+// //   async function assertDatabaseConnectionOk() {
+// //     console.log(`Checking database connection...`);
+// //     try {
+// //       await sequelizer.sequelize.authenticate();
+// //       console.log("Database connection OK!");
+// //     } catch (error: any) {
+// //       console.log("Unable to connect to the database:");
+// //       console.log(error.message);
+// //       process.exit(1);
+// //     }
+// //   }
+
+// //   async function init() {
+// //     await assertDatabaseConnectionOk();
+
+// //     //sequelizer.init();
+
+// //     console.log(`Starting Sequelize + Express example on port ${PORT}...`);
+// //     //console.log('db', sequelizer.db);
+
+// //     app.listen(PORT, () => {
+// //       console.log(
+// //         `Express server started on port ${PORT}. Try some routes, such as '/api/users'.`
+// //       );
+// //     });
+// //   }
+
+// //   init();
+
+// //   // sequelizer.sequelize.sync()
+// //   //   .then(() => {
+// //   //     app.listen(PORT, () => console.log("Running on port ", PORT));
+// //   //   })
+// //   //   .catch(err => console.log(err));
+
+// //   // async () => {
+// //   //   try {
+// //   //     await sequelizer.sequelize.authenticate();
+// //   //     console.log('Connection has been established successfully.');
+// //   //     app.listen(PORT, () => console.log("Running on port ", PORT));
+// //   //   } catch (error) {
+// //   //     console.error('Unable to connect to the database:', error);
+// //   //   }
+// //   // }
+
+// //   // sequelizer.init();
+// //   // app.listen(PORT, () => console.log("Running on port ", PORT));
+
+// //   // console.log(Sequelizer.db)
+// //   // sequelizer
+// //   //   .init()
+// //   //   .then(() => app.listen(PORT, () => console.log("Running on port ", PORT)))
+// //   //   .catch(err => console.log(err));
+// // }
