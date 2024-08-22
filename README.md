@@ -9,6 +9,6 @@ npm run dev
 # run the server on docker
 
 ```
-docker build -t anuragabcr/express .
-docker run -p 5000:5000 anuragabcr/express
+docker build -t spinhobby/express .
+docker run -p 5000:5000 spinhobby/express
 ```
