@@ -10,5 +10,5 @@ npm run dev
 
 ```
 docker build -t spinhobby/express .
-docker run -p 5000:5000 spinhobby/express
+docker run -p 8080:5000 spinhobby/express
 ```
