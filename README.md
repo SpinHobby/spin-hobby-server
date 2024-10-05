@@ -12,3 +12,9 @@ npm run dev
 docker build -t spinhobby/express .
 docker run -p 8080:5000 spinhobby/express
 ```
+
+# Use docker compose
+
+```
+docker compose up
+```
