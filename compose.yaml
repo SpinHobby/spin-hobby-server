@@ -3,7 +3,7 @@ services:
     build: .
     ports:
       - "8080:5000"
-  postgres:
+  postgres17:
     image: postgres:17
     ports:
       - "35432:5432"
