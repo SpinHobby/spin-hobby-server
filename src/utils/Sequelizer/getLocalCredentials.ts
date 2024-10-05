@@ -13,9 +13,9 @@ export function getLocalCredentials(): SequelizeCredentials {
 function getDefaultLocalCredentials() {
   return {
     host: "localhost",
-    user: "postgres",
-    database: "spinhobby",
+    user: "user",
+    database: "db",
     port: 5432,
-    password: "123",
+    password: "pass",
   };
 }
