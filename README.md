@@ -10,12 +10,25 @@ docker compose up
 
 https://localhost:8080
 
-## Connect database
+## Connect database if you already have psql in your local
 
 ```
 psql postgres://user:pass@localhost:35432/db
 ```
 
+## Connect database if you don't have psql in your local
+
+To connect Docker container 
+
+```
+docker compose exec db bash
+```
+
+To connect database
+
+```
+psql postgres://user:pass@localhost/db
+```
 
 # Other options
 
@@ -32,4 +45,10 @@ npm run dev
 ```
 docker build -t spinhobby/express .
 docker run -p 8080:5000 spinhobby/express
+```
+
+## Build from scrach 
+
+```
+docker compose up --build
 ```
