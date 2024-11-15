@@ -4,7 +4,7 @@
 
 create `.env` file in root directory
 
-Copy the content below and past it in the file
+Copy the content below and paste it in the file
 
 ```
 username=postgres
