@@ -4,10 +4,10 @@
 
 create `.env` file in root directory
 
-write down DB settings like below
+Copy the content below and past it in the file
 
 ```
-user=postgres
+username=postgres
 password=pass
 database=db
 host=localhost
