@@ -1,4 +1,38 @@
-# run the server on your local
+# Setup environment
+
+## Use docker compose
+
+```
+docker compose up
+```
+
+## Access web
+
+https://localhost:8080
+
+## Connect database if you already have psql in your local
+
+```
+psql postgres://user:pass@localhost:35432/db
+```
+
+## Connect database if you don't have psql in your local
+
+To connect Docker container 
+
+```
+docker compose exec db bash
+```
+
+To connect database
+
+```
+psql postgres://user:pass@localhost/db
+```
+
+# Other options
+
+## Run the server on your local
 
 To run the server, run the following command
 
@@ -6,9 +40,15 @@ To run the server, run the following command
 npm run dev
 ```
 
-# run the server on docker
+## Run the web server on docker
 
 ```
 docker build -t spinhobby/express .
 docker run -p 8080:5000 spinhobby/express
+```
+
+## Build from scrach 
+
+```
+docker compose up --build
 ```
