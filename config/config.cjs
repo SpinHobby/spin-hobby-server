@@ -2,12 +2,12 @@ require('dotenv').config();
 
 module.exports = {
   "development": {
-    "username": "user",
-    "password": "pass",
-    "database": "db",
-    "host": "localhost",
-    "port": "35432",
-    "dialect": "postgres"
+    "username": process.env.username,
+    "password": process.env.password,
+    "database": process.env.database,
+    "host": process.env.host,
+    "port": process.env.port,
+    "dialect": "postgres",
   },
   "test": {
     "username": "root",
