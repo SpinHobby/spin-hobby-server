@@ -20,7 +20,7 @@
   "type": "module",
   "scripts": {
     "start": "node src/index.ts",
-    "dev": "npx tsx src/index.ts --env-file=.env.development",
+    "dev": "npx tsx src/index.ts",
     "build": "tsc"
   }
 }
