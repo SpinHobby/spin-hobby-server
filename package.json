@@ -4,7 +4,7 @@
     "@types/cors": "^2.8.12",
     "@types/express": "^5.0.0",
     "@types/node": "^22.7.4",
-    "bcryptjs": "^2.4.3",
+    "bcryptjs": "^3.0.0",
     "body-parser": "^1.20.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.1",
