@@ -1,5 +1,19 @@
 # Setup environment
 
+## Put environment file
+
+create `.env` file in root directory
+
+Copy the content below and paste it in the file
+
+```
+username=postgres
+password=pass
+database=db
+host=localhost
+port=35432
+```
+
 ## Use docker compose
 
 ```
@@ -30,7 +44,7 @@ To connect database
 psql postgres://user:pass@localhost/db
 ```
 
-# Other options
+# Other options (No need to run if settings above works)
 
 ## Run the server on your local
 
@@ -47,7 +61,7 @@ docker build -t spinhobby/express .
 docker run -p 8080:5000 spinhobby/express
 ```
 
-## Build from scrach 
+## docker build from scrach 
 
 ```
 docker compose up --build
