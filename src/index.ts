@@ -1,128 +1,103 @@
-import { app } from "../functions/src/index";
+import "dotenv/config";
+import express from "express";
+import {
+  sequelizer,
+  getLoginRequestData,
+  getRegisterRequestData,
+} from "./utils";
+import bodyParser from "body-parser";
+import { Plan, RegisterError } from "./types";
+import cors from "cors";
+import api from "./api";
+import bcrypt from "bcryptjs";
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.EXPRESS_PORT || 8001;
 
-app.listen(5000, () => {
-  console.log(`Express server started on port ${PORT}`);
+export const app = express();
+
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
+app.use(express.static("./public/"));
+app.use(cors());
+
+app.get("/", (req, res) => {
+  res.send("Hello World from Spin Hobby Server!");
 });
 
-// import "dotenv/config";
-// import express from "express";
-// import {
-//   sequelizer,
-//   getLoginRequestData,
-//   getRegisterRequestData,
-// } from "./utils";
-// import bodyParser from "body-parser";
-// import { Plan, RegisterError } from "./types";
-// import cors from "cors";
-// import api from "./api";
-// import { compare, compareSync } from "bcryptjs";
+// Mount your API routes
+app.use("/api", api);
 
-// const PORT = process.env.PORT || 5000;
+// Optional: Add a test login endpoint
+app.post("/loginBeta", (req, res) => {
+  const { username, password } = req.body;
+  console.log("received login attempt:", username);
+  res.send("SUCCESS");
+});
 
-// // const sequelizer = new Sequelizer(!!process.env.PORT);
+async function assertDatabaseConnectionOk() {
+  console.log(`Checking database connection...`);
+  try {
+    await sequelizer.sequelize.authenticate();
+    console.log("Database connection OK!");
+  } catch (error: any) {
+    console.log("Unable to connect to the database:");
+    console.log(error.message);
+    console.log(
+      "Make sure your .env file is configured or start the database with: docker-compose up -d db"
+    );
+    process.exit(1);
+  }
+}
 
-// export const app = express();
+async function init() {
+  try {
+    console.log("Initializing server...");
 
-// app.use(bodyParser.urlencoded({ extended: false }));
+    // await assertDatabaseConnectionOk(); // Disabled - no database setup yet
 
-// app.use(bodyParser.json());
+    console.log(`Starting Spin Hobby Server on port ${PORT}...`);
 
-// app.use(express.static("./public/"));
+    const server = app.listen(PORT, () => {
+      console.log(`🚀 Express server started on port ${PORT}`);
+      console.log(`📊 API available at: http://localhost:${PORT}/api`);
+      console.log(`🏠 Home page: http://localhost:${PORT}/`);
+      console.log("Server is running and waiting for requests...");
+    });
 
-// app.use(cors());
+    // Keep the process alive
+    server.on("error", (error) => {
+      console.error("Server error:", error);
+    });
 
-// app.get("/", (req, res) => {
-//   res.send("Hello World at port " + PORT);
-// });
+    // Handle graceful shutdown
+    process.on("SIGINT", () => {
+      console.log("\nReceived SIGINT. Graceful shutdown...");
+      server.close(() => {
+        console.log("Server closed.");
+        process.exit(0);
+      });
+    });
 
-// app.post("/loginBeta", (req, res) => {
-//   // const username = req.body.username
-//   // const password = req.body.password
+    console.log("Init function completed successfully");
+  } catch (error) {
+    console.error("Error in init function:", error);
+    process.exit(1);
+  }
+}
 
-//   //   console.log("req body: ", req);
+// Add global error handlers
+process.on("uncaughtException", (error) => {
+  console.error("Uncaught Exception:", error);
+  process.exit(1);
+});
 
-//   const { username, password } = req.body;
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+  process.exit(1);
+});
 
-//   console.log("received: ", username, password);
-
-//   res.send("SUCCESS");
-// });
-
-// app.listen(PORT, () => {
-//   //   console.log(
-//   //     `Express server started on port ${PORT}. Try some routes, such as '/api/users'.`
-//   //   );
-
-//   console.log("Listening on port " + PORT);
-
-//   const match = compareSync(
-//     "beta",
-//     "$2a$10$UqutFHJydOIYkrW1HINpz.80TOzEE0uoECoydZ.P7VdtDL55Og4iO"
-//   );
-
-//   console.log("show match: ", match);
-// });
-
-// // export
-
-// // ---------------- Previous version. To be brought back. DO NOT DELETE-------------
-
-// // function main() {
-// //   app.use("/api", api);
-
-// //   async function assertDatabaseConnectionOk() {
-// //     console.log(`Checking database connection...`);
-// //     try {
-// //       await sequelizer.sequelize.authenticate();
-// //       console.log("Database connection OK!");
-// //     } catch (error: any) {
-// //       console.log("Unable to connect to the database:");
-// //       console.log(error.message);
-// //       process.exit(1);
-// //     }
-// //   }
-
-// //   async function init() {
-// //     await assertDatabaseConnectionOk();
-
-// //     //sequelizer.init();
-
-// //     console.log(`Starting Sequelize + Express example on port ${PORT}...`);
-// //     //console.log('db', sequelizer.db);
-
-// //     app.listen(PORT, () => {
-// //       console.log(
-// //         `Express server started on port ${PORT}. Try some routes, such as '/api/users'.`
-// //       );
-// //     });
-// //   }
-
-// //   init();
-
-// //   // sequelizer.sequelize.sync()
-// //   //   .then(() => {
-// //   //     app.listen(PORT, () => console.log("Running on port ", PORT));
-// //   //   })
-// //   //   .catch(err => console.log(err));
-
-// //   // async () => {
-// //   //   try {
-// //   //     await sequelizer.sequelize.authenticate();
-// //   //     console.log('Connection has been established successfully.');
-// //   //     app.listen(PORT, () => console.log("Running on port ", PORT));
-// //   //   } catch (error) {
-// //   //     console.error('Unable to connect to the database:', error);
-// //   //   }
-// //   // }
-
-// //   // sequelizer.init();
-// //   // app.listen(PORT, () => console.log("Running on port ", PORT));
-
-// //   // console.log(Sequelizer.db)
-// //   // sequelizer
-// //   //   .init()
-// //   //   .then(() => app.listen(PORT, () => console.log("Running on port ", PORT)))
-// //   //   .catch(err => console.log(err));
-// // }
+console.log("About to call init()...");
+init().catch((error) => {
+  console.error("Failed to initialize server:", error);
+  process.exit(1);
+});
