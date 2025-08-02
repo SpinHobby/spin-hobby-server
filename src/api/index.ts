@@ -10,6 +10,7 @@ import admin from "./admin";
 import payments from "./payments";
 import cart from "./cart";
 import search from "./search";
+import squareCatalog from "./square-catalog";
 
 const router = express.Router();
 
@@ -25,5 +26,6 @@ router.use("/", admin);
 router.use("/", payments);
 router.use("/", cart);
 router.use("/", search);
+router.use("/", squareCatalog);
 
 export default router;
