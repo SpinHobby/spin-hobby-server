@@ -10,6 +10,7 @@ import { Plan, RegisterError } from "./types";
 import cors from "cors";
 import api from "./api";
 import bcrypt from "bcryptjs";
+import { initializeModels } from "./db/models/initModels";
 
 const PORT = process.env.EXPRESS_PORT || 8001;
 
@@ -52,6 +53,9 @@ async function assertDatabaseConnectionOk() {
 async function init() {
   try {
     console.log("Initializing server...");
+
+    // Initialize Sequelize model associations
+    initializeModels();
 
     // await assertDatabaseConnectionOk(); // Disabled - no database setup yet
 

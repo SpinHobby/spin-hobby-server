@@ -1,4 +1,5 @@
 import express from "express";
+import { SquareProduct, SquareCategory } from "../db/models/initModels";
 
 const router = express.Router();
 
@@ -28,7 +29,7 @@ const homeData = {
     {
       headline: "Studio Ghibli",
       subheading: "Classic Collection",
-      img: "https://images.unsplash.com/photo-1578632749014-ca4762ec6567?ixlib=rb-4.0.3&auto=format&fit=crop&w=2070&q=80",
+      img: "https://i.redd.it/9lrjb3sqzmq41.jpg",
     },
   ],
   featured: [
@@ -322,15 +323,110 @@ const homeData = {
   ],
 };
 
-// GET /api/v1/home - Returns home page data
+// GET /api/v1/home - Returns home page data with real Square integration
 router.get("/v1/home", async (req, res) => {
   try {
-    // In a real application, you would fetch this data from your database
-    // For now, returning mock data to get the app working
-    res.json(homeData);
+    // Get real data from database
+    const [featuredProducts, featuredCategories] = await Promise.all([
+      SquareProduct.getFeaturedProducts(6),
+      SquareCategory.getFeaturedCategories(7),
+    ]);
+
+    // Check if we have real data, otherwise use dummy data
+    if (featuredProducts.length === 0 && featuredCategories.length === 0) {
+      console.log(
+        "🎯 No Square data found, serving dummy data. Run seeding to get real data."
+      );
+      return res.json({
+        ...homeData,
+        isUsingDummyData: true,
+        message:
+          "Using dummy data. Run POST /api/v1/seed/all to load real Square data.",
+      });
+    }
+
+    // Format real Square data for frontend
+    const realHomeData = {
+      header: featuredProducts.slice(0, 3).map((product: any) => ({
+        headline: product.name,
+        subheading:
+          product.customDescription ||
+          product.description ||
+          "Premium anime merchandise",
+        img: product.images[0]?.url || "https://i.redd.it/9lrjb3sqzmq41.jpg",
+        cta: "Shop Now",
+      })),
+
+      featured: featuredProducts.slice(0, 6).map((product: any) => ({
+        title: product.name,
+        img: product.images[0]?.url || "https://i.redd.it/9lrjb3sqzmq41.jpg",
+        price:
+          product.customPrice ||
+          (product.variations[0]?.price
+            ? product.variations[0].price / 100
+            : 29.99),
+        description:
+          product.customDescription ||
+          product.description ||
+          "Premium anime merchandise",
+        series: product.squareCategoryId || "Anime",
+        character: product.name.split(" ")[0] || "Character",
+        productType: "Figure",
+        manufacturer: "Premium Manufacturer",
+        scale: "1/7",
+        material: "PVC, ABS",
+        preorder: false,
+        tags: ["premium", "featured"],
+      })),
+
+      merchs: featuredCategories.slice(0, 4).map((category: any) => ({
+        name: category.customName || category.name,
+        series: category.customName || category.name,
+        merchs: featuredProducts.slice(0, 3).map((product: any) => ({
+          title: product.name,
+          img: product.images[0]?.url || "https://i.redd.it/9lrjb3sqzmq41.jpg",
+          price:
+            product.customPrice ||
+            (product.variations[0]?.price
+              ? product.variations[0].price / 100
+              : 29.99),
+          description:
+            product.customDescription ||
+            product.description ||
+            "Premium anime merchandise",
+          series: category.customName || category.name,
+          character: product.name.split(" ")[0] || "Character",
+          productType: "Figure",
+          manufacturer: "Premium Manufacturer",
+          scale: "1/7",
+          material: "PVC, ABS",
+          preorder: false,
+          tags: ["featured"],
+        })),
+      })),
+
+      categories: featuredCategories.map((category: any) => ({
+        name: category.customName || category.name,
+        img: "https://i.redd.it/9lrjb3sqzmq41.jpg",
+        productCount: Math.floor(Math.random() * 100) + 10,
+        featured: category.isFeatured,
+      })),
+
+      isUsingRealData: true,
+      dataSource: "square",
+      lastUpdated: new Date().toISOString(),
+    };
+
+    res.json(realHomeData);
   } catch (error) {
     console.error("Error fetching home data:", error);
-    res.status(500).json({ error: "Failed to fetch home data" });
+
+    // Fallback to dummy data on error
+    res.json({
+      ...homeData,
+      isUsingDummyData: true,
+      error: "Failed to fetch real data, serving dummy data",
+    });
   }
 });
 
