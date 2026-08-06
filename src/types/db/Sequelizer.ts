@@ -17,6 +17,7 @@ export enum LoginError {
 export enum RegisterError {
   UsernameExists = "UsernameExists",
   EmailExists = "EmailExists",
+  PhoneExists = "PhoneExists",
 }
 
 export type LoginCallback<Error extends LoginError | null> = (
@@ -31,3 +32,10 @@ export interface SequelizeCredentials {
   port: number;
   password: string;
 }
+
+export type Order = {
+  user_id: number;
+  payment_id: number;
+  address_id: number;
+  total: number;
+};

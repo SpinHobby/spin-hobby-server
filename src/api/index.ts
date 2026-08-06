@@ -1,31 +1,20 @@
 import express from "express";
 import square from "./square";
-// Rest of the backend is disabled while we run a minimal Square-only API.
-// import auth from "./auth";
-// import home from "./home";
-// import products from "./products";
-// import categories from "./categories";
-// import series from "./series";
-// import seed from "./seed";
-// import admin from "./admin";
-// import payments from "./payments";
-// import cart from "./cart";
-// import search from "./search";
-// import squareCatalog from "./square-catalog";
+import auth from "./auth";
+import product from "./admin/product";
+import adminRouter from "./admin";
+import cart from "./cart";
+import order from "./order";
+import search from "./search";
 
 const router = express.Router();
 
 router.use("/", square);
-// router.use("/", auth);
-// router.use("/", home);
-// router.use("/", products);
-// router.use("/", categories);
-// router.use("/", series);
-// router.use("/", seed);
-// router.use("/", admin);
-// router.use("/", payments);
-// router.use("/", cart);
-// router.use("/", search);
-// router.use("/", squareCatalog);
+router.use("/", auth);
+router.use("/product", product);
+router.use("/cart", cart);
+router.use("/order", order);
+router.use("/search", search);
+router.use(adminRouter);
 
 export default router;

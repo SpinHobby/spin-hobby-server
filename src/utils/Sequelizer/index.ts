@@ -41,11 +41,29 @@ class Sequelizer {
   }
 
   public init() {
-    // TODO: Dynamic model loading needs to be updated for ES modules
-    // For now, we'll initialize without automatic model loading
-    console.log(
-      "Sequelizer initialized (model auto-loading disabled for ES modules)"
-    );
+    fs.readdirSync("src/db/models")
+      .filter((file: string) => {
+        return (
+          file.indexOf(".") !== 0 &&
+          file !== basename &&
+          file.slice(-3) === ".ts"
+        );
+      })
+      .forEach((file: any) => {
+        const model = require(path.join("../../db/models", file))(
+          this.sequelize,
+          DataTypes
+        );
+        db[model.name] = model;
+      });
+
+    //console.log(db.Address.findAll());
+    Object.keys(db).forEach((modelName) => {
+      if (db[modelName].associate) {
+        db[modelName].associate(db);
+      }
+    });
+
     this.db = db;
   }
 
@@ -102,5 +120,6 @@ class Sequelizer {
 
 const sequelizer = new Sequelizer(!!process.env.PORT);
 sequelizer.init();
+sequelizer.sequelize.sync();
 
 export { sequelizer };

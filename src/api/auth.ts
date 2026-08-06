@@ -1,8 +1,8 @@
-import express from "express";
-const router = express.Router();
-// const { User } = require("../db/models"); // Temporarily disabled
+const router = require("express").Router();
+//const { User } = require('../db/models');
 import { Plan, RegisterError } from "../types";
-// import upload from "./multer"; // Temporarily disabled
+import jwt from "jsonwebtoken";
+import upload from "./multer";
 import {
   sequelizer,
   getLoginRequestData,
@@ -18,55 +18,43 @@ import {
   UserCredentials,
 } from "../types";
 
-// Temporary basic routes for testing
-router.get("/test", (req, res) => {
-  res.json({ message: "Auth API is working!" });
-});
+router.post("/login", async (req: { body: Login }, res: any) => {
+  console.log("LOGIN HERE ---------------> ");
 
-router.post("/test-login", (req, res) => {
-  res.json({ message: "Login endpoint reached", body: req.body });
-});
+  const login = getLoginRequestData(req.body);
+  if (!login) return res.sendStatus(400);
 
-/* 
-// TODO: Re-enable these routes once database models are properly set up for ES modules
+  const user = await sequelizer.db.User.findOne({
+    where: {
+      username: login.username.toLowerCase(),
+    },
+  });
 
-router.post(
-  "/login",
-  (
-    req: { body: Login },
-    res: {
-      sendStatus: (arg0: number) => any;
-      json: (arg0: { error?: any; status?: string }) => void;
-    }
-  ) => {
-    const login = getLoginRequestData(req.body);
-    if (!login) return res.sendStatus(400);
-
-    sequelizer.db.User.validateLogin(login, (error: any, userData: any) => {
-      if (error) res.json({ error });
-      else res.json({ status: "valid" });
+  sequelizer.db.User.validateLogin(login, (error: any, userData: any) => {
+    if (error) res.json({ error });
+    else return;
+  }).then(() => {
+    const token = jwt.sign({ id: user.dataValues.id }, "secret", {
+      expiresIn: 86400,
     });
-  }
-);
+
+    // res.json({ status: "valid" });
+    res.status(200).json({
+      ...user.dataValues,
+      token,
+    });
+  });
+});
 
 router.post(
   "/register",
-  // upload.single("avatar"), // Disabled until multer is added
-  (
-    req: { body: any; file: string | undefined },
-    res: {
-      sendStatus: (arg0: number) => void;
-      status: (arg0: number) => {
-        (): any;
-        new (): any;
-        send: { (arg0: { message: RegisterError }): void; new (): any };
-      };
-    }
-  ) => {
+  upload.single("avatar"),
+  (req: { body: any; file: string | undefined }, res: any) => {
     const credentials = getRegisterRequestData({
       ...req.body,
       plan: Plan.Standard,
     });
+
     if (!credentials) {
       return res.sendStatus(400);
     }
@@ -75,11 +63,39 @@ router.post(
       credentials.avatar = req.file;
     }
 
+    console.log("===============1 ==============", credentials);
+
     sequelizer.db.User.addAccount(credentials)
-      .then(() => res.sendStatus(200))
+      .then((user: any) => {
+        console.log("=============== 1 a =================");
+
+        console.log("here", user);
+        const token = jwt.sign({ id: user.dataValues.id }, "secret", {
+          expiresIn: 86400,
+        });
+
+        console.log("=============== 2 ==============");
+
+        // res.json({ status: "valid" });
+
+        res.status(200).json({
+          ...user.dataValues,
+          phone: parseInt(user.dataValues.phone),
+          token,
+        });
+
+        console.log("=============== 3 ==============");
+
+        //res.sendStatus(200)
+      })
       .catch((e: { errors: { message: any }[] }) => {
+        console.log(e);
+
         const message =
           ((e.errors && e.errors[0]?.message) as string | undefined) || null;
+
+        console.log("CAUGHT ERROR: ------------", message);
+
         switch (message) {
           case "username must be unique":
             res.status(409).send({ message: RegisterError.UsernameExists });
@@ -87,12 +103,14 @@ router.post(
           case "email must be unique":
             res.status(409).send({ message: RegisterError.EmailExists });
             break;
+          case "phone must be unique":
+            res.status(409).send({ message: RegisterError.PhoneExists });
+            break;
           default:
             res.sendStatus(500);
         }
       });
   }
 );
-*/
 
-export default router;
+module.exports = router;

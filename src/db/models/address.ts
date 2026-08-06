@@ -10,11 +10,16 @@ module.exports = (sequelize: any, DataTypes: { NUMBER: any; STRING: any; }) => {
      */
     static associate(models: any) {
       // define association here
-      Address.belongsTo(models.User);
+      Address.belongsTo(models.User, {
+
+        foreignKey: 'user_id'
+      
+      });
+      Address.hasOne(models.Order, { foreignKey: 'address_id' });
     }
   }
   Address.init({
-    userId: DataTypes.NUMBER,
+    user_id: DataTypes.NUMBER,
     address_line1: DataTypes.STRING,
     address_line2: DataTypes.STRING,
     city: DataTypes.STRING,
