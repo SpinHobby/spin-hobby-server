@@ -16,17 +16,32 @@ function sendJson(res: express.Response, status: number, data: unknown) {
     );
 }
 
-// GET /api/square/catalog?q=keyword&cursor=...
+// GET /api/square/catalog?q=keyword&cursor=...&limit=24
 router.get("/square/catalog", async (req, res) => {
   try {
-    const { q, cursor } = req.query;
+    const { q, cursor, limit } = req.query;
     const result = await squareService.searchCatalog(
       q as string | undefined,
-      cursor as string | undefined
+      cursor as string | undefined,
+      limit ? parseInt(limit as string) : undefined
     );
     sendJson(res, 200, { success: true, ...result });
   } catch (error: any) {
     console.error("Error searching Square catalog:", error);
+    sendJson(res, 500, { success: false, error: error.message });
+  }
+});
+
+// GET /api/square/catalog/:id
+router.get("/square/catalog/:id", async (req, res) => {
+  try {
+    const result = await squareService.getItem(req.params.id);
+    if (!result.item) {
+      return sendJson(res, 404, { success: false, error: "Item not found" });
+    }
+    sendJson(res, 200, { success: true, ...result });
+  } catch (error: any) {
+    console.error("Error fetching Square catalog item:", error);
     sendJson(res, 500, { success: false, error: error.message });
   }
 });

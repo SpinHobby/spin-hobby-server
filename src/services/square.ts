@@ -15,11 +15,12 @@ export class SquareService {
   }
 
   // Search the catalog. Pass `keywords` to filter by item name/description, omit for the full catalog.
-  async searchCatalog(keywords?: string, cursor?: string) {
+  async searchCatalog(keywords?: string, cursor?: string, limit?: number) {
     const response = await this.client.catalog.search({
       objectTypes: ["ITEM"],
       includeRelatedObjects: true,
       cursor,
+      limit,
       query: keywords ? { textQuery: { keywords: [keywords] } } : undefined,
     });
 
@@ -27,6 +28,18 @@ export class SquareService {
       items: response.objects || [],
       relatedObjects: response.relatedObjects || [],
       cursor: response.cursor,
+    };
+  }
+
+  async getItem(id: string) {
+    const response = await this.client.catalog.batchGet({
+      objectIds: [id],
+      includeRelatedObjects: true,
+    });
+
+    return {
+      item: response.objects?.[0] || null,
+      relatedObjects: response.relatedObjects || [],
     };
   }
 
