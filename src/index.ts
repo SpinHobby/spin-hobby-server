@@ -2,28 +2,30 @@ import "dotenv/config";
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
-import cookie from "cookie-session";
 import api from "./api";
-import {
-  sequelizer,
-  getLoginRequestData,
-  getRegisterRequestData,
-} from "./utils";
-import { Plan, RegisterError } from "./types";
-import bcrypt from "bcryptjs";
-import { initializeModels } from "./db/models/initModels";
+// Sequelize/DB, cookie-session, and auth utils merged in from adminRoute are
+// unused while the backend runs Square-only (no Postgres connection tonight).
+// import cookie from "cookie-session";
+// import {
+//   sequelizer,
+//   getLoginRequestData,
+//   getRegisterRequestData,
+// } from "./utils";
+// import { Plan, RegisterError } from "./types";
+// import bcrypt from "bcryptjs";
+// import { initializeModels } from "./db/models/initModels";
 
 const PORT = process.env.EXPRESS_PORT || 8001;
 
 export const app = express();
 
-app.use(
-  cookie({
-    name: "session",
-    keys: ["secret"],
-    maxAge: 24 * 60 * 60 * 1000,
-  })
-);
+// app.use(
+//   cookie({
+//     name: "session",
+//     keys: ["secret"],
+//     maxAge: 24 * 60 * 60 * 1000,
+//   })
+// );
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 app.use(express.static("./public/"));
@@ -43,29 +45,29 @@ app.post("/loginBeta", (req, res) => {
   res.send("SUCCESS");
 });
 
-async function assertDatabaseConnectionOk() {
-  console.log(`Checking database connection...`);
-  try {
-    await sequelizer.sequelize.authenticate();
-    console.log("Database connection OK!");
-  } catch (error: any) {
-    console.log("Unable to connect to the database:");
-    console.log(error.message);
-    console.log(
-      "Make sure your .env file is configured or start the database with: docker-compose up -d db"
-    );
-    process.exit(1);
-  }
-}
+// async function assertDatabaseConnectionOk() {
+//   console.log(`Checking database connection...`);
+//   try {
+//     await sequelizer.sequelize.authenticate();
+//     console.log("Database connection OK!");
+//   } catch (error: any) {
+//     console.log("Unable to connect to the database:");
+//     console.log(error.message);
+//     console.log(
+//       "Make sure your .env file is configured or start the database with: docker-compose up -d db"
+//     );
+//     process.exit(1);
+//   }
+// }
 
 async function init() {
   try {
     console.log("Initializing server...");
 
     // Initialize Sequelize model associations
-    initializeModels();
+    // initializeModels();
 
-    await assertDatabaseConnectionOk();
+    // await assertDatabaseConnectionOk();
 
     console.log(`Starting Spin Hobby Server on port ${PORT}...`);
 
