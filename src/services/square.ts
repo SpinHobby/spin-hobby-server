@@ -43,6 +43,57 @@ export class SquareService {
     return response.locations || [];
   }
 
+  // Public-safe config the frontend needs to initialize the Web Payments SDK.
+  getConfig() {
+    return {
+      applicationId: process.env.SQUARE_APPLICATION_ID,
+      locationId: process.env.SQUARE_LOCATION_ID,
+    };
+  }
+
+  // Create or update catalog items in bulk, e.g. for seeding test data.
+  async upsertItems(
+    items: {
+      name: string;
+      description?: string;
+      price: number; // smallest currency unit, e.g. cents
+      currency?: Currency;
+    }[]
+  ) {
+    const response = await this.client.catalog.batchUpsert({
+      idempotencyKey: randomUUID(),
+      batches: [
+        {
+          objects: items.map((item, i) => ({
+            type: "ITEM" as const,
+            id: `#item-${i}`,
+            itemData: {
+              name: item.name,
+              description: item.description,
+              variations: [
+                {
+                  type: "ITEM_VARIATION" as const,
+                  id: `#item-${i}-variation`,
+                  itemVariationData: {
+                    itemId: `#item-${i}`,
+                    name: "Regular",
+                    pricingType: "FIXED_PRICING" as const,
+                    priceMoney: {
+                      amount: BigInt(item.price),
+                      currency: item.currency || Currency.Usd,
+                    },
+                  },
+                },
+              ],
+            },
+          })),
+        },
+      ],
+    });
+
+    return response.objects || [];
+  }
+
   // Charge a card using a payment token (nonce) produced by Square's Web Payments SDK on the frontend.
   async createPayment(params: {
     sourceId: string;

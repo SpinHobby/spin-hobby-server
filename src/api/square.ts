@@ -53,6 +53,11 @@ router.get("/square/locations", async (req, res) => {
   }
 });
 
+// GET /api/square/config - public-safe values the frontend needs for the Web Payments SDK
+router.get("/square/config", (req, res) => {
+  sendJson(res, 200, { success: true, ...squareService.getConfig() });
+});
+
 // POST /api/square/payments  { sourceId, amount, currency? }
 router.post("/square/payments", async (req, res) => {
   try {
