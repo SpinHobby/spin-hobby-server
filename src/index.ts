@@ -1,16 +1,17 @@
 import "dotenv/config";
 import express from "express";
-import {
-  sequelizer,
-  getLoginRequestData,
-  getRegisterRequestData,
-} from "./utils";
 import bodyParser from "body-parser";
-import { Plan, RegisterError } from "./types";
 import cors from "cors";
 import api from "./api";
-import bcrypt from "bcryptjs";
-import { initializeModels } from "./db/models/initModels";
+// Sequelize/DB and auth utils are unused while the backend runs Square-only.
+// import {
+//   sequelizer,
+//   getLoginRequestData,
+//   getRegisterRequestData,
+// } from "./utils";
+// import { Plan, RegisterError } from "./types";
+// import bcrypt from "bcryptjs";
+// import { initializeModels } from "./db/models/initModels";
 
 const PORT = process.env.EXPRESS_PORT || 8001;
 
@@ -35,30 +36,9 @@ app.post("/loginBeta", (req, res) => {
   res.send("SUCCESS");
 });
 
-async function assertDatabaseConnectionOk() {
-  console.log(`Checking database connection...`);
-  try {
-    await sequelizer.sequelize.authenticate();
-    console.log("Database connection OK!");
-  } catch (error: any) {
-    console.log("Unable to connect to the database:");
-    console.log(error.message);
-    console.log(
-      "Make sure your .env file is configured or start the database with: docker-compose up -d db"
-    );
-    process.exit(1);
-  }
-}
-
 async function init() {
   try {
     console.log("Initializing server...");
-
-    // Initialize Sequelize model associations
-    initializeModels();
-
-    // await assertDatabaseConnectionOk(); // Disabled - no database setup yet
-
     console.log(`Starting Spin Hobby Server on port ${PORT}...`);
 
     const server = app.listen(PORT, () => {
