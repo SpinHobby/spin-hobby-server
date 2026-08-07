@@ -31,13 +31,14 @@
     "styled-components": "^5.3.5",
     "ts-node": "^10.7.0",
     "tslib": "^2.4.0",
+    "tsx": "^4.23.10",
     "typescript": "^5.6.2"
   },
   "type": "module",
   "scripts": {
     "reset": "npx sequelize-cli db:drop; sudo -u postgres createdb spinhobby; npx sequelize-cli db:migrate",
-    "start": "node src/index.ts",
-    "dev": "npx tsx src/index.ts",
+    "start": "tsx src/index.ts",
+    "dev": "tsx src/index.ts",
     "build": "tsc",
     "migrate": "node db/migrate.cjs migrate",
     "migrate:reset": "node db/migrate.cjs reset",

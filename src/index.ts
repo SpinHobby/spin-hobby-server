@@ -15,7 +15,8 @@ import api from "./api";
 // import bcrypt from "bcryptjs";
 // import { initializeModels } from "./db/models/initModels";
 
-const PORT = process.env.EXPRESS_PORT || 8001;
+// Render/Railway/Heroku-style platforms inject PORT and require the app to bind to it.
+const PORT = process.env.PORT || process.env.EXPRESS_PORT || 8001;
 
 export const app = express();
 
