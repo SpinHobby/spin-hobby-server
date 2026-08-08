@@ -107,6 +107,56 @@ export class SquareService {
     return response.objects || [];
   }
 
+  // Create a single catalog item scoped to this location only (not present at
+  // other locations the merchant may have). Used by the cashier tool so
+  // convention one-offs are searchable/chargeable in Square POS without
+  // being scattered across every location.
+  async createLocationItem(item: {
+    name: string;
+    description?: string;
+    price: number; // smallest currency unit, e.g. cents
+  }) {
+    const locationId = process.env.SQUARE_LOCATION_ID;
+    const response = await this.client.catalog.batchUpsert({
+      idempotencyKey: randomUUID(),
+      batches: [
+        {
+          objects: [
+            {
+              type: "ITEM" as const,
+              id: "#item",
+              presentAtAllLocations: false,
+              presentAtLocationIds: locationId ? [locationId] : undefined,
+              itemData: {
+                name: item.name,
+                description: item.description,
+                variations: [
+                  {
+                    type: "ITEM_VARIATION" as const,
+                    id: "#item-variation",
+                    presentAtAllLocations: false,
+                    presentAtLocationIds: locationId ? [locationId] : undefined,
+                    itemVariationData: {
+                      itemId: "#item",
+                      name: "Regular",
+                      pricingType: "FIXED_PRICING" as const,
+                      priceMoney: {
+                        amount: BigInt(item.price),
+                        currency: Currency.Cad,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    return response.objects?.[0] || null;
+  }
+
   // Charge a card using a payment token (nonce) produced by Square's Web Payments SDK on the frontend.
   async createPayment(params: {
     sourceId: string;
@@ -120,7 +170,7 @@ export class SquareService {
       idempotencyKey: params.idempotencyKey || randomUUID(),
       amountMoney: {
         amount: BigInt(params.amount),
-        currency: params.currency || Currency.Usd,
+        currency: params.currency || Currency.Cad,
       },
       locationId: params.locationId || process.env.SQUARE_LOCATION_ID,
     });
