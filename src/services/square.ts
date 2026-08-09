@@ -115,6 +115,7 @@ export class SquareService {
     name: string;
     description?: string;
     price: number; // smallest currency unit, e.g. cents
+    photo?: { buffer: Buffer; mimetype: string };
   }) {
     const locationId = process.env.SQUARE_LOCATION_ID;
     const response = await this.client.catalog.batchUpsert({
@@ -154,7 +155,31 @@ export class SquareService {
       ],
     });
 
-    return response.objects?.[0] || null;
+    const createdItem = response.objects?.[0] || null;
+
+    if (createdItem?.id && item.photo) {
+      try {
+        await this.client.catalog.images.create({
+          request: {
+            idempotencyKey: randomUUID(),
+            objectId: createdItem.id,
+            isPrimary: true,
+            image: {
+              type: "IMAGE" as const,
+              id: "#image",
+              imageData: { name: item.name },
+            },
+          },
+          imageFile: new Blob([new Uint8Array(item.photo.buffer)], {
+            type: item.photo.mimetype,
+          }),
+        });
+      } catch (error) {
+        console.error("Error attaching photo to Square catalog item:", error);
+      }
+    }
+
+    return createdItem;
   }
 
   // Charge a card using a payment token (nonce) produced by Square's Web Payments SDK on the frontend.

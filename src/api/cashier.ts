@@ -77,10 +77,11 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
   }
 });
 
-// POST /api/cashier/record  { title, description, price } (price in dollars)
-router.post("/cashier/record", async (req, res) => {
+// POST /api/cashier/record  multipart: photo (optional), title, description, price (price in dollars)
+router.post("/cashier/record", upload.single("photo"), async (req, res) => {
   try {
     const { title, description, price } = req.body;
+    const file = req.file;
 
     if (!title || price == null) {
       return res.status(400).json({ success: false, error: "title and price are required" });
@@ -94,6 +95,7 @@ router.post("/cashier/record", async (req, res) => {
       name: title,
       description,
       price: priceCents,
+      photo: file ? { buffer: file.buffer, mimetype: file.mimetype } : undefined,
     });
 
     res.status(200).json({ success: true, itemId: item?.id });
