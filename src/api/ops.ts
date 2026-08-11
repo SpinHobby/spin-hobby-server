@@ -1,7 +1,53 @@
 import express from "express";
 import { pool } from "../db/pool";
+import { getBudgetStatus } from "../services/aiUsage";
 
 const router = express.Router();
+
+// Tools tracked on the ops dashboard. Add an entry here (and a matching row
+// in ai_budgets, or let it fall back to the $20/$30 defaults) whenever a new
+// AI API is wired in - e.g. a photo-enhancement provider later.
+const TRACKED_AI_TOOLS = ["anthropic_cashier"];
+
+router.get("/ops/ai-usage", async (req, res) => {
+  try {
+    const statuses = await Promise.all(TRACKED_AI_TOOLS.map((tool) => getBudgetStatus(tool)));
+    res.status(200).json({ success: true, tools: statuses });
+  } catch (error: any) {
+    console.error("Error fetching AI usage:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.put("/ops/ai-usage/:tool", async (req, res) => {
+  try {
+    const { tool } = req.params;
+    const { warnThresholdUsd, stopThresholdUsd } = req.body;
+    if (
+      !Number.isFinite(Number(warnThresholdUsd)) ||
+      !Number.isFinite(Number(stopThresholdUsd)) ||
+      Number(warnThresholdUsd) < 0 ||
+      Number(stopThresholdUsd) < 0
+    ) {
+      return res.status(400).json({ success: false, error: "Invalid threshold values" });
+    }
+
+    await pool.query(
+      `INSERT INTO ai_budgets (tool, warn_threshold_usd, stop_threshold_usd)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (tool) DO UPDATE SET
+         warn_threshold_usd = EXCLUDED.warn_threshold_usd,
+         stop_threshold_usd = EXCLUDED.stop_threshold_usd`,
+      [tool, Number(warnThresholdUsd), Number(stopThresholdUsd)]
+    );
+
+    const status = await getBudgetStatus(tool);
+    res.status(200).json({ success: true, tool: status });
+  } catch (error: any) {
+    console.error("Error updating AI budget:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // Admin-only gauges. No server-side auth on this route (same pattern as the
 // homepage admin routes) - the frontend gates it behind the shared admin

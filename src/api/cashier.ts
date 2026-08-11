@@ -3,6 +3,9 @@ import multer from "multer";
 import Anthropic from "@anthropic-ai/sdk";
 import { squareService } from "../services/square";
 import { PRODUCT_CATEGORIES } from "../services/productCategories";
+import { estimateAnthropicCost, recordAiUsage, getBudgetStatus } from "../services/aiUsage";
+
+const AI_TOOL = "anthropic_cashier";
 
 const router = express.Router();
 
@@ -45,8 +48,17 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
       return res.status(400).json({ success: false, error: "file must be an image" });
     }
 
+    const budget = await getBudgetStatus(AI_TOOL);
+    if (budget.status === "blocked") {
+      return res.status(429).json({
+        success: false,
+        error: `Photo identification is disabled for the rest of the month - AI budget of $${budget.stopThresholdUsd} reached. Enter the title/description manually, or ask an admin to raise the budget in the Ops dashboard.`,
+      });
+    }
+
+    const model = "claude-opus-5";
     const response = await anthropic.messages.create({
-      model: "claude-opus-5",
+      model,
       max_tokens: 512,
       output_config: { format: { type: "json_schema", schema: IDENTIFY_SCHEMA } },
       messages: [
@@ -77,6 +89,13 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
       throw new Error("No text response from model");
     }
 
+    const inputTokens = response.usage.input_tokens ?? 0;
+    const outputTokens = response.usage.output_tokens;
+    const cost = estimateAnthropicCost(model, inputTokens, outputTokens);
+    recordAiUsage(AI_TOOL, cost, inputTokens, outputTokens).catch((error) =>
+      console.error("Error recording AI usage:", error)
+    );
+
     const result = JSON.parse(textBlock.text);
     res.status(200).json({ success: true, ...result });
   } catch (error: any) {
@@ -90,12 +109,17 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
 // is false - the initial stock count to set for the new variation)
 router.post("/cashier/record", upload.single("photo"), async (req, res) => {
   try {
-    const { title, description, price, hidden, quantity, category } = req.body;
+    const { title, description, price, hidden, quantity, category, condition } = req.body;
     const file = req.file;
 
     if (!title || price == null) {
       return res.status(400).json({ success: false, error: "title and price are required" });
     }
+    const conditionLabel =
+      condition === "sealed" ? "Sealed / New in box" : condition === "used" ? "Opened / Used" : null;
+    const fullDescription = conditionLabel
+      ? [description, `Condition: ${conditionLabel}`].filter(Boolean).join("\n\n")
+      : description;
     const priceCents = Math.round(Number(price) * 100);
     if (!Number.isFinite(priceCents) || priceCents <= 0) {
       return res.status(400).json({ success: false, error: "price must be a positive number" });
@@ -122,7 +146,7 @@ router.post("/cashier/record", upload.single("photo"), async (req, res) => {
 
     const item = await squareService.createLocationItem({
       name: title,
-      description,
+      description: fullDescription,
       price: priceCents,
       photo: file ? { buffer: file.buffer, mimetype: file.mimetype } : undefined,
       hidden: isHidden,
