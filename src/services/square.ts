@@ -126,14 +126,15 @@ export class SquareService {
   }
 
   // Create a single catalog item scoped to this location only (not present at
-  // other locations the merchant may have). Used by the cashier tool so
-  // convention one-offs are searchable/chargeable in Square POS without
-  // being scattered across every location.
+  // other locations the merchant may have). Used by the cashier tool for two
+  // workflows: convention one-offs (hidden from the storefront, chargeable in
+  // Square POS) and website inventory entries (visible, stock-tracked).
   async createLocationItem(item: {
     name: string;
     description?: string;
     price: number; // smallest currency unit, e.g. cents
     photo?: { buffer: Buffer; mimetype: string };
+    hidden: boolean;
   }) {
     const locationId = process.env.SQUARE_LOCATION_ID;
 
@@ -171,10 +172,13 @@ export class SquareService {
                   // storefront doesn't consult it anyway - it queries the catalog
                   // directly. The real "hide from our website" signal is category
                   // membership, filtered out in searchCatalog() below.
-                  ecom_visibility: EcomVisibility.Hidden,
-                  categories: CASHIER_CATEGORY_ID
-                    ? [{ id: CASHIER_CATEGORY_ID }]
-                    : undefined,
+                  ecom_visibility: item.hidden
+                    ? EcomVisibility.Hidden
+                    : EcomVisibility.Visible,
+                  categories:
+                    item.hidden && CASHIER_CATEGORY_ID
+                      ? [{ id: CASHIER_CATEGORY_ID }]
+                      : undefined,
                   variations: [
                     {
                       type: "ITEM_VARIATION",
@@ -276,6 +280,33 @@ export class SquareService {
       }
     }
     return counts;
+  }
+
+  // Sets the starting stock count for a freshly-created variation. This is a
+  // PHYSICAL_COUNT (an absolute snapshot), not an ADJUSTMENT, since there's
+  // no prior state to transition from - the cashier tool is the one entering
+  // the real-world count for the first time.
+  async setInitialInventoryCount(
+    variationId: string,
+    quantity: number
+  ): Promise<void> {
+    const locationId = process.env.SQUARE_LOCATION_ID;
+
+    await this.client.inventory.batchCreateChanges({
+      idempotencyKey: randomUUID(),
+      changes: [
+        {
+          type: "PHYSICAL_COUNT" as const,
+          physicalCount: {
+            catalogObjectId: variationId,
+            state: "IN_STOCK" as const,
+            locationId,
+            quantity: String(quantity),
+            occurredAt: new Date().toISOString(),
+          },
+        },
+      ],
+    });
   }
 
   // Records a web sale against Square's inventory as an IN_STOCK -> SOLD

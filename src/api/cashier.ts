@@ -77,10 +77,12 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
   }
 });
 
-// POST /api/cashier/record  multipart: photo (optional), title, description, price (price in dollars)
+// POST /api/cashier/record  multipart: photo (optional), title, description,
+// price (dollars), hidden ("true"/"false"), quantity (only used when hidden
+// is false - the initial stock count to set for the new variation)
 router.post("/cashier/record", upload.single("photo"), async (req, res) => {
   try {
-    const { title, description, price } = req.body;
+    const { title, description, price, hidden, quantity } = req.body;
     const file = req.file;
 
     if (!title || price == null) {
@@ -90,13 +92,33 @@ router.post("/cashier/record", upload.single("photo"), async (req, res) => {
     if (!Number.isFinite(priceCents) || priceCents <= 0) {
       return res.status(400).json({ success: false, error: "price must be a positive number" });
     }
+    const isHidden = hidden !== "false";
+    let quantityValue: number | undefined;
+    if (!isHidden) {
+      quantityValue = Number(quantity);
+      if (!Number.isFinite(quantityValue) || quantityValue < 0) {
+        return res
+          .status(400)
+          .json({ success: false, error: "quantity must be a non-negative number" });
+      }
+    }
 
     const item = await squareService.createLocationItem({
       name: title,
       description,
       price: priceCents,
       photo: file ? { buffer: file.buffer, mimetype: file.mimetype } : undefined,
+      hidden: isHidden,
     });
+
+    const variationId = item?.item_data?.variations?.[0]?.id;
+    if (!isHidden && variationId && quantityValue != null) {
+      try {
+        await squareService.setInitialInventoryCount(variationId, quantityValue);
+      } catch (error) {
+        console.error("Error setting initial inventory count:", error);
+      }
+    }
 
     res.status(200).json({ success: true, itemId: item?.id });
   } catch (error: any) {
