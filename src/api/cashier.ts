@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import Anthropic from "@anthropic-ai/sdk";
 import { squareService } from "../services/square";
+import { PRODUCT_CATEGORIES } from "../services/productCategories";
 
 const router = express.Router();
 
@@ -24,8 +25,13 @@ const IDENTIFY_SCHEMA = {
       type: "string",
       description: "A 1-2 sentence description of the item for a price tag or receipt.",
     },
+    category: {
+      type: "string",
+      enum: PRODUCT_CATEGORIES,
+      description: "The single best-fitting product category for this item.",
+    },
   },
-  required: ["title", "description"],
+  required: ["title", "description", "category"],
   additionalProperties: false,
 };
 
@@ -57,7 +63,9 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
             },
             {
               type: "text",
-              text: "This is a photo of anime/hobby merchandise being catalogued by a cashier at a convention booth. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt) and write a short title and description for it. If you can't identify the specific character or series, describe what's visible instead of guessing.",
+              text: `This is a photo of anime/hobby merchandise being catalogued by a cashier, either at a convention booth or for the online store. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt), write a short title and description for it, and classify it into exactly one of these categories: ${PRODUCT_CATEGORIES.join(
+                ", "
+              )}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".`,
             },
           ],
         },
@@ -82,7 +90,7 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
 // is false - the initial stock count to set for the new variation)
 router.post("/cashier/record", upload.single("photo"), async (req, res) => {
   try {
-    const { title, description, price, hidden, quantity } = req.body;
+    const { title, description, price, hidden, quantity, category } = req.body;
     const file = req.file;
 
     if (!title || price == null) {
@@ -103,12 +111,22 @@ router.post("/cashier/record", upload.single("photo"), async (req, res) => {
       }
     }
 
+    let categoryId: string | undefined;
+    if (category) {
+      try {
+        categoryId = await squareService.getOrCreateCategoryId(category);
+      } catch (error) {
+        console.error("Error resolving category, saving without one:", error);
+      }
+    }
+
     const item = await squareService.createLocationItem({
       name: title,
       description,
       price: priceCents,
       photo: file ? { buffer: file.buffer, mimetype: file.mimetype } : undefined,
       hidden: isHidden,
+      categoryId,
     });
 
     const variationId = item?.item_data?.variations?.[0]?.id;

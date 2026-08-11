@@ -75,6 +75,38 @@ export class SquareService {
     return response.locations || [];
   }
 
+  // Finds an existing CATEGORY object by exact (case-insensitive) name, or
+  // creates one. Used to keep cashier-assigned product categories (see
+  // productCategories.ts) from creating duplicates on repeat calls.
+  async getOrCreateCategoryId(name: string): Promise<string> {
+    const existing = await this.listCategories();
+    const match = existing.find(
+      (c: any) => c.categoryData?.name?.toLowerCase() === name.toLowerCase()
+    );
+    if (match?.id) return match.id;
+
+    const response = await this.client.catalog.batchUpsert({
+      idempotencyKey: randomUUID(),
+      batches: [
+        {
+          objects: [
+            {
+              type: "CATEGORY" as const,
+              id: "#category",
+              categoryData: { name },
+            },
+          ],
+        },
+      ],
+    });
+
+    const created = response.objects?.[0];
+    if (!created?.id) {
+      throw new Error(`Failed to create category "${name}"`);
+    }
+    return created.id;
+  }
+
   // Public-safe config the frontend needs to initialize the Web Payments SDK.
   getConfig() {
     return {
@@ -136,8 +168,13 @@ export class SquareService {
     price: number; // smallest currency unit, e.g. cents
     photo?: { buffer: Buffer; mimetype: string };
     hidden: boolean;
+    categoryId?: string;
   }) {
     const locationId = process.env.SQUARE_LOCATION_ID;
+    const categories = [
+      ...(item.categoryId ? [{ id: item.categoryId }] : []),
+      ...(item.hidden && CASHIER_CATEGORY_ID ? [{ id: CASHIER_CATEGORY_ID }] : []),
+    ];
 
     // The SDK's request serializer for catalog.batchUpsert doesn't know about
     // ecom_visibility yet (it's a real, documented Square API field - confirmed
@@ -176,10 +213,10 @@ export class SquareService {
                   ecom_visibility: item.hidden
                     ? EcomVisibility.Hidden
                     : EcomVisibility.Visible,
-                  categories:
-                    item.hidden && CASHIER_CATEGORY_ID
-                      ? [{ id: CASHIER_CATEGORY_ID }]
-                      : undefined,
+                  categories: categories.length > 0 ? categories : undefined,
+                  reporting_category: item.categoryId
+                    ? { id: item.categoryId }
+                    : undefined,
                   variations: [
                     {
                       type: "ITEM_VARIATION",
