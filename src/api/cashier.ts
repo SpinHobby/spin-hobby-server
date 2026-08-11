@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import Anthropic from "@anthropic-ai/sdk";
-import { squareService } from "../services/square";
+import { squareService, CASHIER_CATEGORY_ID } from "../services/square";
 import { PRODUCT_CATEGORIES } from "../services/productCategories";
 import { estimateAnthropicCost, recordAiUsage, getBudgetStatus } from "../services/aiUsage";
 
@@ -166,6 +166,147 @@ router.post("/cashier/record", upload.single("photo"), async (req, res) => {
   } catch (error: any) {
     console.error("Error recording item to Square:", error);
     const message = error?.errors?.[0]?.detail || error.message || "Failed to save item";
+    res.status(500).json({ success: false, error: message });
+  }
+});
+
+// GET /api/cashier/search?q=... - unfiltered item search (includes hidden
+// convention items) for the "Edit Existing" picker.
+router.get("/cashier/search", async (req, res) => {
+  try {
+    const { q } = req.query;
+    const result = await squareService.searchAllItems(q as string | undefined, undefined, 20);
+    res.status(200).json({
+      success: true,
+      items: (result.items as any[]).map((item) => ({
+        id: item.id,
+        name: item.itemData?.name,
+        priceCents: Number(
+          item.itemData?.variations?.[0]?.itemVariationData?.priceMoney?.amount ?? 0
+        ),
+        hidden: (item.itemData?.categories || []).some(
+          (c: any) => c.id === CASHIER_CATEGORY_ID
+        ),
+      })),
+    });
+  } catch (error: any) {
+    console.error("Error searching items:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// GET /api/cashier/item/:id - fetch an existing item's editable fields for
+// the "Edit Existing" flow in the cashier tool.
+router.get("/cashier/item/:id", async (req, res) => {
+  try {
+    const { item } = await squareService.getItem(req.params.id);
+    if (!item || item.type !== "ITEM") {
+      return res.status(404).json({ success: false, error: "Item not found" });
+    }
+    const variation = item.itemData?.variations?.[0];
+    const variationId =
+      variation && variation.type === "ITEM_VARIATION" ? variation.id : undefined;
+    const priceCents =
+      variation && variation.type === "ITEM_VARIATION"
+        ? Number(variation.itemVariationData?.priceMoney?.amount ?? 0)
+        : 0;
+
+    const categories = item.itemData?.categories || [];
+    const hidden = categories.some((c) => c.id === CASHIER_CATEGORY_ID);
+    const categoryId = categories.find((c) => c.id !== CASHIER_CATEGORY_ID)?.id;
+
+    let categoryName: string | undefined;
+    if (categoryId) {
+      const allCategories = await squareService.listCategories();
+      categoryName = (allCategories as any[]).find((c) => c.id === categoryId)?.categoryData
+        ?.name;
+    }
+
+    let stockCount: number | null = null;
+    if (variationId) {
+      const counts = await squareService.getInventoryCounts([variationId]);
+      stockCount = variationId in counts ? counts[variationId] : null;
+    }
+
+    res.status(200).json({
+      success: true,
+      item: {
+        id: item.id,
+        name: item.itemData?.name,
+        description: item.itemData?.description,
+        priceCents,
+        variationId,
+        categoryId,
+        categoryName,
+        hidden,
+        stockCount,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error fetching item for edit:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// PUT /api/cashier/item/:id  multipart: title, description, price, hidden,
+// category, quantity (optional new photo). Updates an existing item in place.
+router.put("/cashier/item/:id", upload.single("photo"), async (req, res) => {
+  try {
+    const { title, description, price, hidden, quantity, category, categoryId: rawCategoryId } =
+      req.body;
+    const file = req.file;
+
+    if (!title || price == null) {
+      return res.status(400).json({ success: false, error: "title and price are required" });
+    }
+    const priceCents = Math.round(Number(price) * 100);
+    if (!Number.isFinite(priceCents) || priceCents <= 0) {
+      return res.status(400).json({ success: false, error: "price must be a positive number" });
+    }
+    const isHidden = hidden !== "false";
+
+    // `category` (a name from our canonical list) takes priority; falls back
+    // to `categoryId` (the item's existing raw category id, passed through
+    // unresolved by the edit form when the item's current category isn't one
+    // of ours) so editing other fields doesn't silently clear it.
+    let categoryId: string | undefined;
+    if (category) {
+      try {
+        categoryId = await squareService.getOrCreateCategoryId(category);
+      } catch (error) {
+        console.error("Error resolving category, saving without one:", error);
+      }
+    } else if (rawCategoryId) {
+      categoryId = rawCategoryId;
+    }
+
+    const item = await squareService.updateLocationItem({
+      itemId: String(req.params.id),
+      name: title,
+      description,
+      price: priceCents,
+      hidden: isHidden,
+      categoryId,
+      photo: file ? { buffer: file.buffer, mimetype: file.mimetype } : undefined,
+    });
+
+    if (!isHidden && quantity != null && quantity !== "") {
+      const quantityValue = Number(quantity);
+      const variation = item?.item_data?.variations?.[0];
+      const variationId = variation?.id;
+      if (variationId && Number.isFinite(quantityValue) && quantityValue >= 0) {
+        try {
+          await squareService.setInitialInventoryCount(variationId, quantityValue);
+        } catch (error) {
+          console.error("Error updating inventory count:", error);
+        }
+      }
+    }
+
+    res.status(200).json({ success: true, itemId: item?.id });
+  } catch (error: any) {
+    console.error("Error updating item:", error);
+    const message = error?.errors?.[0]?.detail || error.message || "Failed to update item";
     res.status(500).json({ success: false, error: message });
   }
 });

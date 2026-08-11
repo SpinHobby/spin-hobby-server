@@ -6,7 +6,7 @@ import { processProductPhoto } from "./imageProcessing";
 // excluded from the public storefront (see searchCatalog). Override via env
 // if this account's category ever changes; defaults to the one already
 // created for this Square account so it works without extra setup.
-const CASHIER_CATEGORY_ID =
+export const CASHIER_CATEGORY_ID =
   process.env.SQUARE_CASHIER_CATEGORY_ID || "LNBIPZ6RYAMQTEZX3NF5VOGG";
 
 export class SquareService {
@@ -45,6 +45,25 @@ export class SquareService {
 
     return {
       items,
+      relatedObjects: response.relatedObjects || [],
+      cursor: response.cursor,
+    };
+  }
+
+  // Unfiltered version of searchCatalog for internal/admin use (e.g. the
+  // cashier tool's "Edit Existing" picker) - includes hidden convention
+  // items, unlike the public storefront search.
+  async searchAllItems(keywords?: string, cursor?: string, limit?: number) {
+    const response = await this.client.catalog.search({
+      objectTypes: ["ITEM"],
+      includeRelatedObjects: true,
+      cursor,
+      limit,
+      query: keywords ? { textQuery: { keywords: [keywords] } } : undefined,
+    });
+
+    return {
+      items: response.objects || [],
       relatedObjects: response.relatedObjects || [],
       cursor: response.cursor,
     };
@@ -275,6 +294,124 @@ export class SquareService {
     }
 
     return createdItem;
+  }
+
+  // Updates an existing location-scoped item (name, description, price,
+  // category, hidden/visible, optionally a new primary photo). Requires the
+  // item's and variation's current `version` for Square's optimistic
+  // concurrency check, so this always re-fetches the live item first rather
+  // than trusting a stale version passed in from the caller.
+  async updateLocationItem(update: {
+    itemId: string;
+    name: string;
+    description?: string;
+    price: number; // smallest currency unit, e.g. cents
+    hidden: boolean;
+    categoryId?: string;
+    photo?: { buffer: Buffer; mimetype: string };
+  }) {
+    const { item: existing } = await this.getItem(update.itemId);
+    if (!existing || existing.type !== "ITEM") {
+      throw new Error(`Item ${update.itemId} not found`);
+    }
+    const variation = existing.itemData?.variations?.[0];
+    if (!variation || variation.type !== "ITEM_VARIATION") {
+      throw new Error(`Item ${update.itemId} has no variation to update`);
+    }
+
+    const categories = [
+      ...(update.categoryId ? [{ id: update.categoryId }] : []),
+      ...(update.hidden && CASHIER_CATEGORY_ID ? [{ id: CASHIER_CATEGORY_ID }] : []),
+    ];
+
+    const baseUrl =
+      process.env.SQUARE_ENVIRONMENT === "production"
+        ? "https://connect.squareup.com"
+        : "https://connect.squareupsandbox.com";
+
+    const upsertResponse = await fetch(`${baseUrl}/v2/catalog/batch-upsert`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        "Square-Version": "2025-10-16",
+      },
+      body: JSON.stringify({
+        idempotency_key: randomUUID(),
+        batches: [
+          {
+            objects: [
+              {
+                type: "ITEM",
+                id: existing.id,
+                version: existing.version != null ? Number(existing.version) : undefined,
+                item_data: {
+                  name: update.name,
+                  description: update.description,
+                  ecom_visibility: update.hidden
+                    ? EcomVisibility.Hidden
+                    : EcomVisibility.Visible,
+                  categories: categories.length > 0 ? categories : undefined,
+                  reporting_category: update.categoryId
+                    ? { id: update.categoryId }
+                    : undefined,
+                  variations: [
+                    {
+                      type: "ITEM_VARIATION",
+                      id: variation.id,
+                      version: variation.version != null ? Number(variation.version) : undefined,
+                      item_variation_data: {
+                        item_id: existing.id,
+                        name: "Regular",
+                        pricing_type: "FIXED_PRICING",
+                        price_money: {
+                          amount: update.price,
+                          currency: Currency.Cad,
+                        },
+                      },
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    const upsertData: any = await upsertResponse.json();
+    if (!upsertResponse.ok) {
+      throw new Error(
+        upsertData?.errors?.[0]?.detail || "Failed to update Square catalog item"
+      );
+    }
+
+    const updatedItem = upsertData.objects?.[0] || null;
+
+    if (updatedItem?.id && update.photo) {
+      try {
+        const processedPhoto = await processProductPhoto(update.photo.buffer);
+        await this.client.catalog.images.create({
+          request: {
+            idempotencyKey: randomUUID(),
+            objectId: updatedItem.id,
+            isPrimary: true,
+            image: {
+              type: "IMAGE" as const,
+              id: "#image",
+              imageData: { name: update.name },
+            },
+          },
+          imageFile: new Blob([new Uint8Array(processedPhoto)], {
+            type: "image/jpeg",
+          }),
+        });
+      } catch (error) {
+        console.error("Error attaching photo to Square catalog item:", error);
+      }
+    }
+
+    return updatedItem;
   }
 
   // Charge a card using a payment token (nonce) produced by Square's Web Payments SDK on the frontend.
