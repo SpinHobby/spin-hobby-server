@@ -73,10 +73,10 @@ router.get("/square/config", (req, res) => {
   sendJson(res, 200, { success: true, ...squareService.getConfig() });
 });
 
-// POST /api/square/payments  { sourceId, amount, currency? }
+// POST /api/square/payments  { sourceId, amount, currency?, items?: { variationId, quantity }[] }
 router.post("/square/payments", async (req, res) => {
   try {
-    const { sourceId, amount, currency } = req.body;
+    const { sourceId, amount, currency, items } = req.body;
 
     if (!sourceId || !amount) {
       return sendJson(res, 400, {
@@ -85,11 +85,42 @@ router.post("/square/payments", async (req, res) => {
       });
     }
 
+    // Pre-charge stock guard: reject before touching the card if a tracked
+    // item no longer has enough stock. Untracked variations (missing from
+    // the counts map) are treated as unlimited.
+    if (Array.isArray(items) && items.length > 0) {
+      const counts = await squareService.getInventoryCounts(
+        items.map((i: any) => i.variationId).filter(Boolean)
+      );
+      for (const item of items) {
+        const available = counts[item.variationId];
+        if (available !== undefined && available < item.quantity) {
+          return sendJson(res, 400, {
+            success: false,
+            error: "One or more items in your cart are no longer in stock.",
+          });
+        }
+      }
+    }
+
     const payment = await squareService.createPayment({
       sourceId,
       amount,
       currency,
     });
+
+    // Best-effort: the card has already been charged, so an inventory-sync
+    // failure here shouldn't fail the response - log it and move on.
+    if (Array.isArray(items) && items.length > 0 && payment?.id) {
+      try {
+        await squareService.recordSaleInventoryChanges(
+          items,
+          `inv-${payment.id}`
+        );
+      } catch (error) {
+        console.error("Error recording sale inventory changes:", error);
+      }
+    }
 
     sendJson(res, 200, { success: true, payment });
   } catch (error: any) {
@@ -97,6 +128,21 @@ router.post("/square/payments", async (req, res) => {
     const message =
       error?.errors?.[0]?.detail || error.message || "Payment failed";
     sendJson(res, 400, { success: false, error: message });
+  }
+});
+
+// GET /api/square/inventory?ids=variationId1,variationId2,...
+router.get("/square/inventory", async (req, res) => {
+  try {
+    const ids = String(req.query.ids || "")
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const quantities = await squareService.getInventoryCounts(ids);
+    sendJson(res, 200, { success: true, quantities });
+  } catch (error: any) {
+    console.error("Error fetching Square inventory:", error);
+    sendJson(res, 500, { success: false, error: error.message });
   }
 });
 

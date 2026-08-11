@@ -3,17 +3,14 @@ import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
 import api from "./api";
-// Sequelize/DB, cookie-session, and auth utils merged in from adminRoute are
-// unused while the backend runs Square-only (no Postgres connection tonight).
+// cookie-session and auth utils merged in from adminRoute are unused while
+// the backend runs Square-only. The old Sequelize/AdminJS scaffold they
+// depended on has been removed - Postgres access now goes through
+// src/db/pool.ts for the homepage admin routes only.
 // import cookie from "cookie-session";
-// import {
-//   sequelizer,
-//   getLoginRequestData,
-//   getRegisterRequestData,
-// } from "./utils";
+// import { getLoginRequestData, getRegisterRequestData } from "./utils";
 // import { Plan, RegisterError } from "./types";
 // import bcrypt from "bcryptjs";
-// import { initializeModels } from "./db/models/initModels";
 
 // Render/Railway/Heroku-style platforms inject PORT and require the app to bind to it.
 const PORT = process.env.PORT || process.env.EXPRESS_PORT || 8001;
@@ -46,29 +43,9 @@ app.post("/loginBeta", (req, res) => {
   res.send("SUCCESS");
 });
 
-// async function assertDatabaseConnectionOk() {
-//   console.log(`Checking database connection...`);
-//   try {
-//     await sequelizer.sequelize.authenticate();
-//     console.log("Database connection OK!");
-//   } catch (error: any) {
-//     console.log("Unable to connect to the database:");
-//     console.log(error.message);
-//     console.log(
-//       "Make sure your .env file is configured or start the database with: docker-compose up -d db"
-//     );
-//     process.exit(1);
-//   }
-// }
-
 async function init() {
   try {
     console.log("Initializing server...");
-
-    // Initialize Sequelize model associations
-    // initializeModels();
-
-    // await assertDatabaseConnectionOk();
 
     console.log(`Starting Spin Hobby Server on port ${PORT}...`);
 

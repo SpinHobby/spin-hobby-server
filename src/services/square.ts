@@ -254,6 +254,66 @@ export class SquareService {
 
     return response.payment;
   }
+
+  // Current tracked counts for the given item VARIATION ids at this location.
+  // A variation missing from the returned map is untracked in Square - treat
+  // that as unlimited stock, not zero.
+  async getInventoryCounts(
+    variationIds: string[]
+  ): Promise<Record<string, number>> {
+    if (variationIds.length === 0) return {};
+
+    const locationId = process.env.SQUARE_LOCATION_ID;
+    const page = await this.client.inventory.batchGetCounts({
+      catalogObjectIds: variationIds,
+      locationIds: locationId ? [locationId] : undefined,
+    });
+
+    const counts: Record<string, number> = {};
+    for await (const count of page) {
+      if (count.catalogObjectId && count.quantity != null) {
+        counts[count.catalogObjectId] = Number(count.quantity);
+      }
+    }
+    return counts;
+  }
+
+  // Records a web sale against Square's inventory as an IN_STOCK -> SOLD
+  // adjustment (relative, not an absolute recount) so it doesn't race against
+  // concurrent writers and shows up in Square's own reporting the same way
+  // in-person POS sales already do.
+  //
+  // NOTE: SOLD_ONLINE looked like the right toState (would have let the
+  // dashboard distinguish web sales from in-person ones) but Square's API
+  // rejects IN_STOCK -> SOLD_ONLINE as an unsupported transition (confirmed
+  // by actually calling it, not documented in the SDK's types) - SOLD_ONLINE
+  // appears to be set internally by Square's own Online/eCommerce checkout,
+  // not assignable via a third-party adjustment. Plain SOLD is the
+  // supported transition for this.
+  async recordSaleInventoryChanges(
+    items: { variationId: string; quantity: number }[],
+    idempotencyKey: string
+  ): Promise<void> {
+    if (items.length === 0) return;
+
+    const locationId = process.env.SQUARE_LOCATION_ID;
+    const occurredAt = new Date().toISOString();
+
+    await this.client.inventory.batchCreateChanges({
+      idempotencyKey,
+      changes: items.map((item) => ({
+        type: "ADJUSTMENT" as const,
+        adjustment: {
+          catalogObjectId: item.variationId,
+          quantity: String(item.quantity),
+          fromState: "IN_STOCK" as const,
+          toState: "SOLD" as const,
+          locationId,
+          occurredAt,
+        },
+      })),
+    });
+  }
 }
 
 export const squareService = new SquareService();
