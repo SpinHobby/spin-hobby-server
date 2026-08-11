@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { SquareClient, SquareEnvironment, Currency, EcomVisibility } from "square";
+import { processProductPhoto } from "./imageProcessing";
 
 // Category used to tag cashier-tool convention one-offs so they can be
 // excluded from the public storefront (see searchCatalog). Override via env
@@ -215,6 +216,7 @@ export class SquareService {
 
     if (createdItem?.id && item.photo) {
       try {
+        const processedPhoto = await processProductPhoto(item.photo.buffer);
         await this.client.catalog.images.create({
           request: {
             idempotencyKey: randomUUID(),
@@ -226,8 +228,8 @@ export class SquareService {
               imageData: { name: item.name },
             },
           },
-          imageFile: new Blob([new Uint8Array(item.photo.buffer)], {
-            type: item.photo.mimetype,
+          imageFile: new Blob([new Uint8Array(processedPhoto)], {
+            type: "image/jpeg",
           }),
         });
       } catch (error) {
