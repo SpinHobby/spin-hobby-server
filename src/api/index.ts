@@ -2,6 +2,7 @@ import express from "express";
 import square from "./square";
 import cashier from "./cashier";
 import homepage from "./homepage";
+import ops from "./ops";
 // Legacy DB-backed routes from an early merge, kept disabled while we run a
 // minimal Square-only API (their AdminJS/Sequelize scaffold was broken and
 // has been removed - see src/db/pool.ts + src/api/homepage.ts for the real
@@ -16,6 +17,7 @@ const router = express.Router();
 router.use("/", square);
 router.use("/", cashier);
 router.use("/", homepage);
+router.use("/", ops);
 // router.use("/", auth);
 // router.use("/cart", cart);
 // router.use("/order", order);
