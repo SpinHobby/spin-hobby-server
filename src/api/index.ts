@@ -3,11 +3,12 @@ import square from "./square";
 import cashier from "./cashier";
 import homepage from "./homepage";
 import ops from "./ops";
+import auth from "./auth";
+import wishlist from "./wishlist";
 // Legacy DB-backed routes from an early merge, kept disabled while we run a
 // minimal Square-only API (their AdminJS/Sequelize scaffold was broken and
 // has been removed - see src/db/pool.ts + src/api/homepage.ts for the real
 // Postgres-backed admin routes).
-// import auth from "./auth";
 // import cart from "./cart";
 // import order from "./order";
 // import search from "./search";
@@ -18,7 +19,8 @@ router.use("/", square);
 router.use("/", cashier);
 router.use("/", homepage);
 router.use("/", ops);
-// router.use("/", auth);
+router.use("/", auth);
+router.use("/", wishlist);
 // router.use("/cart", cart);
 // router.use("/order", order);
 // router.use("/search", search);

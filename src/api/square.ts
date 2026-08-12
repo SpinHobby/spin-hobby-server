@@ -1,5 +1,7 @@
 import express from "express";
 import { squareService } from "../services/square";
+import { createOrder, getOrdersForCustomer, getOrderById, lookupGuestOrder } from "../services/orderService";
+import { attachCustomerIfPresent, requireCustomerAuth } from "./middleware/requireCustomerAuth";
 
 const router = express.Router();
 
@@ -73,10 +75,12 @@ router.get("/square/config", (req, res) => {
   sendJson(res, 200, { success: true, ...squareService.getConfig() });
 });
 
-// POST /api/square/payments  { sourceId, amount, currency?, items?: { variationId, quantity }[] }
-router.post("/square/payments", async (req, res) => {
+// POST /api/square/payments  { sourceId, amount, currency?, items?: { itemId, variationId, quantity }[], billing?, shipping? }
+// attachCustomerIfPresent (not requireCustomerAuth) - checkout must stay
+// usable by guests; logged-in customers just get their order linked.
+router.post("/square/payments", attachCustomerIfPresent, async (req, res) => {
   try {
-    const { sourceId, amount, currency, items } = req.body;
+    const { sourceId, amount, currency, items, billing, shipping } = req.body;
 
     if (!sourceId || !amount) {
       return sendJson(res, 400, {
@@ -122,7 +126,26 @@ router.post("/square/payments", async (req, res) => {
       }
     }
 
-    sendJson(res, 200, { success: true, payment });
+    // Also best-effort: the card is already charged, so a DB write failure
+    // here must never block the success response to the customer.
+    let orderId: number | undefined;
+    if (Array.isArray(items) && items.length > 0 && payment?.id && billing) {
+      try {
+        orderId = await createOrder({
+          customerId: req.customer?.id ?? null,
+          paymentId: payment.id,
+          amountCents: amount,
+          currency: currency || "CAD",
+          items,
+          billing,
+          shipping: shipping || billing,
+        });
+      } catch (error) {
+        console.error("Error persisting order:", error);
+      }
+    }
+
+    sendJson(res, 200, { success: true, payment, orderId });
   } catch (error: any) {
     console.error("Error creating Square payment:", error);
     const message =
@@ -142,6 +165,50 @@ router.get("/square/inventory", async (req, res) => {
     sendJson(res, 200, { success: true, quantities });
   } catch (error: any) {
     console.error("Error fetching Square inventory:", error);
+    sendJson(res, 500, { success: false, error: error.message });
+  }
+});
+
+// GET /api/orders - logged-in customer's order history
+router.get("/orders", requireCustomerAuth, async (req, res) => {
+  try {
+    const orders = await getOrdersForCustomer(req.customer!.id);
+    sendJson(res, 200, { success: true, orders });
+  } catch (error: any) {
+    console.error("Error fetching orders:", error);
+    sendJson(res, 500, { success: false, error: error.message });
+  }
+});
+
+// GET /api/orders/lookup?paymentId=&email= - guest order lookup, no auth.
+// Mounted before /orders/:id so it isn't swallowed by that param route.
+router.get("/orders/lookup", async (req, res) => {
+  try {
+    const { paymentId, email } = req.query;
+    if (!paymentId || !email) {
+      return sendJson(res, 400, { success: false, error: "paymentId and email are required" });
+    }
+    const order = await lookupGuestOrder(String(paymentId), String(email));
+    if (!order) {
+      return sendJson(res, 404, { success: false, error: "Order not found" });
+    }
+    sendJson(res, 200, { success: true, order });
+  } catch (error: any) {
+    console.error("Error looking up guest order:", error);
+    sendJson(res, 500, { success: false, error: error.message });
+  }
+});
+
+// GET /api/orders/:id - single order, ownership-checked
+router.get("/orders/:id", requireCustomerAuth, async (req, res) => {
+  try {
+    const order = await getOrderById(Number(req.params.id), req.customer!.id);
+    if (!order) {
+      return sendJson(res, 404, { success: false, error: "Order not found" });
+    }
+    sendJson(res, 200, { success: true, order });
+  } catch (error: any) {
+    console.error("Error fetching order:", error);
     sendJson(res, 500, { success: false, error: error.message });
   }
 });

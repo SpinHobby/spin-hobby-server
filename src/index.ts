@@ -2,6 +2,7 @@ import "dotenv/config";
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import api from "./api";
 // cookie-session and auth utils merged in from adminRoute are unused while
 // the backend runs Square-only. The old Sequelize/AdminJS scaffold they
@@ -24,10 +25,20 @@ export const app = express();
 //     maxAge: 24 * 60 * 60 * 1000,
 //   })
 // );
+// Customer auth uses an httpOnly session cookie, which requires an explicit
+// (non-wildcard) origin allowlist plus credentials:true - a bare cors() would
+// silently prevent the browser from sending/accepting that cookie.
+const FRONTEND_ORIGINS = [
+  "http://localhost:3000",
+  "https://spinhobby.com",
+  "https://www.spinhobby.com",
+];
+
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
+app.use(cookieParser());
 app.use(express.static("./public/"));
-app.use(cors());
+app.use(cors({ origin: FRONTEND_ORIGINS, credentials: true }));
 
 app.get("/", (req, res) => {
   res.send("Hello World from Spin Hobby Server!");

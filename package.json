@@ -9,6 +9,7 @@
     "axios": "^1.6.2",
     "bcryptjs": "^3.0.2",
     "body-parser": "^2.2.0",
+    "cookie-parser": "^1.4.7",
     "cookie-session": "^2.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.0.1",
@@ -16,6 +17,8 @@
     "express-formidable": "^1.2.0",
     "express-session": "^1.17.3",
     "fs": "^0.0.1-security",
+    "google-auth-library": "^11.0.2",
+    "jose": "^6.2.8",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.7.3",
@@ -44,6 +47,7 @@
     "seed:clear": "node db/seed.cjs clear"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/cookie-session": "^2.0.44",
     "@types/jsonwebtoken": "^8.5.8",
     "@types/multer": "^2.2.0",

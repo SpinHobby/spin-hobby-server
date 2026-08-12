@@ -1,116 +1,87 @@
-const router = require("express").Router();
-//const { User } = require('../db/models');
-import { Plan, RegisterError } from "../types";
-import jwt from "jsonwebtoken";
-import upload from "./multer";
+import express from "express";
 import {
-  sequelizer,
-  getLoginRequestData,
-  getRegisterRequestData,
-} from "../utils";
-import "dotenv/config";
+  verifyGoogleIdToken,
+  verifyDiscordCode,
+  findOrCreateCustomer,
+  createSession,
+  revokeSession,
+  getLinkedProviders,
+  getCustomerBySessionId,
+  OAuthIdentity,
+} from "../services/customerAuth";
+import { SESSION_COOKIE_NAME, requireCustomerAuth } from "./middleware/requireCustomerAuth";
 
-import {
-  Login,
-  Account,
-  LoginError,
-  LoginCallback,
-  UserCredentials,
-} from "../types";
+const router = express.Router();
 
-router.post("/login", async (req: { body: Login }, res: any) => {
-  console.log("LOGIN HERE ---------------> ");
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production",
+  sameSite: "lax" as const,
+  maxAge: 30 * 24 * 60 * 60 * 1000,
+  path: "/",
+};
 
-  const login = getLoginRequestData(req.body);
-  if (!login) return res.sendStatus(400);
+// POST /api/auth/oauth/:provider
+// Google:  { idToken }
+// Discord: { code, redirectUri }
+// If a valid session cookie is already present, links this provider to the
+// existing customer instead of finding/creating a separate one.
+router.post("/auth/oauth/:provider", async (req, res) => {
+  try {
+    const provider = req.params.provider;
 
-  const user = await sequelizer.db.User.findOne({
-    where: {
-      username: login.username.toLowerCase(),
-    },
-  });
+    let identity: OAuthIdentity;
+    if (provider === "google") {
+      const { idToken } = req.body;
+      if (!idToken) {
+        return res.status(400).json({ success: false, error: "idToken is required" });
+      }
+      identity = await verifyGoogleIdToken(idToken);
+    } else if (provider === "discord") {
+      const { code, redirectUri } = req.body;
+      if (!code || !redirectUri) {
+        return res
+          .status(400)
+          .json({ success: false, error: "code and redirectUri are required" });
+      }
+      identity = await verifyDiscordCode(code, redirectUri);
+    } else {
+      return res.status(400).json({ success: false, error: `Unsupported provider: ${provider}` });
+    }
 
-  sequelizer.db.User.validateLogin(login, (error: any, userData: any) => {
-    if (error) res.json({ error });
-    else return;
-  }).then(() => {
-    const token = jwt.sign({ id: user.dataValues.id }, "secret", {
-      expiresIn: 86400,
-    });
+    const existingSessionId = req.cookies?.[SESSION_COOKIE_NAME];
+    let linkToCustomerId: number | undefined;
+    if (existingSessionId) {
+      const existing = await getCustomerBySessionId(existingSessionId);
+      if (existing) linkToCustomerId = existing.id;
+    }
 
-    // res.json({ status: "valid" });
-    res.status(200).json({
-      ...user.dataValues,
-      token,
-    });
-  });
+    const customer = await findOrCreateCustomer(provider, identity, linkToCustomerId);
+    const { sessionId } = await createSession(customer.id, req.headers["user-agent"]);
+    res.cookie(SESSION_COOKIE_NAME, sessionId, COOKIE_OPTIONS);
+
+    res.status(200).json({ success: true, customer });
+  } catch (error: any) {
+    console.error("Error in OAuth login:", error);
+    res.status(500).json({ success: false, error: error.message || "Login failed" });
+  }
 });
 
-router.post(
-  "/register",
-  upload.single("avatar"),
-  (req: { body: any; file: string | undefined }, res: any) => {
-    const credentials = getRegisterRequestData({
-      ...req.body,
-      plan: Plan.Standard,
-    });
-
-    if (!credentials) {
-      return res.sendStatus(400);
-    }
-
-    if (req.file) {
-      credentials.avatar = req.file;
-    }
-
-    console.log("===============1 ==============", credentials);
-
-    sequelizer.db.User.addAccount(credentials)
-      .then((user: any) => {
-        console.log("=============== 1 a =================");
-
-        console.log("here", user);
-        const token = jwt.sign({ id: user.dataValues.id }, "secret", {
-          expiresIn: 86400,
-        });
-
-        console.log("=============== 2 ==============");
-
-        // res.json({ status: "valid" });
-
-        res.status(200).json({
-          ...user.dataValues,
-          phone: parseInt(user.dataValues.phone),
-          token,
-        });
-
-        console.log("=============== 3 ==============");
-
-        //res.sendStatus(200)
-      })
-      .catch((e: { errors: { message: any }[] }) => {
-        console.log(e);
-
-        const message =
-          ((e.errors && e.errors[0]?.message) as string | undefined) || null;
-
-        console.log("CAUGHT ERROR: ------------", message);
-
-        switch (message) {
-          case "username must be unique":
-            res.status(409).send({ message: RegisterError.UsernameExists });
-            break;
-          case "email must be unique":
-            res.status(409).send({ message: RegisterError.EmailExists });
-            break;
-          case "phone must be unique":
-            res.status(409).send({ message: RegisterError.PhoneExists });
-            break;
-          default:
-            res.sendStatus(500);
-        }
-      });
+router.post("/auth/logout", async (req, res) => {
+  try {
+    const sessionId = req.cookies?.[SESSION_COOKIE_NAME];
+    if (sessionId) await revokeSession(sessionId);
+    res.clearCookie(SESSION_COOKIE_NAME, { path: "/" });
+    res.status(200).json({ success: true });
+  } catch (error: any) {
+    console.error("Error logging out:", error);
+    res.status(500).json({ success: false, error: error.message });
   }
-);
+});
 
-module.exports = router;
+router.get("/auth/me", requireCustomerAuth, async (req, res) => {
+  const linkedProviders = await getLinkedProviders(req.customer!.id);
+  res.status(200).json({ success: true, customer: req.customer, linkedProviders });
+});
+
+export default router;
