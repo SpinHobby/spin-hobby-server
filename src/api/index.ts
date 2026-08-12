@@ -5,6 +5,7 @@ import homepage from "./homepage";
 import ops from "./ops";
 import auth from "./auth";
 import wishlist from "./wishlist";
+import account from "./account";
 // Legacy DB-backed routes from an early merge, kept disabled while we run a
 // minimal Square-only API (their AdminJS/Sequelize scaffold was broken and
 // has been removed - see src/db/pool.ts + src/api/homepage.ts for the real
@@ -21,6 +22,7 @@ router.use("/", homepage);
 router.use("/", ops);
 router.use("/", auth);
 router.use("/", wishlist);
+router.use("/", account);
 // router.use("/cart", cart);
 // router.use("/order", order);
 // router.use("/search", search);
