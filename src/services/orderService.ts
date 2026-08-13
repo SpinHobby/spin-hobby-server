@@ -121,7 +121,22 @@ export async function createOrder(params: CreateOrderParams): Promise<number> {
     const orderId = orderResult.rows[0].id;
 
     for (const item of params.items) {
-      const snapshot = await resolveItemSnapshot(item.itemId, item.variationId);
+      // A single unresolvable item (deleted from the catalog, or an
+      // environment mismatch between where it was added to cart and where
+      // the order is being written) must not roll back the whole order -
+      // the card is already charged, so losing the entire payment record
+      // over one bad line item is worse than one line item with a
+      // placeholder snapshot. Fall back and keep going.
+      let snapshot: { name: string; unitPriceCents: number; imageUrl?: string };
+      try {
+        snapshot = await resolveItemSnapshot(item.itemId, item.variationId);
+      } catch (error) {
+        console.error(
+          `Error resolving snapshot for item ${item.itemId}/${item.variationId}, using placeholder:`,
+          error
+        );
+        snapshot = { name: `Item unavailable (${item.itemId})`, unitPriceCents: 0 };
+      }
       await client.query(
         `INSERT INTO order_items
            (order_id, square_item_id, square_variation_id, name_snapshot, image_url_snapshot, unit_price_cents, quantity)
