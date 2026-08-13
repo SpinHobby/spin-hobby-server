@@ -1,5 +1,6 @@
 import express from "express";
 import { squareService } from "../services/square";
+import { buildDisplayCategories } from "../services/categoryMapping";
 import { createOrder, getOrdersForCustomer, getOrderById, lookupGuestOrder } from "../services/orderService";
 import { attachCustomerIfPresent, requireCustomerAuth } from "./middleware/requireCustomerAuth";
 
@@ -34,6 +35,29 @@ router.get("/square/catalog", async (req, res) => {
   }
 });
 
+// GET /api/square/catalog/by-category?categoryIds=a,b,c&q=&cursor=&limit=
+// Must be registered before /square/catalog/:id below, or Express matches
+// "by-category" as the :id param.
+router.get("/square/catalog/by-category", async (req, res) => {
+  try {
+    const { categoryIds, q, cursor, limit } = req.query;
+    const ids = typeof categoryIds === "string" ? categoryIds.split(",").filter(Boolean) : [];
+    if (ids.length === 0) {
+      return sendJson(res, 400, { success: false, error: "categoryIds is required" });
+    }
+    const result = await squareService.searchByCategory(
+      ids,
+      q as string | undefined,
+      cursor as string | undefined,
+      limit ? parseInt(limit as string) : undefined
+    );
+    sendJson(res, 200, { success: true, ...result });
+  } catch (error: any) {
+    console.error("Error searching Square catalog by category:", error);
+    sendJson(res, 500, { success: false, error: error.message });
+  }
+});
+
 // GET /api/square/catalog/:id
 router.get("/square/catalog/:id", async (req, res) => {
   try {
@@ -55,6 +79,25 @@ router.get("/square/categories", async (req, res) => {
     sendJson(res, 200, { success: true, categories });
   } catch (error: any) {
     console.error("Error fetching Square categories:", error);
+    sendJson(res, 500, { success: false, error: error.message });
+  }
+});
+
+// GET /api/square/display-categories - curated ~14-category taxonomy for
+// the storefront nav, grouping Square's 60+ raw categories (see
+// categoryMapping.ts). Each entry carries the real Square category IDs it
+// aggregates, for use with /square/catalog/by-category.
+router.get("/square/display-categories", async (req, res) => {
+  try {
+    const rawCategories = await squareService.listCategories();
+    const categories = buildDisplayCategories(
+      rawCategories
+        .map((c: any) => ({ id: c.id, name: c.categoryData?.name }))
+        .filter((c: any) => c.id && c.name)
+    );
+    sendJson(res, 200, { success: true, categories });
+  } catch (error: any) {
+    console.error("Error building display categories:", error);
     sendJson(res, 500, { success: false, error: error.message });
   }
 });

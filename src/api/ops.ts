@@ -1,8 +1,13 @@
 import express from "express";
 import { pool } from "../db/pool";
 import { getBudgetStatus } from "../services/aiUsage";
+import { requireAdminAuth } from "./middleware/requireAdminAuth";
 
 const router = express.Router();
+
+// Every route in this file is admin-only (ops dashboard) - previously
+// gated client-side only, see requireAdminAuth.
+router.use(requireAdminAuth);
 
 // Tools tracked on the ops dashboard. Add an entry here (and a matching row
 // in ai_budgets, or let it fall back to the $20/$30 defaults) whenever a new
@@ -49,9 +54,7 @@ router.put("/ops/ai-usage/:tool", async (req, res) => {
   }
 });
 
-// Admin-only gauges. No server-side auth on this route (same pattern as the
-// homepage admin routes) - the frontend gates it behind the shared admin
-// password screen.
+// Admin-only gauges.
 router.get("/ops/database", async (req, res) => {
   try {
     const sizeResult = await pool.query(

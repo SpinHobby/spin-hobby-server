@@ -1,6 +1,7 @@
 import express from "express";
 import { pool } from "../db/pool";
 import { squareService } from "../services/square";
+import { requireAdminAuth } from "./middleware/requireAdminAuth";
 
 const router = express.Router();
 
@@ -53,8 +54,9 @@ router.get("/homepage", async (req, res) => {
 });
 
 // --- Admin: hero slides ---
-// No server-side auth on these write routes, matching the cashier tool's
-// password-screen-only pattern (confirmed decision, not an oversight).
+// All /homepage/admin/* routes require the shared admin password (see
+// requireAdminAuth) - previously gated client-side only.
+router.use("/homepage/admin", requireAdminAuth);
 
 router.get("/homepage/admin/slides", async (req, res) => {
   try {
