@@ -123,7 +123,7 @@ router.get("/square/config", (req, res) => {
 // usable by guests; logged-in customers just get their order linked.
 router.post("/square/payments", attachCustomerIfPresent, async (req, res) => {
   try {
-    const { sourceId, amount, currency, items, billing, shipping } = req.body;
+    const { sourceId, amount, shippingCents, currency, items, billing, shipping } = req.body;
 
     if (!sourceId || !amount) {
       return sendJson(res, 400, {
@@ -178,6 +178,7 @@ router.post("/square/payments", attachCustomerIfPresent, async (req, res) => {
           customerId: req.customer?.id ?? null,
           paymentId: payment.id,
           amountCents: amount,
+          shippingCents: shippingCents || 0,
           currency: currency || "CAD",
           items,
           billing,

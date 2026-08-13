@@ -21,6 +21,7 @@ export interface CreateOrderParams {
   customerId: number | null;
   paymentId: string;
   amountCents: number;
+  shippingCents: number;
   currency: string;
   items: CheckoutItem[];
   billing: CheckoutAddress & { email: string };
@@ -98,18 +99,19 @@ export async function createOrder(params: CreateOrderParams): Promise<number> {
       params.shipping
     );
 
-    const subtotalCents = params.amountCents; // shipping is not itemized separately yet
+    const subtotalCents = params.amountCents - params.shippingCents;
     const orderResult = await client.query(
       `INSERT INTO orders
          (customer_id, guest_email, square_payment_id, subtotal_cents, shipping_cents, total_cents,
           currency, billing_address_id, shipping_address_id, billing_email, billing_phone)
-       VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         params.customerId,
         params.customerId ? null : params.billing.email,
         params.paymentId,
         subtotalCents,
+        params.shippingCents,
         params.amountCents,
         params.currency,
         billingAddressId,
