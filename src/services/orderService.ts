@@ -21,6 +21,7 @@ export interface CreateOrderParams {
   customerId: number | null;
   paymentId: string;
   amountCents: number;
+  shippingCents: number;
   currency: string;
   items: CheckoutItem[];
   billing: CheckoutAddress & { email: string };
@@ -98,18 +99,19 @@ export async function createOrder(params: CreateOrderParams): Promise<number> {
       params.shipping
     );
 
-    const subtotalCents = params.amountCents; // shipping is not itemized separately yet
+    const subtotalCents = params.amountCents - params.shippingCents;
     const orderResult = await client.query(
       `INSERT INTO orders
          (customer_id, guest_email, square_payment_id, subtotal_cents, shipping_cents, total_cents,
           currency, billing_address_id, shipping_address_id, billing_email, billing_phone)
-       VALUES ($1, $2, $3, $4, 0, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         params.customerId,
         params.customerId ? null : params.billing.email,
         params.paymentId,
         subtotalCents,
+        params.shippingCents,
         params.amountCents,
         params.currency,
         billingAddressId,
@@ -121,7 +123,22 @@ export async function createOrder(params: CreateOrderParams): Promise<number> {
     const orderId = orderResult.rows[0].id;
 
     for (const item of params.items) {
-      const snapshot = await resolveItemSnapshot(item.itemId, item.variationId);
+      // A single unresolvable item (deleted from the catalog, or an
+      // environment mismatch between where it was added to cart and where
+      // the order is being written) must not roll back the whole order -
+      // the card is already charged, so losing the entire payment record
+      // over one bad line item is worse than one line item with a
+      // placeholder snapshot. Fall back and keep going.
+      let snapshot: { name: string; unitPriceCents: number; imageUrl?: string };
+      try {
+        snapshot = await resolveItemSnapshot(item.itemId, item.variationId);
+      } catch (error) {
+        console.error(
+          `Error resolving snapshot for item ${item.itemId}/${item.variationId}, using placeholder:`,
+          error
+        );
+        snapshot = { name: `Item unavailable (${item.itemId})`, unitPriceCents: 0 };
+      }
       await client.query(
         `INSERT INTO order_items
            (order_id, square_item_id, square_variation_id, name_snapshot, image_url_snapshot, unit_price_cents, quantity)

@@ -50,6 +50,54 @@ export class SquareService {
     };
   }
 
+  // Search by one or more real Square category IDs (optionally combined with
+  // keywords), via the dedicated SearchCatalogItems endpoint - unlike the
+  // generic catalog.search() used by searchCatalog() above, this one
+  // actually supports server-side category filtering. Used to power the
+  // storefront's curated display-category browsing (see categoryMapping.ts).
+  // SearchCatalogItems doesn't return relatedObjects (images), so those are
+  // fetched separately to keep the same {items, relatedObjects, cursor}
+  // shape as searchCatalog().
+  async searchByCategory(
+    categoryIds: string[],
+    keywords?: string,
+    cursor?: string,
+    limit?: number
+  ) {
+    const response = await this.client.catalog.searchItems({
+      categoryIds,
+      textFilter: keywords || undefined,
+      cursor,
+      limit,
+    });
+
+    const cashierCategoryId = CASHIER_CATEGORY_ID;
+    const items = (response.items || []).filter((obj: any) => {
+      if (!cashierCategoryId) return true;
+      const categories = obj.itemData?.categories || [];
+      return !categories.some((c: any) => c.id === cashierCategoryId);
+    });
+
+    const imageIds = new Set<string>();
+    items.forEach((item: any) => {
+      (item.itemData?.imageIds || []).forEach((id: string) => imageIds.add(id));
+    });
+
+    let relatedObjects: any[] = [];
+    if (imageIds.size > 0) {
+      const imageResponse = await this.client.catalog.batchGet({
+        objectIds: Array.from(imageIds),
+      });
+      relatedObjects = imageResponse.objects || [];
+    }
+
+    return {
+      items,
+      relatedObjects,
+      cursor: response.cursor,
+    };
+  }
+
   // Unfiltered version of searchCatalog for internal/admin use (e.g. the
   // cashier tool's "Edit Existing" picker) - includes hidden convention
   // items, unlike the public storefront search.
