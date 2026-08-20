@@ -242,8 +242,12 @@ router.post("/cashier/record", upload.single("photo"), async (req, res) => {
 // convention items) for the "Edit Existing" picker.
 router.get("/cashier/search", async (req, res) => {
   try {
-    const { q } = req.query;
-    const result = await squareService.searchAllItems(q as string | undefined, undefined, 20);
+    const { q, cursor } = req.query;
+    const result = await squareService.searchAllItems(
+      (q as string) || undefined,
+      (cursor as string) || undefined,
+      30
+    );
     const imagesById = new Map<string, string>();
     (result.relatedObjects as any[]).forEach((obj) => {
       if (obj.type === "IMAGE" && obj.imageData?.url) {
@@ -252,6 +256,7 @@ router.get("/cashier/search", async (req, res) => {
     });
     res.status(200).json({
       success: true,
+      cursor: result.cursor,
       items: (result.items as any[]).map((item) => {
         const imageId = item.itemData?.imageIds?.[0];
         return {
