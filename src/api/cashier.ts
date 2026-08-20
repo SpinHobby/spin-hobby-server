@@ -3,6 +3,7 @@ import multer from "multer";
 import Anthropic from "@anthropic-ai/sdk";
 import { squareService, CASHIER_CATEGORY_ID } from "../services/square";
 import { PRODUCT_CATEGORIES } from "../services/productCategories";
+import { cropToArtworkRegion } from "../services/imageProcessing";
 import { estimateAnthropicCost, recordAiUsage, getBudgetStatus } from "../services/aiUsage";
 
 const AI_TOOL = "anthropic_cashier";
@@ -33,10 +34,53 @@ const IDENTIFY_SCHEMA = {
       enum: PRODUCT_CATEGORIES,
       description: "The single best-fitting product category for this item.",
     },
+    artworkCrop: {
+      type: "object",
+      description:
+        "Only include this when the photo is of a SEALED box: the bounding box of the printed product photo/artwork panel on the box face, with a small margin so the full panel is included even if photographed at a slight angle. Coordinates are fractions (0-1) of the full photo's width/height, measured from the top-left corner. Omit entirely if the photo isn't a sealed box, or if no clear artwork panel is visible.",
+      properties: {
+        x: { type: "number", description: "Left edge, as a fraction of image width (0-1)." },
+        y: { type: "number", description: "Top edge, as a fraction of image height (0-1)." },
+        width: { type: "number", description: "Width, as a fraction of image width (0-1)." },
+        height: { type: "number", description: "Height, as a fraction of image height (0-1)." },
+        rotationDegrees: {
+          type: "number",
+          description:
+            "Degrees to rotate the cropped region clockwise to make the artwork's edges level/straight, between -45 and 45. 0 if it's already straight.",
+        },
+      },
+      required: ["x", "y", "width", "height", "rotationDegrees"],
+      additionalProperties: false,
+    },
   },
   required: ["title", "description", "category"],
   additionalProperties: false,
 };
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+// Validates + clamps the model's artworkCrop into a safe, always-in-bounds
+// box before it's ever used to crop a real image - a model-returned
+// coordinate slightly outside [0,1] or a nonsensical width/height must never
+// crash or corrupt the save.
+function sanitizeArtworkCrop(raw: any): {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotationDegrees: number;
+} | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const x = clamp(Number(raw.x), 0, 0.95);
+  const y = clamp(Number(raw.y), 0, 0.95);
+  const width = clamp(Number(raw.width), 0.05, 1 - x);
+  const height = clamp(Number(raw.height), 0.05, 1 - y);
+  const rotationDegrees = clamp(Number(raw.rotationDegrees) || 0, -45, 45);
+  if (![x, y, width, height, rotationDegrees].every(Number.isFinite)) return undefined;
+  return { x, y, width, height, rotationDegrees };
+}
 
 router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
   try {
@@ -47,6 +91,7 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
     if (!file.mimetype.startsWith("image/")) {
       return res.status(400).json({ success: false, error: "file must be an image" });
     }
+    const isSealed = req.body.condition === "sealed";
 
     const budget = await getBudgetStatus(AI_TOOL);
     if (budget.status === "blocked") {
@@ -77,7 +122,11 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
               type: "text",
               text: `This is a photo of anime/hobby merchandise being catalogued by a cashier, either at a convention booth or for the online store. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt), write a short title and description for it, and classify it into exactly one of these categories: ${PRODUCT_CATEGORIES.join(
                 ", "
-              )}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".`,
+              )}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".\n\n${
+                isSealed
+                  ? "This item is SEALED in its box. Also locate the printed product photo/artwork panel on the box's face and return it as `artworkCrop`, so it can be cropped out and used as the product photo - this is the manufacturer's own professional photo of the figure, already on the packaging. Include a small margin around the panel and estimate any rotation needed to straighten it."
+                  : "This item is not sealed (the actual product is what's photographed) - omit `artworkCrop` entirely."
+              }`,
             },
           ],
         },
@@ -97,7 +146,14 @@ router.post("/cashier/identify", upload.single("photo"), async (req, res) => {
     );
 
     const result = JSON.parse(textBlock.text);
-    res.status(200).json({ success: true, ...result });
+    const artworkCrop = sanitizeArtworkCrop(result.artworkCrop);
+    res.status(200).json({
+      success: true,
+      title: result.title,
+      description: result.description,
+      category: result.category,
+      artworkCrop,
+    });
   } catch (error: any) {
     console.error("Error identifying item:", error);
     res.status(500).json({ success: false, error: error.message });
@@ -144,11 +200,23 @@ router.post("/cashier/record", upload.single("photo"), async (req, res) => {
       }
     }
 
+    let photoBuffer = file?.buffer;
+    const artworkCrop = sanitizeArtworkCrop({
+      x: req.body.artworkCropX,
+      y: req.body.artworkCropY,
+      width: req.body.artworkCropWidth,
+      height: req.body.artworkCropHeight,
+      rotationDegrees: req.body.artworkRotationDegrees,
+    });
+    if (photoBuffer && artworkCrop) {
+      photoBuffer = await cropToArtworkRegion(photoBuffer, artworkCrop);
+    }
+
     const item = await squareService.createLocationItem({
       name: title,
       description: fullDescription,
       price: priceCents,
-      photo: file ? { buffer: file.buffer, mimetype: file.mimetype } : undefined,
+      photo: photoBuffer && file ? { buffer: photoBuffer, mimetype: file.mimetype } : undefined,
       hidden: isHidden,
       categoryId,
     });
@@ -176,18 +244,28 @@ router.get("/cashier/search", async (req, res) => {
   try {
     const { q } = req.query;
     const result = await squareService.searchAllItems(q as string | undefined, undefined, 20);
+    const imagesById = new Map<string, string>();
+    (result.relatedObjects as any[]).forEach((obj) => {
+      if (obj.type === "IMAGE" && obj.imageData?.url) {
+        imagesById.set(obj.id, obj.imageData.url);
+      }
+    });
     res.status(200).json({
       success: true,
-      items: (result.items as any[]).map((item) => ({
-        id: item.id,
-        name: item.itemData?.name,
-        priceCents: Number(
-          item.itemData?.variations?.[0]?.itemVariationData?.priceMoney?.amount ?? 0
-        ),
-        hidden: (item.itemData?.categories || []).some(
-          (c: any) => c.id === CASHIER_CATEGORY_ID
-        ),
-      })),
+      items: (result.items as any[]).map((item) => {
+        const imageId = item.itemData?.imageIds?.[0];
+        return {
+          id: item.id,
+          name: item.itemData?.name,
+          priceCents: Number(
+            item.itemData?.variations?.[0]?.itemVariationData?.priceMoney?.amount ?? 0
+          ),
+          hidden: (item.itemData?.categories || []).some(
+            (c: any) => c.id === CASHIER_CATEGORY_ID
+          ),
+          imageUrl: imageId ? imagesById.get(imageId) : undefined,
+        };
+      }),
     });
   } catch (error: any) {
     console.error("Error searching items:", error);

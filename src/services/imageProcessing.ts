@@ -18,6 +18,58 @@ const BACKGROUND = { r: 250, g: 250, b: 250, alpha: 1 };
 // crushes shadows toward black rather than helping, which looked worse than
 // the original. A real lighting fix needs proper white-balance/exposure
 // logic, not a blind histogram stretch - not worth the risk for now.
+export interface ArtworkCrop {
+  x: number; // fraction of width, 0-1
+  y: number; // fraction of height, 0-1
+  width: number; // fraction of width, 0-1
+  height: number; // fraction of height, 0-1
+  rotationDegrees: number; // clockwise, to straighten after cropping
+}
+
+// Extracts a sub-region of a photo (the AI-located artwork panel on a sealed
+// box, e.g.) and straightens it. Crops BEFORE rotating - the box coordinates
+// come from the model looking at the original, unrotated photo, so cropping
+// first with a small margin (already baked into the coordinates upstream)
+// keeps the panel fully inside the frame even after the straightening
+// rotation nudges it. Falls back to the original buffer on any failure,
+// matching processProductPhoto's philosophy of never failing the whole save
+// over a best-effort cleanup step.
+export async function cropToArtworkRegion(
+  buffer: Buffer,
+  crop: ArtworkCrop
+): Promise<Buffer> {
+  try {
+    const oriented = sharp(buffer).rotate();
+    const meta = await oriented.metadata();
+    const width = meta.width;
+    const height = meta.height;
+    if (!width || !height) return buffer;
+
+    const left = Math.round(crop.x * width);
+    const top = Math.round(crop.y * height);
+    const extractWidth = Math.max(1, Math.min(width - left, Math.round(crop.width * width)));
+    const extractHeight = Math.max(1, Math.min(height - top, Math.round(crop.height * height)));
+
+    let working = sharp(await oriented.toBuffer()).extract({
+      left,
+      top,
+      width: extractWidth,
+      height: extractHeight,
+    });
+
+    if (Math.abs(crop.rotationDegrees) >= 0.5) {
+      working = sharp(await working.toBuffer()).rotate(crop.rotationDegrees, {
+        background: BACKGROUND,
+      });
+    }
+
+    return await working.toBuffer();
+  } catch (error) {
+    console.error("Error cropping artwork region, using original photo:", error);
+    return buffer;
+  }
+}
+
 export async function processProductPhoto(buffer: Buffer): Promise<Buffer> {
   try {
     let working = sharp(buffer).rotate();
