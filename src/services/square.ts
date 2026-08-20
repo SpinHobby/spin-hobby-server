@@ -345,10 +345,11 @@ export class SquareService {
   }
 
   // Updates an existing location-scoped item (name, description, price,
-  // category, hidden/visible, optionally a new primary photo). Requires the
-  // item's and variation's current `version` for Square's optimistic
-  // concurrency check, so this always re-fetches the live item first rather
-  // than trusting a stale version passed in from the caller.
+  // category, hidden/visible, optionally a new primary photo or removing
+  // the current one). Requires the item's and variation's current
+  // `version` for Square's optimistic concurrency check, so this always
+  // re-fetches the live item first rather than trusting a stale version
+  // passed in from the caller.
   async updateLocationItem(update: {
     itemId: string;
     name: string;
@@ -357,6 +358,7 @@ export class SquareService {
     hidden: boolean;
     categoryId?: string;
     photo?: { buffer: Buffer; mimetype: string };
+    removePhoto?: boolean;
   }) {
     const { item: existing } = await this.getItem(update.itemId);
     if (!existing || existing.type !== "ITEM") {
@@ -371,6 +373,15 @@ export class SquareService {
       ...(update.categoryId ? [{ id: update.categoryId }] : []),
       ...(update.hidden && CASHIER_CATEGORY_ID ? [{ id: CASHIER_CATEGORY_ID }] : []),
     ];
+
+    // Square's catalog upsert fully replaces item_data - any field left out
+    // of the request body (not just left `undefined` in JS) resets to
+    // empty, image_ids included. So existing photos must be explicitly
+    // re-sent to survive an edit that isn't touching the photo at all;
+    // an empty array here explicitly clears them (removePhoto, or about to
+    // attach a replacement below).
+    const imageIds =
+      update.removePhoto || update.photo ? [] : existing.itemData?.imageIds || [];
 
     const baseUrl =
       process.env.SQUARE_ENVIRONMENT === "production"
@@ -403,6 +414,7 @@ export class SquareService {
                   reporting_category: update.categoryId
                     ? { id: update.categoryId }
                     : undefined,
+                  image_ids: imageIds,
                   variations: [
                     {
                       type: "ITEM_VARIATION",

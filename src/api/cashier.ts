@@ -305,10 +305,15 @@ router.get("/cashier/search", async (req, res) => {
 // the "Edit Existing" flow in the cashier tool.
 router.get("/cashier/item/:id", async (req, res) => {
   try {
-    const { item } = await squareService.getItem(req.params.id);
+    const { item, relatedObjects } = await squareService.getItem(req.params.id);
     if (!item || item.type !== "ITEM") {
       return res.status(404).json({ success: false, error: "Item not found" });
     }
+    const imageId = item.itemData?.imageIds?.[0];
+    const imageUrl = imageId
+      ? (relatedObjects as any[]).find((o) => o.type === "IMAGE" && o.id === imageId)?.imageData
+          ?.url
+      : undefined;
     const variation = item.itemData?.variations?.[0];
     const variationId =
       variation && variation.type === "ITEM_VARIATION" ? variation.id : undefined;
@@ -346,6 +351,7 @@ router.get("/cashier/item/:id", async (req, res) => {
         categoryName,
         hidden,
         stockCount,
+        imageUrl,
       },
     });
   } catch (error: any) {
@@ -355,11 +361,21 @@ router.get("/cashier/item/:id", async (req, res) => {
 });
 
 // PUT /api/cashier/item/:id  multipart: title, description, price, hidden,
-// category, quantity (optional new photo). Updates an existing item in place.
+// category, quantity, removePhoto ("true" to clear the current photo
+// without replacing it - ignored if a new photo is also uploaded).
+// Updates an existing item in place.
 router.put("/cashier/item/:id", upload.single("photo"), async (req, res) => {
   try {
-    const { title, description, price, hidden, quantity, category, categoryId: rawCategoryId } =
-      req.body;
+    const {
+      title,
+      description,
+      price,
+      hidden,
+      quantity,
+      category,
+      categoryId: rawCategoryId,
+      removePhoto,
+    } = req.body;
     const file = req.file;
 
     if (!title || price == null) {
@@ -394,6 +410,7 @@ router.put("/cashier/item/:id", upload.single("photo"), async (req, res) => {
       hidden: isHidden,
       categoryId,
       photo: file ? { buffer: file.buffer, mimetype: file.mimetype } : undefined,
+      removePhoto: !file && removePhoto === "true",
     });
 
     if (!isHidden && quantity != null && quantity !== "") {
