@@ -239,14 +239,16 @@ router.post("/cashier/record", upload.single("photo"), async (req, res) => {
 });
 
 // GET /api/cashier/search?q=... - unfiltered item search (includes hidden
-// convention items) for the "Edit Existing" picker.
+// convention items) for the "Edit Existing" picker and the admin "Manage
+// Items" browser. Returns enough per item (category, stock) for the admin
+// UI to filter/sort client-side without a round trip per item.
 router.get("/cashier/search", async (req, res) => {
   try {
     const { q, cursor } = req.query;
     const result = await squareService.searchAllItems(
       (q as string) || undefined,
       (cursor as string) || undefined,
-      30
+      100
     );
     const imagesById = new Map<string, string>();
     (result.relatedObjects as any[]).forEach((obj) => {
@@ -254,21 +256,42 @@ router.get("/cashier/search", async (req, res) => {
         imagesById.set(obj.id, obj.imageData.url);
       }
     });
+
+    const items = result.items as any[];
+
+    const categoriesById = new Map<string, string>();
+    if (items.some((item) => (item.itemData?.categories || []).length > 0)) {
+      const allCategories = await squareService.listCategories();
+      (allCategories as any[]).forEach((c) => {
+        if (c.id && c.categoryData?.name) categoriesById.set(c.id, c.categoryData.name);
+      });
+    }
+
+    const variationIds = items
+      .map((item) => item.itemData?.variations?.[0]?.id)
+      .filter((id): id is string => !!id);
+    const stockCounts = await squareService.getInventoryCounts(variationIds);
+
     res.status(200).json({
       success: true,
       cursor: result.cursor,
-      items: (result.items as any[]).map((item) => {
+      items: items.map((item) => {
         const imageId = item.itemData?.imageIds?.[0];
+        const variationId = item.itemData?.variations?.[0]?.id;
+        const categories = item.itemData?.categories || [];
+        const categoryId = categories.find((c: any) => c.id !== CASHIER_CATEGORY_ID)?.id;
         return {
           id: item.id,
           name: item.itemData?.name,
           priceCents: Number(
             item.itemData?.variations?.[0]?.itemVariationData?.priceMoney?.amount ?? 0
           ),
-          hidden: (item.itemData?.categories || []).some(
-            (c: any) => c.id === CASHIER_CATEGORY_ID
-          ),
+          hidden: categories.some((c: any) => c.id === CASHIER_CATEGORY_ID),
           imageUrl: imageId ? imagesById.get(imageId) : undefined,
+          categoryId,
+          categoryName: categoryId ? categoriesById.get(categoryId) : undefined,
+          stockCount:
+            variationId && variationId in stockCounts ? stockCounts[variationId] : null,
         };
       }),
     });
