@@ -6,8 +6,13 @@ import { requireAdminAuth } from "./middleware/requireAdminAuth";
 const router = express.Router();
 
 // Every route in this file is admin-only (ops dashboard) - previously
-// gated client-side only, see requireAdminAuth.
-router.use(requireAdminAuth);
+// gated client-side only, see requireAdminAuth. Must be scoped to "/ops" -
+// this router is mounted at "/" alongside every other route file in
+// api/index.ts, so an unscoped router.use() here would silently 401 every
+// route registered after it in that file (auth, wishlist, account, events),
+// not just this file's own routes. (Found and fixed live - this had broken
+// Google/Discord login, wishlist, and account endpoints in production.)
+router.use("/ops", requireAdminAuth);
 
 // Tools tracked on the ops dashboard. Add an entry here (and a matching row
 // in ai_budgets, or let it fall back to the $20/$30 defaults) whenever a new
