@@ -1,6 +1,6 @@
 {
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.116.0",
+    "@anthropic-ai/sdk": "^0.123.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/cors": "^2.8.12",
     "@types/express": "^5.0.0",
