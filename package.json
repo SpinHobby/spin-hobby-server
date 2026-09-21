@@ -20,7 +20,7 @@
     "google-auth-library": "^11.0.2",
     "jose": "^6.2.8",
     "jsonwebtoken": "^9.0.2",
-    "multer": "^1.4.5-lts.1",
+    "multer": "^2.4.0",
     "pg": "^8.7.3",
     "sharp": "^0.35.3",
     "square": "^45.0.1",
