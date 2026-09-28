@@ -658,7 +658,7 @@ async function adminProducts(req: Request, db: SupabaseClient, url: URL) {
   const variationIds = page.items.map((item: Row) => item.variationId).filter(Boolean);
   if (itemIds.length) {
     const [metaResult, alertResult] = await Promise.all([
-      db.from('product_metadata').select('square_item_id,availability,jan_code,is_featured').in('square_item_id', itemIds),
+      db.from('product_metadata').select('square_item_id,availability,jan_code,is_featured,sort_order').in('square_item_id', itemIds),
       variationIds.length
         ? db.from('stock_alerts').select('square_variation_id').in('square_variation_id', variationIds).is('notified_at', null)
         : Promise.resolve({ data: [], error: null }),
@@ -670,7 +670,7 @@ async function adminProducts(req: Request, db: SupabaseClient, url: URL) {
     for (const row of (alertResult.data ?? []) as Row[]) alerts.set(row.square_variation_id, (alerts.get(row.square_variation_id) ?? 0) + 1);
     page.items = page.items.map((item: Row) => {
       const m = meta.get(item.id) as Row | undefined;
-      return { ...item, janCode: m?.jan_code ?? null, availability: m?.availability ?? 'auto', isFeatured: m?.is_featured ?? false, alertsWaiting: alerts.get(item.variationId) ?? 0 };
+      return { ...item, janCode: m?.jan_code ?? null, availability: m?.availability ?? 'auto', isFeatured: m?.is_featured ?? false, sortOrder: m?.sort_order ?? 0, alertsWaiting: alerts.get(item.variationId) ?? 0 };
     });
   }
   return page;
@@ -996,6 +996,7 @@ async function checkoutConfig(db: SupabaseClient) {
     freeShippingThresholdCents: Number(store.free_shipping_threshold_cents),
     handlingDaysMin: Number(store.handling_days_min),
     handlingDaysMax: Number(store.handling_days_max),
+    fxCadUsd: Number(store.fx_cad_usd),
   };
 }
 
