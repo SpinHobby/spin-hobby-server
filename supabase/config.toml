@@ -1,0 +1,23 @@
+project_id = "spin-hobby"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173", "https://spinhobby.com", "https://admin.spinhobby.com"]
+jwt_expiry = 3600
+enable_signup = true
+
+[storage]
+enabled = true
+
+[functions.store-api]
+verify_jwt = false
+
+[functions.square-sync]
+verify_jwt = false
