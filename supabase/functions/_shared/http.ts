@@ -1,10 +1,12 @@
 export type Json = Record<string, unknown> | unknown[] | string | number | boolean | null;
 
 function configuredOrigins() {
-  return (Deno.env.get('ALLOWED_ORIGINS') ?? '')
+  const productionOrigins = ['https://spinhobby.com', 'https://www.spinhobby.com'];
+  const environmentOrigins = (Deno.env.get('ALLOWED_ORIGINS') ?? '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+  return [...new Set([...productionOrigins, ...environmentOrigins])];
 }
 
 export function isAllowedOrigin(req: Request) {
