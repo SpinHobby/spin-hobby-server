@@ -653,6 +653,26 @@ async function adminProducts(req: Request, db: SupabaseClient, url: URL) {
     page.items = page.items.filter((item: Row) => ids.has(item.id));
     page.total = page.items.length;
   }
+  // Admin-only fields the storefront doesn't expose: JAN, availability, featured flag, waiting restock alerts.
+  const itemIds = page.items.map((item: Row) => item.id);
+  const variationIds = page.items.map((item: Row) => item.variationId).filter(Boolean);
+  if (itemIds.length) {
+    const [metaResult, alertResult] = await Promise.all([
+      db.from('product_metadata').select('square_item_id,availability,jan_code,is_featured').in('square_item_id', itemIds),
+      variationIds.length
+        ? db.from('stock_alerts').select('square_variation_id').in('square_variation_id', variationIds).is('notified_at', null)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (metaResult.error) throw metaResult.error;
+    if (alertResult.error) throw alertResult.error;
+    const meta = new Map((metaResult.data ?? []).map((row: Row) => [row.square_item_id, row]));
+    const alerts = new Map<string, number>();
+    for (const row of (alertResult.data ?? []) as Row[]) alerts.set(row.square_variation_id, (alerts.get(row.square_variation_id) ?? 0) + 1);
+    page.items = page.items.map((item: Row) => {
+      const m = meta.get(item.id) as Row | undefined;
+      return { ...item, janCode: m?.jan_code ?? null, availability: m?.availability ?? 'auto', isFeatured: m?.is_featured ?? false, alertsWaiting: alerts.get(item.variationId) ?? 0 };
+    });
+  }
   return page;
 }
 
@@ -816,6 +836,28 @@ async function adminTaxRates(req: Request, db: SupabaseClient) {
 
 async function adminSlides(req: Request, db: SupabaseClient, path: string) {
   const admin = await requireAdmin(req, db);
+  const slideId = /^\/admin\/homepage\/slides\/([0-9a-f-]{36})$/.exec(path)?.[1];
+  if (slideId && req.method === 'DELETE') {
+    const { error } = await db.from('hero_slides').delete().eq('id', slideId);
+    if (error) throw error;
+    await writeAdminLog(db, admin.id, 'homepage.slide_deleted', slideId);
+    return { success: true };
+  }
+  if (slideId && req.method === 'PUT') {
+    const payload = await bodyAsJson(req);
+    const update: Row = {};
+    if ('headline' in payload) update.headline = stringValue(payload.headline, 'headline', 160);
+    if ('subheading' in payload) update.subheading = optionalString(payload.subheading, 300);
+    if ('imageUrl' in payload) update.image_url = optionalString(payload.imageUrl, 1000);
+    if ('linkUrl' in payload) update.link_url = optionalString(payload.linkUrl, 1000);
+    if ('isVisible' in payload) update.is_visible = payload.isVisible === true;
+    if ('sortOrder' in payload && Number.isInteger(Number(payload.sortOrder))) update.sort_order = Number(payload.sortOrder);
+    const { data, error } = await db.from('hero_slides').update(update).eq('id', slideId).select().single();
+    if (error) throw error;
+    await writeAdminLog(db, admin.id, 'homepage.slide_updated', slideId, update);
+    return { success: true, slide: data };
+  }
+  if (slideId) throw new Error('Unsupported slide request.');
   if (path.endsWith('/reorder')) {
     const payload = await bodyAsJson(req);
     if (!Array.isArray(payload.ids) || payload.ids.length > 100) throw new Error('ids is required.');
@@ -1010,7 +1052,7 @@ async function router(req: Request) {
   }
   if (path === '/admin/settings' && (req.method === 'GET' || req.method === 'PUT')) return response(req, await adminSettings(req, db));
   if (path === '/admin/tax-rates' && (req.method === 'GET' || req.method === 'PUT')) return response(req, await adminTaxRates(req, db));
-  if (path === '/admin/homepage/slides' || path === '/admin/homepage/slides/reorder') return response(req, await adminSlides(req, db, path));
+  if (path === '/admin/homepage/slides' || path === '/admin/homepage/slides/reorder' || /^\/admin\/homepage\/slides\/[0-9a-f-]{36}$/.test(path)) return response(req, await adminSlides(req, db, path));
   if (path === '/admin/events' && (req.method === 'GET' || req.method === 'POST')) return response(req, await adminEvents(req, db));
   if (/^\/admin\/events\/[^/]+$/.test(path) && (req.method === 'PUT' || req.method === 'DELETE')) return response(req, await adminEvents(req, db, path.split('/').at(-1)));
   if (req.method === 'GET' && path === '/admin/square/readiness') return response(req, await squareReadiness(req, db));
