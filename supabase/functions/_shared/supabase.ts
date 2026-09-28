@@ -28,7 +28,25 @@ export async function currentUser(req: Request, db: SupabaseClient): Promise<App
     .eq('id', data.user.id)
     .maybeSingle();
   if (profileError || !profile) return null;
-  return { id: profile.id, email: profile.email, role: profile.role as AppRole };
+  const role = bootstrapRole(profile.email, profile.role as AppRole);
+  if (role !== profile.role) {
+    // Promote accounts listed in OWNER_EMAILS / STAFF_EMAILS the first time they sign in.
+    const { error } = await db.from('profiles').update({ role }).eq('id', profile.id);
+    if (error) throw error;
+  }
+  return { id: profile.id, email: profile.email, role };
+}
+
+function emailList(name: string) {
+  return (Deno.env.get(name) ?? '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+}
+
+/** Env-listed emails get at least that role. Never demotes anyone set by hand in the database. */
+function bootstrapRole(email: string, current: AppRole): AppRole {
+  const address = email.toLowerCase();
+  if (emailList('OWNER_EMAILS').includes(address)) return 'owner';
+  if (current === 'customer' && emailList('STAFF_EMAILS').includes(address)) return 'staff';
+  return current;
 }
 
 export async function requireUser(req: Request, db: SupabaseClient): Promise<AppUser> {
