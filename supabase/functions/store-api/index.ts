@@ -980,6 +980,25 @@ async function squareCatalog(req: Request, db: SupabaseClient, path: string, url
   return productPage(db, url);
 }
 
+// Public, non-secret values the checkout page needs to render the active payment method.
+async function checkoutConfig(db: SupabaseClient) {
+  const store = await settings(db);
+  return {
+    success: true,
+    provider: store.payment_provider,
+    paypalClientId: Deno.env.get('PAYPAL_CLIENT_ID') ?? null,
+    paypalEnv: Deno.env.get('PAYPAL_ENV') === 'live' ? 'live' : 'sandbox',
+    squareApplicationId: Deno.env.get('SQUARE_APPLICATION_ID') ?? null,
+    squareLocationId: Deno.env.get('SQUARE_LOCATION_ID') ?? null,
+    squareEnv: Deno.env.get('SQUARE_ENV') === 'production' ? 'production' : 'sandbox',
+    shippingStandardCents: Number(store.shipping_standard_cents),
+    shippingExpressCents: Number(store.shipping_express_cents),
+    freeShippingThresholdCents: Number(store.free_shipping_threshold_cents),
+    handlingDaysMin: Number(store.handling_days_min),
+    handlingDaysMax: Number(store.handling_days_max),
+  };
+}
+
 async function authMe(req: Request, db: SupabaseClient) {
   const user = await requireUser(req, db);
   return { success: true, user };
@@ -1022,6 +1041,7 @@ async function router(req: Request) {
     return response(req, await productPage(db, url));
   }
   if (req.method === 'GET' && path === '/homepage') return response(req, await homepage(db));
+  if (req.method === 'GET' && path === '/checkout/config') return response(req, await checkoutConfig(db));
   if (req.method === 'GET' && path === '/auth/me') return response(req, await authMe(req, db));
   if (req.method === 'POST' && path === '/auth/logout') return response(req, await authLogout(req, db));
   if (req.method === 'GET' && path === '/wishlist') return response(req, await customerWishlist(req, db));
