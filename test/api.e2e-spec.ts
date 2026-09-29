@@ -64,6 +64,7 @@ describe('platform', () => {
 
   it('refuses unknown browser origins and allows configured ones', async () => {
     await http.get('/products').set('Origin', 'https://evil.example').expect(403);
+    await http.get('/products').set('Origin', 'http://localhost:61234').expect(200); // any localhost port outside production
     const ok = await http.get('/products').set('Origin', ORIGIN).expect(200);
     expect(ok.headers['access-control-allow-origin']).toBe(ORIGIN);
     const preflight = await http.options('/cart/quote').set('Origin', 'https://spinhobby.com').set('Access-Control-Request-Method', 'POST').set('Access-Control-Request-Headers', 'authorization,content-type');
