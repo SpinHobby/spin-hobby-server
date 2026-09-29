@@ -58,18 +58,12 @@ npm run test:e2e    # every HTTP route against a real Postgres (PGlite) with the
 The e2e suite needs no network or Docker: PayPal, Square, Resend and Claude calls are
 intercepted, and sign-ins use locally signed tokens.
 
-## Deploy (Railway)
+## Deploy (Render)
 
-`railway.json` builds the Dockerfile and health-checks `/health`:
-
-```sh
-railway init            # or: railway link, to an existing project
-railway up
-```
-
-Set the variables from `.env.example` in Railway (at minimum `DATABASE_URL`, `SUPABASE_URL`,
-`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_ORIGINS`), then point the
-storefront's `VITE_API_URL` at the Railway URL. Any other container host works too:
+`render.yaml` is a Render Blueprint: **New → Blueprint → this repo**. It builds the Dockerfile,
+health-checks `/health`, auto-deploys `main`, and prompts for the secrets
+(`DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, payment/email keys). Then point the storefront's
+`VITE_API_URL` at the Render URL. (`railway.json` is kept for Railway; any container host works:)
 
 ```sh
 docker build -t spin-hobby-api .

@@ -1,0 +1,60 @@
+# Render Blueprint for the Spin Hobby API (NestJS).
+# Dashboard: New > Blueprint > pick this repo. Render builds the Dockerfile, checks /health,
+# and redeploys on every push to main. Values marked `sync: false` are prompted for on first
+# setup (and can be edited later under the service's Environment tab); never commit them.
+services:
+  - type: web
+    name: spin-hobby-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      # Public / non-secret
+      - key: NODE_ENV
+        value: production
+      - key: SUPABASE_URL
+        value: https://zmlltsytckexrmybvnof.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_tStjaCxjQZrh2_BG7h6i6g_F3c3wx9d
+      - key: ALLOWED_ORIGINS
+        value: https://admin.spinhobby.com
+      - key: STOREFRONT_URL
+        value: https://spinhobby.com
+      - key: OWNER_EMAILS
+        value: info@spinhobby.com,tingjayj@gmail.com
+      - key: DATABASE_SSL
+        value: "true"
+
+      # Required secrets (Supabase dashboard)
+      - key: DATABASE_URL            # Connect > Session pooler > URI, with the DB password
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY   # Project Settings > API Keys > secret key
+        sync: false
+
+      # Optional until you take payments / send email / use the cashier tool
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_ENV              # sandbox | live
+        value: sandbox
+      - key: SQUARE_ACCESS_TOKEN
+        sync: false
+      - key: SQUARE_APPLICATION_ID
+        sync: false
+      - key: SQUARE_LOCATION_ID
+        sync: false
+      - key: SQUARE_ENV              # sandbox | production
+        value: sandbox
+      - key: SQUARE_WEBHOOK_SIGNATURE_KEY
+        sync: false
+      - key: SQUARE_WEBHOOK_URL      # https://<this service>.onrender.com/webhooks/square
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
