@@ -2,7 +2,6 @@
 
 /dist
 
-package-lock.json
 
 .env
 
@@ -12,3 +11,5 @@ package-lock.json
 .env.backup
 .env.fixed
 .env~
+/coverage
+*.tsbuildinfo

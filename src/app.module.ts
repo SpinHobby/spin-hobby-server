@@ -1,0 +1,62 @@
+import { Module } from '@nestjs/common';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { AccountController } from './account/account.controller.js';
+import { AdminCatalogController } from './admin/admin-catalog.controller.js';
+import { AdminContentController } from './admin/admin-content.controller.js';
+import { AdminOrdersController } from './admin/admin-orders.controller.js';
+import { AccessGuard } from './auth/access.js';
+import { AuthService } from './auth/auth.service.js';
+import { AiUsageService } from './cashier/ai-usage.service.js';
+import { CashierController } from './cashier/cashier.controller.js';
+import { IdentifyService } from './cashier/identify.service.js';
+import { SquareCatalogService } from './cashier/square-catalog.service.js';
+import { CatalogController } from './catalog/catalog.controller.js';
+import { CatalogService } from './catalog/catalog.service.js';
+import { CheckoutController } from './checkout/checkout.controller.js';
+import { QuoteService } from './checkout/quote.service.js';
+import { AdminLog } from './common/admin-log.service.js';
+import { JsonErrorFilter } from './common/http-exception.filter.js';
+import { DbModule } from './db/db.module.js';
+import { EmailService } from './email/email.service.js';
+import { HealthController } from './health/health.controller.js';
+import { OpsController } from './ops/ops.controller.js';
+import { PayPalClient } from './payments/paypal.client.js';
+import { SquareClient } from './payments/square.client.js';
+import { SquareSyncController } from './square-sync/square-sync.controller.js';
+import { SquareSyncService } from './square-sync/square-sync.service.js';
+import { StoreService } from './store/store.service.js';
+import { WebhooksController } from './webhooks/webhooks.controller.js';
+
+@Module({
+  imports: [DbModule],
+  controllers: [
+    HealthController,
+    CatalogController,
+    AccountController,
+    CheckoutController,
+    WebhooksController,
+    AdminCatalogController,
+    AdminOrdersController,
+    AdminContentController,
+    SquareSyncController,
+    CashierController,
+    OpsController,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: AccessGuard },
+    { provide: APP_FILTER, useClass: JsonErrorFilter },
+    AuthService,
+    AdminLog,
+    StoreService,
+    CatalogService,
+    QuoteService,
+    PayPalClient,
+    SquareClient,
+    EmailService,
+    SquareSyncService,
+    SquareCatalogService,
+    AiUsageService,
+    IdentifyService,
+  ],
+})
+export class AppModule {}

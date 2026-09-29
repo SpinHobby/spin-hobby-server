@@ -39,7 +39,7 @@ async function fetchCategoryNames() {
   const names = new Map<string, string>();
   let cursor: string | undefined;
   do {
-    const data = await squareFetch('/v2/catalog/search-catalog-objects', {
+    const data = await squareFetch('/v2/catalog/search', {
       object_types: ['CATEGORY'], include_deleted_objects: false, limit: 100, ...(cursor ? { cursor } : {}),
     });
     for (const object of data.objects ?? []) if (object.type === 'CATEGORY' && object.category_data?.name) names.set(object.id, object.category_data.name);
@@ -106,7 +106,7 @@ async function syncInventory(db: ReturnType<typeof serviceClient>, variationIds:
     let cursor: string | undefined;
     const quantities = new Map<string, number>();
     do {
-      const data = await squareFetch('/v2/inventory/batch-retrieve-counts', {
+      const data = await squareFetch('/v2/inventory/counts/batch-retrieve', {
         catalog_object_ids: ids, location_ids: [locationId], states: ['IN_STOCK'], ...(cursor ? { cursor } : {}),
       });
       for (const count of data.counts ?? []) quantities.set(count.catalog_object_id, (quantities.get(count.catalog_object_id) ?? 0) + Number(count.quantity ?? 0));

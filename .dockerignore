@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+legacy
+supabase
+test
+.env*
+.git
+*.md
