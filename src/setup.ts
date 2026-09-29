@@ -8,17 +8,20 @@ export function configureApp(app: INestApplication) {
   // Base64 photo uploads (already resized in the browser) need more than the 100 kB default.
   (app as NestExpressApplication).useBodyParser('json', { limit: '8mb' });
   const origins = allowedOrigins();
+  // Outside production, any localhost port may call the API (Vite picks ports dynamically).
+  const localDev = env('NODE_ENV') !== 'production';
+  const allowed = (origin: string) => origins.includes(origin) || (localDev && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
   // Same rule as the edge function: browsers on unknown origins are refused outright.
   app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin;
-    if (origin && !origins.includes(origin)) {
+    if (origin && !allowed(origin)) {
       res.status(403).json({ success: false, error: 'Origin is not allowed.' });
       return;
     }
     next();
   });
   app.enableCors({
-    origin: origins,
+    origin: (origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) => cb(null, !origin || allowed(origin)),
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'x-client-info', 'apikey', 'content-type', 'idempotency-key'],
     maxAge: 86400,

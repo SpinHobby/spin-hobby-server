@@ -41,8 +41,5 @@ secret = "env(SUPABASE_AUTH_EXTERNAL_DISCORD_SECRET)"
 [storage]
 enabled = true
 
-[functions.store-api]
-verify_jwt = false
-
-[functions.square-sync]
-verify_jwt = false
+# Edge functions retired: all API logic runs in the NestJS server (src/). The old
+# functions are kept for reference in legacy/supabase-edge-functions.

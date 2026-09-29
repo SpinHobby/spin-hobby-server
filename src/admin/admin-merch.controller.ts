@@ -8,6 +8,7 @@ import { jsonBody, optionalString, positiveInteger, stringValue } from '../commo
 import { Db, type Queryable, type Row } from '../db/db.service.js';
 import { publicProduct } from '../catalog/product.mapper.js';
 import { StorageService } from '../storage/storage.service.js';
+import { categoryId } from './admin-categories.controller.js';
 
 export const isManualId = (id: string) => id.startsWith('manual-');
 
@@ -79,6 +80,8 @@ export class AdminMerchController {
     const orderBy = date(p.orderByDate, 'order-by date');
     const release = date(p.releaseMonth, 'release month');
     if (availability === 'preorder' && !orderBy) throw new AppError('Pre-orders need an order-by date.');
+    const shopCategory = categoryId(p.categoryId);
+    if (shopCategory && !(await this.db.one('select 1 from public.store_categories where id = $1', [shopCategory]))) throw new AppError('Category not found.', 404);
     const itemId = `manual-${randomUUID()}`;
     const variationId = `${itemId}-v`;
 
@@ -92,10 +95,10 @@ export class AdminMerchController {
       await this.db.exec('update public.catalog_products set default_variation_id = $2 where square_item_id = $1', [itemId, variationId], tx);
       await this.db.exec('insert into public.inventory_snapshots (square_variation_id, quantity) values ($1, $2)', [variationId, qty], tx);
       await this.db.exec(
-        `insert into public.product_metadata (square_item_id, availability, release_month, order_by_date, series, jan_code, compare_at_cents, max_per_customer, is_featured)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `insert into public.product_metadata (square_item_id, availability, release_month, order_by_date, series, jan_code, compare_at_cents, max_per_customer, is_featured, category_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
         [itemId, availability, release ? `${release.slice(0, 7)}-01` : null, orderBy, optionalString(p.series, 120), optionalString(p.janCode, 20),
-          p.compareAtCents ? priceCents(p.compareAtCents) : null, p.maxPerCustomer ? positiveInteger(p.maxPerCustomer, 'maxPerCustomer', 1000) : null, p.isFeatured === true],
+          p.compareAtCents ? priceCents(p.compareAtCents) : null, p.maxPerCustomer ? positiveInteger(p.maxPerCustomer, 'maxPerCustomer', 1000) : null, p.isFeatured === true, shopCategory],
         tx,
       );
       await this.replaceImages(itemId, images, tx);

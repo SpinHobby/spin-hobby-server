@@ -1,26 +1,40 @@
 # Spin Hobby server
 
-NestJS API for spinhobby.com — the storefront, checkout and staff admin in
-[`SpinHobby/spin-hobby`](https://github.com/SpinHobby/spin-hobby) talk to it.
-
-It serves **the same routes and JSON** as the Supabase `store-api` edge function in
-[`supabase/functions`](supabase/functions), so the frontend can use either one by
-changing a single variable:
+NestJS API for spinhobby.com. It is the **only backend**: the storefront, checkout and staff
+admin in [`SpinHobby/spin-hobby`](https://github.com/SpinHobby/spin-hobby) talk to it and
+nothing else. Sign-in, catalog filtering, category trees, checkout, payments, Square sync,
+the cashier tool and all admin actions run here.
 
 ```
-VITE_STORE_API_BASE=https://api.spinhobby.com                               # this server
-VITE_STORE_API_BASE=https://<ref>.supabase.co/functions/v1/store-api        # edge function
+browser ──► spin-hobby API (this repo) ──► Supabase Postgres · Supabase Auth · Supabase Storage
+                                        └─► Square · PayPal · Resend · Claude
 ```
+
+The Supabase edge functions that used to do this are retired (kept for reference in
+`legacy/supabase-edge-functions`). Supabase is still the database, identity provider and
+file storage; `supabase/migrations` is the schema.
 
 | | |
 |---|---|
 | Framework | NestJS 12 (ES modules), Node 22+ |
 | Database | Supabase Postgres, schema in [`supabase/migrations`](supabase/migrations) |
-| Sign-in | Supabase Auth access tokens (verified with the project's signing keys) |
+| Sign-in | `POST /auth/login` etc., backed by Supabase Auth |
 | Payments | PayPal or Square (switchable in Admin → Settings) |
-| Catalog | Mirrored from Square (`POST /admin/square/sync`, webhook, or on a timer) |
+| Catalog | Square sync + hand-entered products, shop category tree |
 | Email | Resend (restock alerts, shipping notices) |
 | Cashier AI | Claude (`claude-opus-5`) with a monthly budget cap |
+
+## Local development (no Docker, no Supabase account)
+
+```sh
+npm install
+npm run dev:local     # API on http://localhost:8080 with a seeded in-process Postgres
+```
+
+Sign in as `owner@spinhobby.test` / `spinhobby` (or `staff@spinhobby.test`). Then run the
+frontend with `VITE_API_URL=http://localhost:8080 npm run dev` in the spin-hobby repo.
+
+To run against a real Supabase project instead: `cp .env.example .env`, fill it in, `npm run start:dev`.
 
 ## Run locally
 
@@ -44,9 +58,18 @@ npm run test:e2e    # every HTTP route against a real Postgres (PGlite) with the
 The e2e suite needs no network or Docker: PayPal, Square, Resend and Claude calls are
 intercepted, and sign-ins use locally signed tokens.
 
-## Deploy
+## Deploy (Railway)
 
-Any Node or container host works (Render, Railway, Fly, Cloud Run…):
+`railway.json` builds the Dockerfile and health-checks `/health`:
+
+```sh
+railway init            # or: railway link, to an existing project
+railway up
+```
+
+Set the variables from `.env.example` in Railway (at minimum `DATABASE_URL`, `SUPABASE_URL`,
+`SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ALLOWED_ORIGINS`), then point the
+storefront's `VITE_API_URL` at the Railway URL. Any other container host works too:
 
 ```sh
 docker build -t spin-hobby-api .
@@ -54,8 +77,7 @@ docker run -p 8080:8080 --env-file .env spin-hobby-api
 ```
 
 Then set `SQUARE_WEBHOOK_URL` to `https://<your-host>/webhooks/square` in both the
-Square dashboard and the environment, and point the storefront's
-`VITE_STORE_API_BASE` at the host.
+Square dashboard and the environment.
 
 ## Routes
 
@@ -63,7 +85,8 @@ Access: **public** · **user** (signed in) · **staff** (staff or owner) · **ow
 
 | Area | Routes |
 |---|---|
-| Catalog (public) | `GET /products` `/products/facets` `/products/preorders` `/products/ranking` `/products/new-in-stock` `/homepage` `/square/catalog[/:id]` `/square/inventory` `/square/config` `/square/display-categories` |
+| Sign-in (public) | `GET /auth/providers` · `POST /auth/login` `/auth/refresh` · `GET /auth/oauth-url` |
+| Catalog (public) | `GET /products` (filters: `categoryId`, `group`, `ids`, `q`, `status`, `min`/`max`, `sort`) `/products/facets` `/categories` `/products/preorders` `/products/ranking` `/products/new-in-stock` `/homepage` `/square/catalog[/:id]` `/square/inventory` `/square/config` `/square/display-categories` |
 | Checkout (public) | `GET /checkout/config` · `POST /cart/quote` `/checkout/intent` `/paypal/capture` `/square/payments` · `GET /orders/lookup` |
 | Account (user) | `GET /auth/me` · `POST /auth/logout` · `GET/POST /wishlist` · `DELETE /wishlist/:id` · `GET /orders[/:id]` · `POST /alerts` (public) |
 | Admin (staff) | `GET /admin/dashboard` · `GET /admin/products` · `PATCH /admin/products/:id` · `POST /admin/products/:id/notify-restock` · `GET /admin/orders[/:id]` · `POST /admin/orders/:id/ship` · `GET /admin/orders/:id/packing-slip` · slides `GET/POST/PUT/DELETE /admin/homepage/slides[/:id\|/reorder]` · events `GET/POST/PUT/DELETE /admin/events[/:id]` · `GET /admin/square/readiness` · `GET /admin/settings` |
@@ -86,7 +109,8 @@ src/
   cashier/       photo → Claude → Square item tool, AI budget
   webhooks/      Square (HMAC) and PayPal webhooks
   db/            pg pool + transactions
-supabase/        migrations + the original edge functions
-legacy/          the previous Express server, kept for reference
+supabase/        database migrations + Auth config
+scripts/         dev-local.mjs (seeded local Postgres + API)
+legacy/          the previous Express server and the retired edge functions
 test/            e2e suite + PGlite harness
 ```
