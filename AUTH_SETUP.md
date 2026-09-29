@@ -13,6 +13,9 @@ supabase secrets set OWNER_EMAILS="tingjayj@gmail.com" --project-ref zmlltsytcke
 supabase functions deploy store-api --project-ref zmlltsytckexrmybvnof
 ```
 
+Running the NestJS server instead? Set `OWNER_EMAILS` (and `STAFF_EMAILS`) in that host's
+environment — it applies the same rule.
+
 The first time a listed email signs in, its profile is promoted automatically.
 Roles set by hand are never downgraded. Without redeploying, the SQL editor works too:
 
