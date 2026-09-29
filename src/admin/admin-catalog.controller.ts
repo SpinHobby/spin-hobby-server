@@ -41,6 +41,8 @@ export class AdminCatalogController {
       toShip: toShip.length,
       oldestToShipDays: toShip.length ? Math.floor((Date.now() - Math.min(...toShip.map((o) => new Date(o.created_at).getTime()))) / 86_400_000) : 0,
       openPreorders: preorders.length,
+      preorderProducts: products.filter((p) => p.status === 'pre').length,
+      ordersToday: orders.filter((o) => new Date(o.created_at) >= today).length,
       reservedUnits: reserved?.units ?? 0, // units, not orders (the edge function counted orders)
       lowStock: low.length,
       alertsWaiting: alerts?.count ?? 0,

@@ -7,6 +7,7 @@ import { AdminContentController } from './admin/admin-content.controller.js';
 import { AdminMerchController } from './admin/admin-merch.controller.js';
 import { AdminOrdersController } from './admin/admin-orders.controller.js';
 import { AccessGuard } from './auth/access.js';
+import { AuthController } from './auth/auth.controller.js';
 import { AuthService } from './auth/auth.service.js';
 import { AiUsageService } from './cashier/ai-usage.service.js';
 import { CashierController } from './cashier/cashier.controller.js';
@@ -35,6 +36,7 @@ import { WebhooksController } from './webhooks/webhooks.controller.js';
   controllers: [
     HealthController,
     CatalogController,
+    AuthController,
     AccountController,
     CheckoutController,
     WebhooksController,

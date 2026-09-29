@@ -5,7 +5,9 @@
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "nest build",
     "start": "node dist/main.js",
@@ -14,7 +16,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "dev:local": "node scripts/dev-local.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",
@@ -31,6 +34,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite-socket": "^0.2.11",
     "@nestjs/cli": "^12.0.8",
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.1.1",

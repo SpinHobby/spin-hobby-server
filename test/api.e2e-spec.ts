@@ -95,6 +95,7 @@ describe('storefront catalog', () => {
     expect((await http.get('/products?category=Prize%20Figures')).body.items.map((p: any) => p.id)).toEqual(['PRZ1']);
     expect((await http.get('/products?status=in,low&sort=price_asc')).body.items.map((p: any) => p.id)).toEqual(['PRZ1', 'CHB1']);
     expect((await http.get('/products?min=50&max=100')).body.items.map((p: any) => p.id).sort()).toEqual(['CHB1', 'OLD1']);
+    expect((await http.get('/products?min=25&max=39')).body.items).toEqual([]); // max is exclusive ($39 falls in the next bucket)
     expect((await http.get('/products?q=re:zero')).body.items.map((p: any) => p.id)).toEqual(['FIG1']);
     expect((await http.get('/products?q=4580000000001')).body.items.map((p: any) => p.id)).toEqual(['FIG1']);
     expect((await http.get('/products?q=100%25')).body.items).toEqual([]); // LIKE wildcards are escaped
@@ -114,12 +115,70 @@ describe('storefront catalog', () => {
     expect(home.featuredItems.map((p: any) => p.id)).toEqual(['FIG1']);
     expect(home.preorders.map((p: any) => p.id)).toEqual(['FIG1']);
     expect(home.newInStock.map((p: any) => p.id).sort()).toEqual(['CHB1', 'PRZ1']);
-    expect(home).toMatchObject({ slides: [], events: [], categories: [] });
+    expect(home.categories).toEqual([]);
+    // No slides/events configured yet: the server supplies the welcome defaults.
+    expect(home.slides.map((sl: any) => sl.headline)).toEqual(['New arrivals every week', 'Free shipping on orders $75+', 'Join our Discord community']);
+    expect(home.events.map((e: any) => e.name)).toContain('Otafest');
+    expect(home.promos).toEqual({ closingSoon: 1, maxDiscountPct: 19 }); // FIG1 closes in 20 days; CHB1 $64 vs $79
   });
 
   it('exposes public checkout config driven by store settings', async () => {
     const res = await http.get('/checkout/config').expect(200);
     expect(res.body).toMatchObject({ provider: 'paypal', paypalClientId: 'pp-client', squareEnv: 'sandbox', freeShippingThresholdCents: 7500, handlingDaysMin: 2, handlingDaysMax: 3, fxCadUsd: 0.73 });
+  });
+});
+
+describe('storefront sections and server-side filters', () => {
+  it('filters by menu section, sale, wishlist ids and featured order', async () => {
+    const ids = (url: string) => http.get(url).then((r) => r.body.items.map((p: any) => p.id));
+    expect((await ids('/products?group=figures&limit=60')).sort()).toEqual(['CHB1', 'FIG1', 'PRZ1']);
+    expect(await ids('/products?group=preorders')).toEqual(['FIG1']);
+    expect((await ids('/products?group=new&limit=60')).sort()).toEqual(['CHB1', 'PRZ1']);
+    expect(await ids('/products?group=sale')).toEqual(['CHB1']);
+    expect(await ids('/products?group=plushies')).toEqual(['OLD1']);
+    expect((await ids('/products?ids=PRZ1,BDG1,HID1')).sort()).toEqual(['BDG1', 'PRZ1']);
+    expect(await ids('/products?ids=')).toEqual([]);
+    expect((await ids('/products?sort=featured&limit=60'))[0]).toBe('FIG1');
+    await http.get('/products?group=nonsense').expect(400, { success: false, error: 'Unknown section.' });
+    await http.get('/products?categoryId=nope').expect(400);
+  });
+});
+
+describe('sign-in through the API', () => {
+  const gotrue = (status: number, body: unknown) => () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+
+  it('lists the enabled providers', async () => {
+    process.env.SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test';
+    const auth = mockFetch({ '/auth/v1/settings': () => ({ external: { email: true, google: true, discord: false } }) });
+    try {
+      expect((await http.get('/auth/providers').expect(200)).body).toEqual({ success: true, password: true, google: true, discord: false });
+    } finally { auth.restore(); }
+  });
+
+  it('signs in with email + password and returns a session with the profile', async () => {
+    const auth = mockFetch({
+      'grant_type=password': (init) => {
+        const body = JSON.parse(String(init?.body));
+        return body.password === 'right' ? gotrue(200, { access_token: shopper.token, refresh_token: 'r1', expires_in: 3600 })() : gotrue(400, { error_code: 'invalid_credentials', msg: 'Invalid login credentials' })();
+      },
+      'grant_type=refresh_token': gotrue(200, { access_token: shopper.token, refresh_token: 'r2', expires_at: 1900000000 }),
+    });
+    try {
+      await http.post('/auth/login').send({ email: 'fan@example.com', password: 'wrong' }).expect(401, { success: false, error: 'Wrong email or password.' });
+      const ok = await http.post('/auth/login').send({ email: 'Fan@Example.com', password: 'right' }).expect(200);
+      expect(ok.body).toMatchObject({ success: true, accessToken: shopper.token, refreshToken: 'r1', user: { email: 'fan@example.com', role: 'customer' } });
+      expect(ok.body.expiresAt).toBeGreaterThan(Date.now() / 1000);
+      expect(auth.calls[0].body).toEqual({ email: 'fan@example.com', password: 'wrong' });
+      const refreshed = await http.post('/auth/refresh').send({ refreshToken: 'r1' }).expect(200);
+      expect(refreshed.body).toMatchObject({ refreshToken: 'r2', expiresAt: 1900000000 });
+    } finally { auth.restore(); }
+  });
+
+  it('builds OAuth links only for allowed sites', async () => {
+    const res = await http.get('/auth/oauth-url?provider=google&redirectTo=https://spinhobby.com/admin').expect(200);
+    expect(res.body.url).toBe('https://proj.supabase.co/auth/v1/authorize?provider=google&redirect_to=https%3A%2F%2Fspinhobby.com%2Fadmin');
+    await http.get('/auth/oauth-url?provider=google&redirectTo=https://evil.example/steal').expect(400);
+    await http.get('/auth/oauth-url?provider=myspace&redirectTo=https://spinhobby.com').expect(400);
   });
 });
 
@@ -305,7 +364,7 @@ describe('admin', () => {
 
   it('summarises the dashboard', async () => {
     const res = await http.get('/admin/dashboard').set('Authorization', staff.auth).expect(200);
-    expect(res.body).toMatchObject({ success: true, toShip: 1, openPreorders: 1, reservedUnits: 1, alertsWaiting: 1 });
+    expect(res.body).toMatchObject({ success: true, toShip: 1, openPreorders: 1, reservedUnits: 1, alertsWaiting: 1, preorderProducts: 1, ordersToday: 2 });
     expect(res.body.lowStockList.map((p: any) => p.id).sort()).toEqual(['CHB1']);
     expect(res.body.closingPreorders.map((p: any) => p.id)).toEqual(['FIG1']);
     expect(res.body.salesTodayCents).toBeGreaterThan(0);
@@ -450,6 +509,13 @@ describe('shop categories', () => {
     expect(fig).toMatchObject({ category: 'Limited Editions', categoryId: ids.limited });
     const counts = Object.fromEntries((await http.get('/admin/categories').set('Authorization', staff.auth)).body.categories.map((c: any) => [c.name, c.productCount]));
     expect(counts).toMatchObject({ 'Limited Editions': 1, 'Prize Figures': 2, Figures: 0 });
+    // Storefront: totals roll up into parents, and a parent filter includes its whole branch.
+    const facets = (await http.get('/products/facets')).body;
+    const totals = Object.fromEntries(facets.shopCategories.map((c: any) => [c.name, c.total]));
+    expect(totals).toEqual({ Figures: 3, 'Scale Figures': 1, 'Limited Editions': 1, 'Prize Figures': 2 });
+    expect((await http.get(`/products?categoryId=${ids.figures}&limit=60`)).body.items.map((p: any) => p.id).sort()).toEqual(['CHB1', 'FIG1', 'PRZ1']);
+    expect((await http.get(`/products?categoryId=${ids.scale}`)).body.items.map((p: any) => p.id)).toEqual(['FIG1']);
+    expect((await http.get('/products?q=limited%20editions')).body.items.map((p: any) => p.id)).toEqual(['FIG1']); // search matches category names
   });
 
   it('hides a hidden branch from storefront navigation', async () => {

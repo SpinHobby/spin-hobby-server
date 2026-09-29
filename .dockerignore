@@ -3,6 +3,7 @@ dist
 coverage
 legacy
 supabase
+scripts
 test
 .env*
 .git
