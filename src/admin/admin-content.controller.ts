@@ -3,14 +3,14 @@ import { Access, CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AdminLog } from '../common/admin-log.service.js';
 import { AppError, notFound } from '../common/errors.js';
-import { jsonBody, optionalString, stringValue, type Json } from '../common/validation.js';
+import { jsonBody, optionalString, stringValue, boolValue, type Json } from '../common/validation.js';
 import { env } from '../config/env.js';
 import { Db, type Row } from '../db/db.service.js';
 import { SquareSyncService } from '../square-sync/square-sync.service.js';
 import { StoreService } from '../store/store.service.js';
 
 const SETTINGS_FIELDS = ['payment_provider', 'shipping_standard_cents', 'shipping_express_cents', 'free_shipping_threshold_cents',
-  'low_stock_threshold', 'fx_cad_usd', 'handling_days_min', 'handling_days_max'] as const;
+  'low_stock_threshold', 'fx_cad_usd', 'handling_days_min', 'handling_days_max', 'maintenance_mode', 'maintenance_message'] as const;
 const SETTINGS_INTEGERS = ['shipping_standard_cents', 'shipping_express_cents', 'free_shipping_threshold_cents', 'low_stock_threshold', 'handling_days_min', 'handling_days_max'];
 
 function sortOrder(value: unknown) {
@@ -35,6 +35,8 @@ export class AdminContentController {
     const update: Row = {};
     for (const key of SETTINGS_FIELDS) if (key in payload) update[key] = payload[key];
     if (update.payment_provider && !['paypal', 'square'].includes(update.payment_provider)) throw new AppError('Invalid payment provider.');
+    if (update.maintenance_mode !== undefined) update.maintenance_mode = boolValue(update.maintenance_mode, 'maintenance_mode');
+    if (update.maintenance_message !== undefined) update.maintenance_message = optionalString(update.maintenance_message, 1000);
     for (const key of SETTINGS_INTEGERS) {
       if (update[key] !== undefined && (!Number.isInteger(Number(update[key])) || Number(update[key]) < 0)) throw new AppError(`Invalid ${key}.`);
     }

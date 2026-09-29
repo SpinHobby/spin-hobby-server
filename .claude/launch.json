@@ -4,8 +4,8 @@
     {
       "name": "spin-hobby-backend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 8001
+      "runtimeArgs": ["run", "dev:local"],
+      "port": 8080
     }
   ]
 }

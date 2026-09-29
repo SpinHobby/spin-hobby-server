@@ -40,6 +40,11 @@ export function likePattern(value: string): string {
   return `%${value.slice(0, 100).replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
+export function boolValue(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new AppError(`${field} must be true or false.`);
+  return value;
+}
+
 export function nonNegativeIntOrNull(value: unknown, field: string): number | null {
   if (value === undefined || value === null || value === '') return null;
   const n = Number(value);

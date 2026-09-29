@@ -10,6 +10,8 @@ export interface StoreSettings {
   fx_cad_usd: number;
   handling_days_min: number;
   handling_days_max: number;
+  maintenance_mode: boolean;
+  maintenance_message: string | null;
   updated_at: string;
 }
 

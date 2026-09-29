@@ -38,6 +38,8 @@ export class CheckoutController {
       handlingDaysMin: s.handling_days_min,
       handlingDaysMax: s.handling_days_max,
       fxCadUsd: Number(s.fx_cad_usd),
+      maintenanceMode: s.maintenance_mode,
+      maintenanceMessage: s.maintenance_message,
     };
   }
 
