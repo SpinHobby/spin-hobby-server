@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AccountController } from './account/account.controller.js';
 import { AdminCatalogController } from './admin/admin-catalog.controller.js';
+import { AdminCategoriesController } from './admin/admin-categories.controller.js';
 import { AdminContentController } from './admin/admin-content.controller.js';
 import { AdminMerchController } from './admin/admin-merch.controller.js';
 import { AdminOrdersController } from './admin/admin-orders.controller.js';
@@ -40,6 +41,7 @@ import { WebhooksController } from './webhooks/webhooks.controller.js';
     AdminCatalogController,
     AdminOrdersController,
     AdminContentController,
+    AdminCategoriesController,
     AdminMerchController,
     SquareSyncController,
     CashierController,

@@ -9,6 +9,7 @@ export function publicProduct(p: Row) {
     series: p.series,
     character: p.character,
     category: p.category,
+    categoryId: p.category_id ?? null,
     images: p.images ?? [],
     priceCents: p.price_cents,
     compareAtCents: p.compare_at_cents,

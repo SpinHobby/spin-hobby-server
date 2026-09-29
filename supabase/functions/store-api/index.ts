@@ -46,6 +46,7 @@ function publicProduct(product: Row) {
     series: product.series,
     character: product.character,
     category: product.category,
+    categoryId: product.category_id ?? null,
     images: product.images ?? [],
     priceCents: product.price_cents,
     compareAtCents: product.compare_at_cents,
@@ -124,6 +125,142 @@ async function productFacets(db: SupabaseClient) {
   };
 }
 
+// ---------------------------------------------------------------- shop categories
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function categoryIdValue(value: unknown): string | null {
+  if (value === null || value === '' || value === undefined) return null;
+  if (typeof value !== 'string' || !UUID.test(value)) throw new Error('Invalid category.');
+  return value;
+}
+
+async function assertCategoryExists(db: SupabaseClient, id: string | null) {
+  if (!id) return;
+  const { data, error } = await db.from('store_categories').select('id').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Category not found.');
+}
+
+/** Visible categories as a flat list; a hidden category hides its whole branch. */
+async function visibleCategories(db: SupabaseClient) {
+  const { data, error } = await db.from('store_categories').select('id,parent_id,name,sort_order').eq('is_visible', true).order('sort_order').order('name');
+  if (error) throw error;
+  const rows = data ?? [];
+  const byId = new Map(rows.map((r: Row) => [r.id, r]));
+  const reachable = (r: Row): boolean => r.parent_id === null || (byId.has(r.parent_id) && reachable(byId.get(r.parent_id) as Row));
+  return rows.filter(reachable).map((r: Row) => ({ id: r.id, parentId: r.parent_id, name: r.name, sortOrder: r.sort_order }));
+}
+
+async function adminCategories(req: Request, db: SupabaseClient, path: string) {
+  const admin = await requireAdmin(req, db);
+  const duplicateName = (error: Row) => { if (error?.code === '23505') throw new Error('A category with that name already exists here.'); throw error; };
+  const cleanName = (value: unknown) => stringValue(value, 'name', 80).replace(/\s+/g, ' ');
+  const nextSort = async (parentId: string | null) => {
+    let query = db.from('store_categories').select('sort_order').order('sort_order', { ascending: false }).limit(1);
+    query = parentId ? query.eq('parent_id', parentId) : query.is('parent_id', null);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data?.length ? Number(data[0].sort_order) + 1 : 0;
+  };
+
+  if (path === '/admin/categories' && req.method === 'GET') {
+    const [{ data: cats, error }, { data: products, error: productError }] = await Promise.all([
+      db.from('store_categories').select('*').order('sort_order').order('name'),
+      db.from('storefront_products').select('category_id').not('category_id', 'is', null),
+    ]);
+    if (error) throw error;
+    if (productError) throw productError;
+    const counts = new Map<string, number>();
+    for (const row of products ?? []) counts.set(row.category_id, (counts.get(row.category_id) ?? 0) + 1);
+    return { success: true, categories: (cats ?? []).map((c: Row) => ({ id: c.id, parentId: c.parent_id, name: c.name, sortOrder: c.sort_order, isVisible: c.is_visible, productCount: counts.get(c.id) ?? 0 })) };
+  }
+
+  if (path === '/admin/categories' && req.method === 'POST') {
+    const payload = await bodyAsJson(req);
+    const parentId = categoryIdValue(payload.parentId);
+    if (parentId) await assertCategoryExists(db, parentId);
+    const name = cleanName(payload.name);
+    const { data, error } = await db.from('store_categories').insert({ parent_id: parentId, name, sort_order: await nextSort(parentId), is_visible: payload.isVisible !== false }).select().single();
+    if (error) duplicateName(error);
+    await writeAdminLog(db, admin.id, 'category.created', data.id, { name, parentId });
+    return { success: true, category: { id: data.id, parentId: data.parent_id, name: data.name, sortOrder: data.sort_order, isVisible: data.is_visible, productCount: 0 } };
+  }
+
+  if (path === '/admin/categories/reorder' && req.method === 'PUT') {
+    const ids = (await bodyAsJson(req)).ids;
+    if (!Array.isArray(ids) || ids.length > 500 || ids.some((id) => typeof id !== 'string' || !UUID.test(id))) throw new Error('ids is required.');
+    for (const [sortOrder, id] of (ids as string[]).entries()) {
+      const { error } = await db.from('store_categories').update({ sort_order: sortOrder }).eq('id', id);
+      if (error) throw error;
+    }
+    await writeAdminLog(db, admin.id, 'category.reordered', 'store_categories', { count: ids.length });
+    return { success: true };
+  }
+
+  const id = /^\/admin\/categories\/([0-9a-f-]{36})$/i.exec(path)?.[1];
+  if (!id) throw new Error('Route not found.');
+  const { data: all, error: allError } = await db.from('store_categories').select('id,parent_id,name');
+  if (allError) throw allError;
+  const current = (all ?? []).find((c: Row) => c.id === id);
+  if (!current) throw new Error('Category not found.');
+
+  if (req.method === 'PUT') {
+    const payload = await bodyAsJson(req);
+    const changes: Row = {};
+    if ('name' in payload) changes.name = cleanName(payload.name);
+    if ('isVisible' in payload) changes.is_visible = payload.isVisible === true;
+    if ('parentId' in payload) {
+      const parentId = categoryIdValue(payload.parentId);
+      if (parentId) {
+        if (!(all ?? []).some((c: Row) => c.id === parentId)) throw new Error('Parent category not found.');
+        for (let at: string | null = parentId; at; at = (all ?? []).find((c: Row) => c.id === at)?.parent_id ?? null) {
+          if (at === id) throw new Error("A category can't be moved inside itself.");
+        }
+      }
+      if (parentId !== current.parent_id) { changes.parent_id = parentId; changes.sort_order = await nextSort(parentId); }
+    }
+    if (Object.keys(changes).length) {
+      const { error } = await db.from('store_categories').update(changes).eq('id', id);
+      if (error) duplicateName(error);
+      await writeAdminLog(db, admin.id, 'category.updated', id, changes);
+    }
+    return { success: true };
+  }
+
+  if (req.method === 'DELETE') {
+    const subtree = new Set([id]);
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const c of all ?? []) if (c.parent_id && subtree.has(c.parent_id) && !subtree.has(c.id)) { subtree.add(c.id); grew = true; }
+    }
+    const { count } = await db.from('product_metadata').select('square_item_id', { count: 'exact', head: true }).in('category_id', [...subtree]);
+    const { error } = await db.from('store_categories').delete().eq('id', id);
+    if (error) throw error;
+    await writeAdminLog(db, admin.id, 'category.deleted', id, { name: current.name, subcategories: subtree.size - 1, products: count ?? 0 });
+    return { success: true, deletedCategories: subtree.size, uncategorisedProducts: count ?? 0 };
+  }
+  throw new Error('Route not found.');
+}
+
+async function bulkCategory(req: Request, db: SupabaseClient) {
+  const admin = await requireAdmin(req, db);
+  const payload = await bodyAsJson(req);
+  const ids = payload.ids;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 500 || ids.some((id) => typeof id !== 'string')) throw new Error('Select at least one product.');
+  const target = categoryIdValue(payload.categoryId);
+  await assertCategoryExists(db, target);
+  const { data: existing, error } = await db.from('catalog_products').select('square_item_id').in('square_item_id', ids);
+  if (error) throw error;
+  const rows = (existing ?? []).map((p: Row) => ({ square_item_id: p.square_item_id, category_id: target }));
+  if (rows.length) {
+    const { error: upsertError } = await db.from('product_metadata').upsert(rows, { onConflict: 'square_item_id' });
+    if (upsertError) throw upsertError;
+  }
+  await writeAdminLog(db, admin.id, 'product.bulk_category', target ?? 'none', { count: rows.length });
+  return { success: true, updated: rows.length };
+}
+
 async function homepage(db: SupabaseClient) {
   const [slides, featured, preorders, ranking, newInStock, events] = await Promise.all([
     db.from('hero_slides').select('*').eq('is_visible', true).order('sort_order'),
@@ -134,6 +271,7 @@ async function homepage(db: SupabaseClient) {
     db.from('store_events').select('*').eq('is_visible', true).order('sort_order'),
   ]);
   for (const result of [slides, featured, preorders, ranking, newInStock, events]) if (result.error) throw result.error;
+  const categories = await visibleCategories(db);
   return {
     success: true,
     slides: slides.data,
@@ -142,6 +280,7 @@ async function homepage(db: SupabaseClient) {
     ranking: (ranking.data ?? []).map(publicProduct),
     newInStock: (newInStock.data ?? []).map(publicProduct),
     events: events.data,
+    categories,
   };
 }
 
@@ -686,10 +825,11 @@ async function updateProduct(req: Request, db: SupabaseClient, squareItemId: str
   const { data: product, error: productError } = await db.from('catalog_products').select('square_item_id').eq('square_item_id', squareItemId).maybeSingle();
   if (productError) throw productError;
   if (!product) throw new Error('Product not found.');
-  const allowed = ['availability', 'release_month', 'order_by_date', 'series', 'character', 'manufacturer', 'jan_code', 'compare_at_cents', 'max_per_customer', 'deposit_cents', 'is_featured', 'sort_order'];
+  const allowed = ['availability', 'release_month', 'order_by_date', 'series', 'character', 'manufacturer', 'jan_code', 'compare_at_cents', 'max_per_customer', 'deposit_cents', 'is_featured', 'sort_order', 'category_id'];
   const changes: Row = { square_item_id: squareItemId };
   for (const key of allowed) if (key in payload) changes[key] = payload[key] === '' ? null : payload[key];
   if (changes.availability && !['auto', 'preorder', 'backorder', 'hidden'].includes(changes.availability)) throw new Error('Invalid availability.');
+  if ('category_id' in changes) { changes.category_id = categoryIdValue(changes.category_id); await assertCategoryExists(db, changes.category_id); }
   for (const key of ['compare_at_cents', 'max_per_customer', 'deposit_cents', 'sort_order']) {
     if (changes[key] !== undefined && changes[key] !== null && (!Number.isInteger(Number(changes[key])) || Number(changes[key]) < 0)) throw new Error(`Invalid ${key}.`);
   }
@@ -768,6 +908,8 @@ async function createManualProduct(req: Request, db: SupabaseClient) {
   const images = imageUrls(p.imageUrls ?? []) ?? [];
   const availability = p.availability === 'preorder' ? 'preorder' : 'auto';
   if (availability === 'preorder' && !p.orderByDate) throw new Error('Pre-orders need an order-by date.');
+  const shopCategory = categoryIdValue(p.categoryId);
+  await assertCategoryExists(db, shopCategory);
   const itemId = `manual-${crypto.randomUUID()}`;
   const variationId = `${itemId}-v`;
 
@@ -791,6 +933,7 @@ async function createManualProduct(req: Request, db: SupabaseClient) {
         compare_at_cents: p.compareAtCents ? priceCentsValue(p.compareAtCents) : null,
         max_per_customer: p.maxPerCustomer ? positiveInteger(p.maxPerCustomer, 'maxPerCustomer', 1000) : null,
         is_featured: p.isFeatured === true,
+        category_id: shopCategory,
       }),
     ]);
     for (const { error } of writes) if (error) throw error;
@@ -1191,6 +1334,9 @@ async function router(req: Request) {
     return response(req, await productPage(db, url));
   }
   if (req.method === 'GET' && path === '/homepage') return response(req, await homepage(db));
+  if (req.method === 'GET' && path === '/categories') return response(req, { success: true, categories: await visibleCategories(db) });
+  if (path === '/admin/categories' || path.startsWith('/admin/categories/')) return response(req, await adminCategories(req, db, path));
+  if (req.method === 'POST' && path === '/admin/products/bulk-category') return response(req, await bulkCategory(req, db));
   if (req.method === 'GET' && path === '/checkout/config') return response(req, await checkoutConfig(db));
   if (req.method === 'GET' && path === '/auth/me') return response(req, await authMe(req, db));
   if (req.method === 'POST' && path === '/auth/logout') return response(req, await authLogout(req, db));

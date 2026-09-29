@@ -4,12 +4,13 @@ import type { AppUser } from '../auth/auth.service.js';
 import { AdminLog } from '../common/admin-log.service.js';
 import { AppError, notFound } from '../common/errors.js';
 import { jsonBody } from '../common/validation.js';
+import { categoryId } from './admin-categories.controller.js';
 import { CatalogService, type ProductQuery } from '../catalog/catalog.service.js';
 import { Db, type Row } from '../db/db.service.js';
 import { EmailService } from '../email/email.service.js';
 
 const EDITABLE = ['availability', 'release_month', 'order_by_date', 'series', 'character', 'manufacturer', 'jan_code',
-  'compare_at_cents', 'max_per_customer', 'deposit_cents', 'is_featured', 'sort_order'] as const;
+  'compare_at_cents', 'max_per_customer', 'deposit_cents', 'is_featured', 'sort_order', 'category_id'] as const;
 const INTEGER_FIELDS = new Set(['compare_at_cents', 'max_per_customer', 'deposit_cents', 'sort_order']);
 
 @Controller('admin')
@@ -96,6 +97,10 @@ export class AdminCatalogController {
       if (changes[key] !== undefined && changes[key] !== null && (!Number.isInteger(Number(changes[key])) || Number(changes[key]) < 0)) throw new AppError(`Invalid ${key}.`);
     }
     if ('is_featured' in changes) changes.is_featured = changes.is_featured === true;
+    if ('category_id' in changes) {
+      changes.category_id = categoryId(changes.category_id);
+      if (changes.category_id && !(await this.db.one('select 1 from public.store_categories where id = $1', [changes.category_id]))) throw new AppError('Category not found.', 404);
+    }
     const keys = Object.keys(changes);
     const columns = ['square_item_id', ...keys];
     const values = [squareItemId, ...keys.map((k) => changes[k])];
@@ -110,6 +115,28 @@ export class AdminCatalogController {
       return row;
     });
     return { success: true, product };
+  }
+
+  /** Moves many products into one shop category (or clears it with categoryId: null). */
+  @Post('products/bulk-category')
+  @HttpCode(200)
+  async bulkCategory(@CurrentUser() admin: AppUser, @Body() body: unknown) {
+    const p = jsonBody(body);
+    const ids = p.ids;
+    if (!Array.isArray(ids) || !ids.length || ids.length > 500 || ids.some((id) => typeof id !== 'string')) throw new AppError('Select at least one product.');
+    const target = categoryId(p.categoryId);
+    if (target && !(await this.db.one('select 1 from public.store_categories where id = $1', [target]))) throw new AppError('Category not found.', 404);
+    const updated = await this.db.transaction(async (tx) => {
+      const rows = await this.db.many(
+        `insert into public.product_metadata (square_item_id, category_id)
+         select c.square_item_id, $2::uuid from public.catalog_products c where c.square_item_id = any($1::text[])
+         on conflict (square_item_id) do update set category_id = excluded.category_id returning square_item_id`,
+        [ids, target], tx,
+      );
+      await this.log.write(admin.id, 'product.bulk_category', target ?? 'none', { count: rows.length }, tx);
+      return rows.length;
+    });
+    return { success: true, updated };
   }
 
   @Post('products/:id/notify-restock')

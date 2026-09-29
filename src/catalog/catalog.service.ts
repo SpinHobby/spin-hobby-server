@@ -78,14 +78,26 @@ export class CatalogService {
     };
   }
 
+  /** Visible shop categories as a flat list (parentId links build the tree). */
+  async categories() {
+    const rows = await this.db.many<{ id: string; parent_id: string | null; name: string; sort_order: number }>(
+      'select id, parent_id, name, sort_order from public.store_categories where is_visible order by sort_order, name',
+    );
+    // A hidden category hides its whole branch from navigation.
+    const visible = new Set(rows.map((r) => r.id));
+    const ok = (r: { parent_id: string | null }): boolean => r.parent_id === null || (visible.has(r.parent_id) && ok(rows.find((x) => x.id === r.parent_id)!));
+    return rows.filter(ok).map((r) => ({ id: r.id, parentId: r.parent_id, name: r.name, sortOrder: r.sort_order }));
+  }
+
   async homepage() {
-    const [slides, featured, preorders, ranking, newInStock, events] = await Promise.all([
+    const [slides, featured, preorders, ranking, newInStock, events, categories] = await Promise.all([
       this.db.many('select * from public.hero_slides where is_visible order by sort_order, created_at'),
       this.db.many('select * from public.storefront_products where is_featured order by sort_order, id limit 8'),
       this.db.many("select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12"),
       this.db.many('select * from public.storefront_products where rank is not null order by rank, id limit 5'),
       this.db.many("select * from public.storefront_products where status in ('in','low') order by updated_at desc, id limit 5"),
       this.db.many('select * from public.store_events where is_visible order by sort_order, created_at'),
+      this.categories(),
     ]);
     return {
       success: true as const,
@@ -95,6 +107,7 @@ export class CatalogService {
       ranking: ranking.map(publicProduct),
       newInStock: newInStock.map(publicProduct),
       events,
+      categories,
     };
   }
 

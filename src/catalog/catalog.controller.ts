@@ -34,6 +34,11 @@ export class CatalogController {
     return this.catalog.productPage({ ...query, status: 'in,low', sort: 'new' });
   }
 
+  @Get('categories')
+  async categories() {
+    return { success: true, categories: await this.catalog.categories() };
+  }
+
   @Get('homepage')
   homepage() {
     return this.catalog.homepage();
