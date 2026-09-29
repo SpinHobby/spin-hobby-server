@@ -63,7 +63,7 @@ intercepted, and sign-ins use locally signed tokens.
 `render.yaml` is a Render Blueprint: **New → Blueprint → this repo**. It builds the Dockerfile,
 health-checks `/health`, auto-deploys `main`, and prompts for the secrets
 (`DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, payment/email keys). Then point the storefront's
-`VITE_API_URL` at the Render URL. (`railway.json` is kept for Railway; any container host works:)
+`VITE_API_URL` at the Render URL. Any other container host works too:
 
 ```sh
 docker build -t spin-hobby-api .
