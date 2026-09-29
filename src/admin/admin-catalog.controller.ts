@@ -68,15 +68,17 @@ export class AdminCatalogController {
     if (items.length) {
       const ids = items.map((i) => i.id);
       const variations = items.map((i) => i.variationId).filter(Boolean);
-      const [meta, alerts] = await Promise.all([
+      const [meta, catalog, alerts] = await Promise.all([
         this.db.many('select square_item_id, availability, jan_code, is_featured, sort_order from public.product_metadata where square_item_id = any($1::text[])', [ids]),
+        this.db.many('select square_item_id, source, description from public.catalog_products where square_item_id = any($1::text[])', [ids]),
         this.db.many('select square_variation_id, count(*)::int as n from public.stock_alerts where notified_at is null and square_variation_id = any($1::text[]) group by 1', [variations]),
       ]);
       const metaById = new Map(meta.map((m) => [m.square_item_id, m]));
       const alertsByVar = new Map(alerts.map((a) => [a.square_variation_id, a.n]));
+      const catalogById = new Map(catalog.map((c) => [c.square_item_id, c]));
       items = items.map((i) => {
         const m = metaById.get(i.id);
-        return { ...i, janCode: m?.jan_code ?? null, availability: m?.availability ?? 'auto', isFeatured: m?.is_featured ?? false, sortOrder: m?.sort_order ?? 0, alertsWaiting: alertsByVar.get(i.variationId) ?? 0 };
+        return { ...i, janCode: m?.jan_code ?? null, availability: m?.availability ?? 'auto', isFeatured: m?.is_featured ?? false, sortOrder: m?.sort_order ?? 0, source: catalogById.get(i.id)?.source ?? 'square', description: catalogById.get(i.id)?.description ?? null, alertsWaiting: alertsByVar.get(i.variationId) ?? 0 };
       });
     }
     return { ...page, items, total };

@@ -9,7 +9,6 @@ async function bootstrap() {
   // rawBody: webhook signatures are computed over the exact bytes Square/PayPal sent.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
   app.set('trust proxy', 1);
-  app.useBodyParser('json', { limit: '1mb' });
   configureApp(app);
   const port = Number(process.env.PORT ?? 8080);
   await app.listen(port, '0.0.0.0');

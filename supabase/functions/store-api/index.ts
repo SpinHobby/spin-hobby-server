@@ -452,7 +452,8 @@ async function captureSquare(req: Request, db: SupabaseClient) {
         location_id: locationId,
         reference_id: `spin-hobby-${order.id}`,
         line_items: (lines ?? []).map((line: Row) => ({
-          catalog_object_id: line.square_variation_id,
+          // Hand-entered products don't exist in Square's catalog: send them as named ad-hoc items.
+          ...(isManualId(line.square_item_id) ? {} : { catalog_object_id: line.square_variation_id }),
           name: line.name,
           quantity: String(line.quantity),
           base_price_money: { amount: line.unit_price_cents, currency: 'CAD' },
@@ -657,20 +658,23 @@ async function adminProducts(req: Request, db: SupabaseClient, url: URL) {
   const itemIds = page.items.map((item: Row) => item.id);
   const variationIds = page.items.map((item: Row) => item.variationId).filter(Boolean);
   if (itemIds.length) {
-    const [metaResult, alertResult] = await Promise.all([
+    const [metaResult, catalogResult, alertResult] = await Promise.all([
       db.from('product_metadata').select('square_item_id,availability,jan_code,is_featured,sort_order').in('square_item_id', itemIds),
+      db.from('catalog_products').select('square_item_id,source,description').in('square_item_id', itemIds),
       variationIds.length
         ? db.from('stock_alerts').select('square_variation_id').in('square_variation_id', variationIds).is('notified_at', null)
         : Promise.resolve({ data: [], error: null }),
     ]);
     if (metaResult.error) throw metaResult.error;
+    if (catalogResult.error) throw catalogResult.error;
+    const catalogById = new Map((catalogResult.data ?? []).map((row: Row) => [row.square_item_id, row]));
     if (alertResult.error) throw alertResult.error;
     const meta = new Map((metaResult.data ?? []).map((row: Row) => [row.square_item_id, row]));
     const alerts = new Map<string, number>();
     for (const row of (alertResult.data ?? []) as Row[]) alerts.set(row.square_variation_id, (alerts.get(row.square_variation_id) ?? 0) + 1);
     page.items = page.items.map((item: Row) => {
       const m = meta.get(item.id) as Row | undefined;
-      return { ...item, janCode: m?.jan_code ?? null, availability: m?.availability ?? 'auto', isFeatured: m?.is_featured ?? false, sortOrder: m?.sort_order ?? 0, alertsWaiting: alerts.get(item.variationId) ?? 0 };
+      return { ...item, janCode: m?.jan_code ?? null, availability: m?.availability ?? 'auto', isFeatured: m?.is_featured ?? false, sortOrder: m?.sort_order ?? 0, source: (catalogById.get(item.id) as Row | undefined)?.source ?? 'square', description: (catalogById.get(item.id) as Row | undefined)?.description ?? null, alertsWaiting: alerts.get(item.variationId) ?? 0 };
     });
   }
   return page;
@@ -693,6 +697,151 @@ async function updateProduct(req: Request, db: SupabaseClient, squareItemId: str
   if (error) throw error;
   await writeAdminLog(db, admin.id, 'product.updated', squareItemId, changes);
   return { success: true, product: data };
+}
+
+// ---------------------------------------------------------------- manual merchandise + image uploads
+
+const IMAGE_BUCKET = 'product-images';
+const IMAGE_TYPES: Record<string, string> = { 'image/webp': 'webp', 'image/jpeg': 'jpg', 'image/png': 'png' };
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const isManualId = (id: string) => id.startsWith('manual-');
+
+/** Admin UI resizes in the browser, then sends base64. Stored in the public product-images bucket. */
+async function adminUpload(req: Request, db: SupabaseClient) {
+  const admin = await requireAdmin(req, db);
+  const payload = await bodyAsJson(req);
+  const contentType = stringValue(payload.contentType, 'contentType', 40);
+  const ext = IMAGE_TYPES[contentType];
+  if (!ext) throw new Error('Upload a WebP, JPEG or PNG image.');
+  const folder = payload.folder === 'slides' ? 'slides' : 'products';
+  const base64 = stringValue(payload.data, 'data', 8_000_000).replace(/^data:[^,]+,/, '');
+  let bytes: Uint8Array;
+  try { bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0)); } catch { throw new Error('The image data is invalid.'); }
+  if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) throw new Error('Images must be under 5 MB.');
+  const path = `${folder}/${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await db.storage.from(IMAGE_BUCKET).upload(path, bytes, { contentType, upsert: false, cacheControl: '31536000' });
+  if (error) throw error;
+  const url = db.storage.from(IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+  await writeAdminLog(db, admin.id, 'image.uploaded', path, { bytes: bytes.length });
+  return { success: true, url, path, bytes: bytes.length };
+}
+
+function imageUrls(value: unknown) {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > 8) throw new Error('Add up to 8 photos.');
+  return value.map((url) => {
+    const text = stringValue(url, 'image URL', 1000);
+    if (!/^https:\/\//.test(text)) throw new Error('Photo URLs must start with https://');
+    return text;
+  });
+}
+
+function priceCentsValue(value: unknown) {
+  const cents = Number(value);
+  if (!Number.isInteger(cents) || cents <= 0 || cents > 10_000_000) throw new Error('Enter a price above $0.');
+  return cents;
+}
+
+function stockValue(value: unknown) {
+  if (value === null || value === '') return null; // untracked = unlimited
+  const qty = Number(value);
+  if (!Number.isInteger(qty) || qty < 0 || qty > 100_000) throw new Error('Stock must be a whole number of 0 or more.');
+  return qty;
+}
+
+async function replaceImages(db: SupabaseClient, itemId: string, urls: string[]) {
+  const { error: deleteError } = await db.from('product_images').delete().eq('square_item_id', itemId);
+  if (deleteError) throw deleteError;
+  if (!urls.length) return;
+  const { error } = await db.from('product_images').insert(urls.map((image_url, sort_order) => ({ square_item_id: itemId, image_url, sort_order })));
+  if (error) throw error;
+}
+
+/** Creates merchandise that isn't in Square yet. Storefront, checkout and admin treat it like any product. */
+async function createManualProduct(req: Request, db: SupabaseClient) {
+  const admin = await requireAdmin(req, db);
+  const p = await bodyAsJson(req);
+  const name = stringValue(p.name, 'name', 200);
+  const category = optionalString(p.category, 120);
+  const priceCents = priceCentsValue(p.priceCents);
+  const stock = stockValue(p.stockCount ?? null);
+  const images = imageUrls(p.imageUrls ?? []) ?? [];
+  const availability = p.availability === 'preorder' ? 'preorder' : 'auto';
+  if (availability === 'preorder' && !p.orderByDate) throw new Error('Pre-orders need an order-by date.');
+  const itemId = `manual-${crypto.randomUUID()}`;
+  const variationId = `${itemId}-v`;
+
+  const { error: productError } = await db.from('catalog_products').insert({
+    square_item_id: itemId, name, description: optionalString(p.description, 2000), category,
+    category_ids: [], is_active: true, is_visible: true, source: 'manual',
+  });
+  if (productError) throw productError;
+  try {
+    const { error: variationError } = await db.from('catalog_variations').insert({ square_variation_id: variationId, square_item_id: itemId, name: 'Regular', price_cents: priceCents });
+    if (variationError) throw variationError;
+    const writes = await Promise.all([
+      db.from('catalog_products').update({ default_variation_id: variationId }).eq('square_item_id', itemId),
+      db.from('inventory_snapshots').insert({ square_variation_id: variationId, quantity: stock }),
+      db.from('product_metadata').insert({
+        square_item_id: itemId, availability,
+        release_month: optionalString(p.releaseMonth, 10) ? `${String(p.releaseMonth).slice(0, 7)}-01` : null,
+        order_by_date: optionalString(p.orderByDate, 30),
+        series: optionalString(p.series, 120),
+        jan_code: optionalString(p.janCode, 20),
+        compare_at_cents: p.compareAtCents ? priceCentsValue(p.compareAtCents) : null,
+        max_per_customer: p.maxPerCustomer ? positiveInteger(p.maxPerCustomer, 'maxPerCustomer', 1000) : null,
+        is_featured: p.isFeatured === true,
+      }),
+    ]);
+    for (const { error } of writes) if (error) throw error;
+    await replaceImages(db, itemId, images);
+  } catch (error) {
+    await db.from('catalog_products').delete().eq('square_item_id', itemId); // cascades to the rows above
+    throw error;
+  }
+  await writeAdminLog(db, admin.id, 'product.created', itemId, { name, priceCents, stock });
+  const { data } = await db.from('storefront_products').select('*').eq('id', itemId).maybeSingle();
+  return { success: true, product: data ? { ...publicProduct(data), source: 'manual' } : { id: itemId } };
+}
+
+/** Name, price, category, stock and photos for hand-entered products (Square owns these for synced ones). */
+async function updateManualProduct(req: Request, db: SupabaseClient, itemId: string) {
+  const admin = await requireAdmin(req, db);
+  if (!isManualId(itemId)) throw new Error('This product comes from Square. Edit its name, price, photos and stock in Square.');
+  const p = await bodyAsJson(req);
+  const { data: product, error: findError } = await db.from('catalog_products').select('default_variation_id').eq('square_item_id', itemId).maybeSingle();
+  if (findError) throw findError;
+  if (!product) throw new Error('Product not found.');
+  const variationId = product.default_variation_id as string;
+  const productChanges: Row = {};
+  if ('name' in p) productChanges.name = stringValue(p.name, 'name', 200);
+  if ('category' in p) productChanges.category = optionalString(p.category, 120);
+  if ('description' in p) productChanges.description = optionalString(p.description, 2000);
+  if (Object.keys(productChanges).length) {
+    const { error } = await db.from('catalog_products').update(productChanges).eq('square_item_id', itemId);
+    if (error) throw error;
+  }
+  if ('priceCents' in p) {
+    const { error } = await db.from('catalog_variations').update({ price_cents: priceCentsValue(p.priceCents) }).eq('square_variation_id', variationId);
+    if (error) throw error;
+  }
+  if ('stockCount' in p) {
+    const { error } = await db.from('inventory_snapshots').upsert({ square_variation_id: variationId, quantity: stockValue(p.stockCount), synced_at: new Date().toISOString() });
+    if (error) throw error;
+  }
+  const images = imageUrls(p.imageUrls);
+  if (images) await replaceImages(db, itemId, images);
+  await writeAdminLog(db, admin.id, 'product.catalog_updated', itemId, { ...productChanges, priceCents: p.priceCents, stockCount: p.stockCount, images: images?.length });
+  return { success: true };
+}
+
+async function archiveManualProduct(req: Request, db: SupabaseClient, itemId: string) {
+  const admin = await requireAdmin(req, db);
+  if (!isManualId(itemId)) throw new Error('This product comes from Square. Archive it in Square instead.');
+  const { error } = await db.from('catalog_products').update({ is_active: false }).eq('square_item_id', itemId);
+  if (error) throw error;
+  await writeAdminLog(db, admin.id, 'product.archived', itemId);
+  return { success: true };
 }
 
 async function sendRestockEmails(db: SupabaseClient, recipients: Row[], productName: string) {
@@ -1059,6 +1208,10 @@ async function router(req: Request) {
 
   if (req.method === 'GET' && path === '/admin/dashboard') return response(req, await adminDashboard(req, db));
   if (req.method === 'GET' && path === '/admin/products') return response(req, await adminProducts(req, db, url));
+  if (req.method === 'POST' && path === '/admin/uploads') return response(req, await adminUpload(req, db));
+  if (req.method === 'POST' && path === '/admin/products') return response(req, await createManualProduct(req, db));
+  if (req.method === 'PATCH' && /^\/admin\/products\/[^/]+\/catalog$/.test(path)) return response(req, await updateManualProduct(req, db, decodeURIComponent(path.split('/')[3])));
+  if (req.method === 'DELETE' && /^\/admin\/products\/[^/]+$/.test(path)) return response(req, await archiveManualProduct(req, db, decodeURIComponent(path.split('/')[3])));
   if (req.method === 'PATCH' && path.startsWith('/admin/products/') && !path.endsWith('/notify-restock')) return response(req, await updateProduct(req, db, decodeURIComponent(path.slice('/admin/products/'.length))));
   if (req.method === 'POST' && path.startsWith('/admin/products/') && path.endsWith('/notify-restock')) return response(req, await notifyRestock(req, db, decodeURIComponent(path.slice('/admin/products/'.length, -'/notify-restock'.length))));
   if (req.method === 'GET' && path === '/admin/orders') return response(req, await adminOrders(req, db, url));

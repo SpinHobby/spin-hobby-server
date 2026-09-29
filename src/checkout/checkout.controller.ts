@@ -147,7 +147,7 @@ export class CheckoutController {
         order: {
           location_id: locationId,
           reference_id: `spin-hobby-${order.id}`,
-          line_items: lines.map((l) => ({ catalog_object_id: l.square_variation_id, name: l.name, quantity: String(l.quantity), base_price_money: { amount: l.unit_price_cents, currency: 'CAD' } })),
+          line_items: lines.map((l) => ({ ...(l.square_item_id.startsWith('manual-') ? {} : { catalog_object_id: l.square_variation_id }), name: l.name, quantity: String(l.quantity), base_price_money: { amount: l.unit_price_cents, currency: 'CAD' } })),
           service_charges: [
             ...(order.shipping_cents ? [{ name: 'Shipping', amount_money: { amount: order.shipping_cents, currency: 'CAD' } }] : []),
             ...(order.tax_cents ? [{ name: 'Sales tax', amount_money: { amount: order.tax_cents, currency: 'CAD' } }] : []),
