@@ -3,7 +3,8 @@ import type { INestApplication } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createApp, createDatabase, JWT_SECRET, mockFetch, seedProduct, signUp } from './harness.js';
+import { resetSignupLimits } from '../src/auth/auth.controller.js';
+import { createApp, createDatabase, JWT_SECRET, mockFetch, seedProduct, signUp, tokenFor } from './harness.js';
 
 const ORIGIN = 'http://localhost:5173';
 const future = (days: number) => new Date(Date.now() + days * 86_400_000).toISOString();
@@ -178,7 +179,7 @@ describe('sign-in through the API', () => {
     process.env.SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_test';
     const auth = mockFetch({ '/auth/v1/settings': () => ({ external: { email: true, google: true, discord: false } }) });
     try {
-      expect((await http.get('/auth/providers').expect(200)).body).toEqual({ success: true, password: true, google: true, discord: false });
+      expect((await http.get('/auth/providers').expect(200)).body).toEqual({ success: true, password: true, signup: true, google: true, discord: false });
     } finally { auth.restore(); }
   });
 
@@ -199,6 +200,33 @@ describe('sign-in through the API', () => {
       const refreshed = await http.post('/auth/refresh').send({ refreshToken: 'r1' }).expect(200);
       expect(refreshed.body).toMatchObject({ refreshToken: 'r2', expiresAt: 1900000000 });
     } finally { auth.restore(); }
+  });
+
+  it('creates confirmed customer accounts without sending email', async () => {
+    resetSignupLimits();
+    const newbie = { id: '00000000-0000-4000-8000-00000000abcd', email: 'newbie@example.com' };
+    const auth = mockFetch({
+      '/auth/v1/admin/users': async (init) => {
+        const body = JSON.parse(String(init?.body));
+        if (body.email === 'fan@example.com') return gotrue(422, { error_code: 'email_exists', msg: 'A user with this email address has already been registered' })();
+        await pglite.query('insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)', [newbie.id, body.email, JSON.stringify(body.user_metadata)]);
+        return gotrue(200, { id: newbie.id, email: body.email })();
+      },
+      'grant_type=password': async () => gotrue(200, { access_token: await tokenFor(newbie.id, newbie.email), refresh_token: 'n1', expires_in: 3600 })(),
+    });
+    try {
+      await http.post('/auth/signup').send({ email: 'not-an-email', password: 'longenough' }).expect(400);
+      await http.post('/auth/signup').send({ email: 'x@example.com', password: 'short' }).expect(400, { success: false, error: 'Use a password with at least 8 characters.' });
+      await http.post('/auth/signup').send({ email: 'fan@example.com', password: 'longenough' }).expect(409);
+      const ok = await http.post('/auth/signup').send({ email: 'Newbie@Example.com', password: 'longenough', firstName: 'Nia' }).expect(201);
+      expect(ok.body).toMatchObject({ success: true, refreshToken: 'n1', user: { email: 'newbie@example.com', role: 'customer' } });
+      const created = auth.calls.find((c) => c.url.includes('/admin/users') && c.body.email === 'newbie@example.com');
+      expect(created?.body).toEqual({ email: 'newbie@example.com', password: 'longenough', email_confirm: true, user_metadata: { first_name: 'Nia' } });
+      const profile = await pglite.query<{ first_name: string }>('select first_name from public.profiles where id = $1', [newbie.id]);
+      expect(profile.rows[0].first_name).toBe('Nia');
+      for (let i = 0; i < 3; i++) await http.post('/auth/signup').send({ email: 'fan@example.com', password: 'longenough' }).expect(409);
+      await http.post('/auth/signup').send({ email: 'late@example.com', password: 'longenough' }).expect(429);
+    } finally { auth.restore(); resetSignupLimits(); }
   });
 
   it('builds OAuth links only for allowed sites', async () => {

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Ip, Post, Query } from '@nestjs/common';
 import { SignJWT } from 'jose';
 import { AppError } from '../common/errors.js';
 import { jsonBody, stringValue } from '../common/validation.js';
@@ -13,6 +13,25 @@ function supabase() {
   const url = env('SUPABASE_URL')?.replace(/\/$/, '');
   const key = env('SUPABASE_PUBLISHABLE_KEY') ?? env('SUPABASE_ANON_KEY');
   return url && key ? { url, key } : null;
+}
+
+function serviceKey() {
+  return env('SUPABASE_SERVICE_ROLE_KEY') ?? env('SUPABASE_SECRET_KEY');
+}
+
+/** Sign-ups per IP address per window; keeps bots from mass-creating accounts. */
+const SIGNUP_LIMIT = 5;
+const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
+const signupAttempts = new Map<string, number[]>();
+export function resetSignupLimits() { signupAttempts.clear(); }
+function allowSignup(ip: string) {
+  const now = Date.now();
+  const recent = (signupAttempts.get(ip) ?? []).filter((t) => now - t < SIGNUP_WINDOW_MS);
+  if (recent.length >= SIGNUP_LIMIT) { signupAttempts.set(ip, recent); return false; }
+  recent.push(now);
+  signupAttempts.set(ip, recent);
+  if (signupAttempts.size > 10_000) signupAttempts.clear();
+  return true;
 }
 
 /** Local development only: sign in as a seeded account without Supabase (see scripts/dev-local.mjs). */
@@ -31,12 +50,13 @@ export class AuthController {
   /** Which sign-in methods to show. */
   @Get('providers')
   async providers() {
-    if (devLoginEnabled()) return { success: true, password: true, google: false, discord: false, dev: true };
+    if (devLoginEnabled()) return { success: true, password: true, signup: false, google: false, discord: false, dev: true };
     const sb = supabase();
-    if (!sb) return { success: true, password: false, google: false, discord: false };
+    if (!sb) return { success: true, password: false, signup: false, google: false, discord: false };
     const res = await fetch(`${sb.url}/auth/v1/settings`, { headers: { apikey: sb.key } }).catch(() => null);
     const settings = res?.ok ? ((await res.json()) as { external?: Record<string, boolean> }) : { external: {} };
-    return { success: true, password: Boolean(settings.external?.email), google: Boolean(settings.external?.google), discord: Boolean(settings.external?.discord) };
+    const password = Boolean(settings.external?.email);
+    return { success: true, password, signup: password && Boolean(serviceKey()), google: Boolean(settings.external?.google), discord: Boolean(settings.external?.discord) };
   }
 
   @Post('login')
@@ -46,6 +66,46 @@ export class AuthController {
     const email = stringValue(p.email, 'email', 254).toLowerCase();
     const password = stringValue(p.password, 'password', 200);
     if (devLoginEnabled()) return this.devLogin(email, password);
+    return this.session(await this.gotrue('password', { email, password }));
+  }
+
+  /**
+   * Customer sign-up. The account is created already confirmed through the Supabase admin API,
+   * so no confirmation email is sent (Supabase's built-in mailer is heavily rate limited).
+   */
+  @Post('signup')
+  @HttpCode(201)
+  async signup(@Body() body: unknown, @Ip() ip: string) {
+    const p = jsonBody(body);
+    const email = stringValue(p.email, 'email', 254).toLowerCase();
+    const password = stringValue(p.password, 'password', 200);
+    const firstName = typeof p.firstName === 'string' ? p.firstName.trim().slice(0, 80) : '';
+    const lastName = typeof p.lastName === 'string' ? p.lastName.trim().slice(0, 80) : '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AppError('Enter a valid email address.');
+    if (password.length < 8) throw new AppError('Use a password with at least 8 characters.');
+    const sb = supabase();
+    const key = serviceKey();
+    if (devLoginEnabled() || !sb || !key) throw new AppError('Creating accounts is not available right now.', 503);
+    if (!allowSignup(ip || 'unknown')) throw new AppError('Too many sign-ups from this network. Try again later.', 429);
+
+    const res = await fetch(`${sb.url}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email, password, email_confirm: true,
+        user_metadata: { ...(firstName && { first_name: firstName }), ...(lastName && { last_name: lastName }) },
+      }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as Record<string, any>;
+      const message = String(data.msg ?? data.message ?? data.error_description ?? '');
+      if (data.error_code === 'email_exists' || (res.status === 422 && /already.*registered|exists/i.test(message))) {
+        throw new AppError('An account with this email already exists. Sign in instead.', 409, 'email_exists');
+      }
+      if (data.error_code === 'weak_password' || /password/i.test(message)) throw new AppError(message || 'Choose a stronger password.');
+      if (res.status === 429) throw new AppError('Too many attempts. Wait a few minutes and try again.', 429);
+      throw new AppError('Could not create your account.', 502);
+    }
     return this.session(await this.gotrue('password', { email, password }));
   }
 

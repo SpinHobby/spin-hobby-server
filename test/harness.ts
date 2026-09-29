@@ -64,16 +64,21 @@ export async function signUp(pglite: PGlite, email: string, role?: 'customer' | 
   const id = randomUUID();
   await pglite.query('insert into auth.users (id, email) values ($1, $2)', [id, email]);
   if (role) await pglite.query('update public.profiles set role = $2 where id = $1', [id, role]);
+  const token = await tokenFor(id, email);
+  return { id, token, auth: `Bearer ${token}` };
+}
+
+/** A Supabase-style access token for an existing auth user. */
+export async function tokenFor(id: string, email: string) {
   const jwt = new SignJWT({ email, role: 'authenticated' }).setProtectedHeader({ alg: 'HS256' });
   // Supabase tokens carry iss = <SUPABASE_URL>/auth/v1, which the server checks when SUPABASE_URL is set.
   if (process.env.SUPABASE_URL) jwt.setIssuer(`${process.env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`);
-  const token = await jwt
+  return jwt
     .setSubject(id)
     .setAudience('authenticated')
     .setIssuedAt()
     .setExpirationTime('1h')
     .sign(new TextEncoder().encode(JWT_SECRET));
-  return { id, token, auth: `Bearer ${token}` };
 }
 
 interface SeedProduct {
