@@ -60,7 +60,9 @@ export class HealthController {
   @Get()
   async health(@Res({ passthrough: true }) res: Response) {
     const checks: Record<string, Check> = {};
-    const missing = REQUIRED.filter((k) => !env(k));
+    // `npm run dev:local`: no Supabase at all; sign-in and uploads are simulated locally.
+    const localDev = env('NODE_ENV') !== 'production' && env('AUTH_DEV_LOGIN') === 'true';
+    const missing = REQUIRED.filter((k) => !env(k) && !(localDev && k !== 'DATABASE_URL'));
     checks.config = { ok: missing.length === 0, missing };
 
     // Database
@@ -93,7 +95,9 @@ export class HealthController {
     // Supabase Auth (sign-in)
     const sbUrl = env('SUPABASE_URL')?.replace(/\/$/, '');
     const sbKey = env('SUPABASE_PUBLISHABLE_KEY') ?? env('SUPABASE_ANON_KEY');
-    if (!sbUrl || !sbKey) {
+    if (localDev) {
+      checks.auth = { ok: true, mode: 'local-dev-login' };
+    } else if (!sbUrl || !sbKey) {
       checks.auth = { ok: false, error: 'not_configured', hint: 'Set SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY.' };
     } else {
       try {
@@ -111,7 +115,9 @@ export class HealthController {
 
     // Storage (admin photo uploads)
     const service = env('SUPABASE_SERVICE_ROLE_KEY') ?? env('SUPABASE_SECRET_KEY');
-    if (!sbUrl || !service) {
+    if (localDev && (!sbUrl || !service)) {
+      checks.storage = { ok: true, mode: 'local-disk' };
+    } else if (!sbUrl || !service) {
       checks.storage = { ok: false, error: 'not_configured', hint: 'Set SUPABASE_SERVICE_ROLE_KEY for photo uploads.' };
     } else {
       try {

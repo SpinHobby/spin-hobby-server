@@ -4,6 +4,7 @@ import { Access, CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AdminLog } from '../common/admin-log.service.js';
 import { AppError, notFound } from '../common/errors.js';
+import { env } from '../config/env.js';
 import { jsonBody, optionalString, positiveInteger, stringValue } from '../common/validation.js';
 import { Db, type Queryable, type Row } from '../db/db.service.js';
 import { publicProduct } from '../catalog/product.mapper.js';
@@ -31,7 +32,9 @@ function imageUrls(value: unknown): string[] | undefined {
   if (!Array.isArray(value) || value.length > 8) throw new AppError('Add up to 8 photos.');
   return value.map((url) => {
     const text = stringValue(url, 'image URL', 1000);
-    if (!/^https:\/\//.test(text)) throw new AppError('Photo URLs must start with https://');
+    // Production requires https; local development may use the API's own /uploads on localhost.
+    const localDev = env('NODE_ENV') !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(text);
+    if (!/^https:\/\//.test(text) && !localDev) throw new AppError('Photo URLs must start with https://');
     return text;
   });
 }

@@ -3,6 +3,7 @@ import { Access, CurrentUser } from '../auth/access.js';
 import { AuthService, type AppUser } from '../auth/auth.service.js';
 import { AppError, notFound } from '../common/errors.js';
 import { email as validEmail, jsonBody, positiveInteger, stringValue } from '../common/validation.js';
+import { env } from '../config/env.js';
 import { Db } from '../db/db.service.js';
 import { publicProduct } from '../catalog/product.mapper.js';
 
@@ -20,6 +21,8 @@ export class AccountController {
   @HttpCode(200)
   @Access('user')
   async logout(@Headers('authorization') authorization: string) {
+    // Local dev sign-in has no Supabase session to revoke; the browser just drops its token.
+    if (env('NODE_ENV') !== 'production' && env('AUTH_DEV_LOGIN') === 'true') return { success: true };
     await this.auth.signOutEverywhere(authorization);
     return { success: true };
   }
