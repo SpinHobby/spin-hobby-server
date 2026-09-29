@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
 import { allowedOrigins, env } from './config/env.js';
+import { localUploadDir } from './storage/storage.service.js';
 
 /** Shared by main.ts and the e2e tests so both run the exact same HTTP stack. */
 export function configureApp(app: INestApplication) {
@@ -28,6 +29,10 @@ export function configureApp(app: INestApplication) {
   });
   const prefix = env('API_PREFIX');
   if (prefix) app.setGlobalPrefix(prefix.replace(/^\/|\/$/g, ''));
+  if (localDev) {
+    // Dev-only photo uploads (StorageService falls back to disk without Supabase Storage).
+    (app as NestExpressApplication).useStaticAssets(localUploadDir(), { prefix: '/uploads', maxAge: '1h' });
+  }
   app.enableShutdownHooks();
   return app;
 }

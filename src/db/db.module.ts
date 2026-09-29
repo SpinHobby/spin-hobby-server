@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { env } from '../config/env.js';
-import { createPgDriver, Db, DB_DRIVER } from './db.service.js';
+import { createMissingDriver, createPgDriver, Db, DB_DRIVER } from './db.service.js';
 
 @Global()
 @Module({
@@ -9,7 +9,10 @@ import { createPgDriver, Db, DB_DRIVER } from './db.service.js';
       provide: DB_DRIVER,
       useFactory: () => {
         const url = env('DATABASE_URL');
-        if (!url) throw new Error('DATABASE_URL is required (the Supabase Postgres connection string).');
+        if (!url) {
+          console.error('[Db] DATABASE_URL is not set: database routes will fail until it is. See GET /health.');
+          return createMissingDriver();
+        }
         return createPgDriver(url);
       },
     },

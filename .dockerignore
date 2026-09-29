@@ -2,7 +2,8 @@ node_modules
 dist
 coverage
 legacy
-supabase
+supabase/*
+!supabase/migrations
 scripts
 test
 .env*

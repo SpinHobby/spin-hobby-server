@@ -22,6 +22,7 @@ import { JsonErrorFilter } from './common/http-exception.filter.js';
 import { DbModule } from './db/db.module.js';
 import { EmailService } from './email/email.service.js';
 import { HealthController } from './health/health.controller.js';
+import { MigrationService } from './migrations/migration.service.js';
 import { OpsController } from './ops/ops.controller.js';
 import { PayPalClient } from './payments/paypal.client.js';
 import { SquareClient } from './payments/square.client.js';
@@ -65,6 +66,7 @@ import { WebhooksController } from './webhooks/webhooks.controller.js';
     AiUsageService,
     IdentifyService,
     StorageService,
+    MigrationService,
   ],
 })
 export class AppModule {}

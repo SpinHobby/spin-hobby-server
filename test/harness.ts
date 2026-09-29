@@ -24,7 +24,7 @@ const SUPABASE_STUBS = `
   do $$ begin create role anon; create role authenticated; create role service_role; exception when others then null; end $$;
 `;
 
-export async function createDatabase() {
+export async function createDatabase(options: { migrations?: string[] } = {}) {
   // Same value shapes as the production pg driver (see db.service.ts).
   const pglite = new PGlite({
     extensions: { pgcrypto },
@@ -37,12 +37,13 @@ export async function createDatabase() {
     },
   });
   await pglite.exec(SUPABASE_STUBS);
-  for (const file of readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
+  for (const file of options.migrations ?? readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
     await pglite.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
   }
   const driver: DbDriver = {
     query: (sql, params) => pglite.query(sql, params as any[]) as any,
-    transaction: (fn) => pglite.transaction((tx) => fn({ query: (sql, params) => tx.query(sql, params as any[]) as any })),
+    script: async (sql) => { await pglite.exec(sql); },
+    transaction: (fn) => pglite.transaction((tx) => fn({ query: (sql, params) => tx.query(sql, params as any[]) as any, script: async (sql) => { await tx.exec(sql); } })),
     close: async () => { /* closed by the test */ },
   };
   return { pglite, driver };

@@ -9,7 +9,7 @@ services:
     dockerfilePath: ./Dockerfile
     branch: main
     autoDeploy: true
-    healthCheckPath: /health
+    healthCheckPath: /health/live   # GET /health shows detailed diagnostics
     envVars:
       # Public / non-secret
       - key: NODE_ENV
