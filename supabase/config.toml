@@ -8,7 +8,10 @@ max_rows = 1000
 
 [auth]
 enabled = true
-site_url = "http://localhost:5173"
+# Fallback for sign-in / confirmation links when a requested redirect isn't allow-listed.
+# Must be production: `supabase config push` copies this to the live project.
+# Local dev still works because localhost is in additional_redirect_urls below.
+site_url = "https://spinhobby.com"
 additional_redirect_urls = [
   "http://localhost:5173", "http://localhost:5173/**",
   "https://spinhobby.com", "https://spinhobby.com/**",
