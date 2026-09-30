@@ -73,6 +73,11 @@ docker run -p 8080:8080 --env-file .env spin-hobby-api
 Then set `SQUARE_WEBHOOK_URL` to `https://<your-host>/webhooks/square` in both the
 Square dashboard and the environment.
 
+## Staging
+
+A separate staging stack (branch `staging`, its own Render service and Supabase project, sandbox
+payments) for testing before production. See [`STAGING.md`](STAGING.md).
+
 ## Routes
 
 Access: **public** · **user** (signed in) · **staff** (staff or owner) · **owner**.

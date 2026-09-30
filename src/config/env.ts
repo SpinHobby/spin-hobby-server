@@ -21,3 +21,15 @@ export const paypalIsLive = () => env('PAYPAL_ENV') === 'live';
 export function allowedOrigins(): string[] {
   return [...new Set(['https://spinhobby.com', 'https://www.spinhobby.com', ...envList('ALLOWED_ORIGINS')])];
 }
+
+/**
+ * Whether a browser origin may call the API. ALLOWED_ORIGINS entries may use `*` for one
+ * subdomain label, e.g. `https://*--spinhobby.netlify.app` for Netlify deploy previews.
+ */
+export function originAllowed(origin: string): boolean {
+  return allowedOrigins().some((entry) => {
+    if (!entry.includes('*')) return entry === origin;
+    const pattern = entry.split('*').map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[a-z0-9-]+');
+    return new RegExp(`^${pattern}$`).test(origin);
+  });
+}

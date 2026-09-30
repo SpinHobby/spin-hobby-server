@@ -1,0 +1,53 @@
+# Render Blueprint for the STAGING API. Separate from render.yaml so syncing one never touches
+# the other. Dashboard: New > Blueprint > this repo > Blueprint path: render.staging.yaml.
+# Deploys every push to the `staging` branch. Uses its own Supabase project and sandbox payments
+# only; never paste production keys here. See STAGING.md.
+services:
+  - type: web
+    name: spin-hobby-api-staging
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    branch: staging
+    autoDeploy: true
+    healthCheckPath: /health/live
+    envVars:
+      - key: APP_ENV                 # shown by GET /health; lets you confirm you're on staging
+        value: staging
+      - key: NODE_ENV
+        value: production
+      # The staging storefront (Netlify branch deploy) plus Netlify deploy previews.
+      - key: ALLOWED_ORIGINS
+        value: https://staging--spinhobby.netlify.app,https://*--spinhobby.netlify.app
+      - key: STOREFRONT_URL
+        value: https://staging--spinhobby.netlify.app
+      - key: OWNER_EMAILS
+        value: info@spinhobby.com,tingjayj@gmail.com
+      - key: DATABASE_SSL
+        value: "true"
+
+      # The STAGING Supabase project (not zmlltsytckexrmybvnof, which is production)
+      - key: SUPABASE_URL            # https://<staging-ref>.supabase.co
+        sync: false
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: DATABASE_URL            # Connect > Session pooler > URI, with the staging DB password
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+
+      # Sandbox only. Leave blank to test without them.
+      - key: PAYPAL_ENV
+        value: sandbox
+      - key: PAYPAL_CLIENT_ID        # PayPal developer dashboard > Sandbox app
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: SQUARE_ENV
+        value: sandbox
+      - key: SQUARE_ACCESS_TOKEN     # Square developer dashboard > Sandbox credentials
+        sync: false
+      - key: SQUARE_APPLICATION_ID
+        sync: false
+      - key: SQUARE_LOCATION_ID
+        sync: false

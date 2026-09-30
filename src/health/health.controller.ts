@@ -150,6 +150,7 @@ export class HealthController {
       status: ok ? 'ok' : 'degraded',
       checks,
       integrations,
+      environment: env('APP_ENV') ?? 'production',
       version: env('RENDER_GIT_COMMIT')?.slice(0, 7) ?? null,
       time: new Date().toISOString(),
     };

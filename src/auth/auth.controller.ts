@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Ip, Post, Query } from '@nestjs/common
 import { SignJWT } from 'jose';
 import { AppError } from '../common/errors.js';
 import { jsonBody, stringValue } from '../common/validation.js';
-import { allowedOrigins, env, envList } from '../config/env.js';
+import { env, envList, originAllowed } from '../config/env.js';
 import { Db } from '../db/db.service.js';
 import { AuthService } from './auth.service.js';
 
@@ -125,7 +125,7 @@ export class AuthController {
     let origin: string;
     try { origin = new URL(target).origin; } catch { throw new AppError('Invalid redirectTo.'); }
     const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    if (!allowedOrigins().includes(origin) && !local) throw new AppError('redirectTo is not an allowed site.');
+    if (!originAllowed(origin) && !local) throw new AppError('redirectTo is not an allowed site.');
     const sb = supabase();
     if (!sb) throw new AppError('Sign-in is not configured.', 503);
     const url = `${sb.url}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(target)}`;
