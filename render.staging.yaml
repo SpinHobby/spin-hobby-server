@@ -26,6 +26,13 @@ services:
       - key: DATABASE_SSL
         value: "true"
 
+      # Staging-only admin sign-in: type the username in the email box on the sign-in form.
+      # Ignored unless APP_ENV=staging. Change the password before putting anything sensitive here.
+      - key: STAGING_ADMIN_USERNAME
+        value: SpinHobby
+      - key: STAGING_ADMIN_PASSWORD
+        value: "123456"
+
       # The STAGING Supabase project (not zmlltsytckexrmybvnof, which is production)
       - key: SUPABASE_URL            # https://<staging-ref>.supabase.co
         sync: false

@@ -1,10 +1,11 @@
-import { Body, Controller, Get, HttpCode, Ip, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Ip, Logger, Post, Query } from '@nestjs/common';
 import { SignJWT } from 'jose';
 import { AppError } from '../common/errors.js';
 import { jsonBody, stringValue } from '../common/validation.js';
 import { env, envList, originAllowed } from '../config/env.js';
 import { Db } from '../db/db.service.js';
 import { AuthService } from './auth.service.js';
+import { isStagingAdminLogin, secretsMatch, stagingAdmin, type StagingAdmin } from './staging-admin.js';
 
 type Provider = 'google' | 'discord';
 const PROVIDERS: Provider[] = ['google', 'discord'];
@@ -45,20 +46,31 @@ function devLoginEnabled() {
  */
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(private readonly auth: AuthService, private readonly db: Db) {}
 
-  /** Which sign-in methods to show. */
+  /** Which sign-in methods to show. `username: true` means the email field also accepts the staging admin username. */
   @Get('providers')
   async providers() {
     if (devLoginEnabled()) return { success: true, password: true, signup: false, google: false, discord: false, dev: true };
+    const admin = stagingAdmin();
     const sb = supabase();
     if (!sb) return { success: true, password: false, signup: false, google: false, discord: false };
     const res = await fetch(`${sb.url}/auth/v1/settings`, { headers: { apikey: sb.key } }).catch(() => null);
     const settings = res?.ok ? ((await res.json()) as { external?: Record<string, boolean> }) : { external: {} };
     const password = Boolean(settings.external?.email);
-    return { success: true, password, signup: password && Boolean(serviceKey()), google: Boolean(settings.external?.google), discord: Boolean(settings.external?.discord) };
+    return {
+      success: true,
+      password: password || Boolean(admin),
+      signup: password && Boolean(serviceKey()),
+      google: Boolean(settings.external?.google),
+      discord: Boolean(settings.external?.discord),
+      ...(admin && { username: true }),
+    };
   }
 
+  /** Email + password, or (staging only) the admin username + password. */
   @Post('login')
   @HttpCode(200)
   async login(@Body() body: unknown) {
@@ -66,6 +78,8 @@ export class AuthController {
     const email = stringValue(p.email, 'email', 254).toLowerCase();
     const password = stringValue(p.password, 'password', 200);
     if (devLoginEnabled()) return this.devLogin(email, password);
+    const admin = stagingAdmin();
+    if (isStagingAdminLogin(admin, email)) return this.stagingAdminLogin(admin, password);
     return this.session(await this.gotrue('password', { email, password }));
   }
 
@@ -86,6 +100,8 @@ export class AuthController {
     const sb = supabase();
     const key = serviceKey();
     if (devLoginEnabled() || !sb || !key) throw new AppError('Creating accounts is not available right now.', 503);
+    // The staging admin's reserved address can't be claimed through sign-up.
+    if (email === stagingAdmin()?.email) throw new AppError('An account with this email already exists. Sign in instead.', 409, 'email_exists');
     if (!allowSignup(ip || 'unknown')) throw new AppError('Too many sign-ups from this network. Try again later.', 429);
 
     const res = await fetch(`${sb.url}/auth/v1/admin/users`, {
@@ -162,6 +178,49 @@ export class AuthController {
       expiresAt: Number(data.expires_at ?? Math.floor(Date.now() / 1000) + Number(data.expires_in ?? 3600)),
       user,
     };
+  }
+
+  /**
+   * Staging admin sign-in (see staging-admin.ts). The account lives in the staging Supabase
+   * project: it is created on the first sign-in, kept an owner, and its password is re-synced
+   * whenever STAGING_ADMIN_PASSWORD changes. The session it returns is an ordinary Supabase one.
+   */
+  private async stagingAdminLogin(admin: StagingAdmin, password: string) {
+    if (!secretsMatch(password, admin.password)) throw new AppError('Wrong email or password.', 401);
+    const sb = supabase();
+    const key = serviceKey();
+    if (!sb || !key) throw new AppError('Sign-in is not configured.', 503);
+    const headers = { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
+    const failed = (what: string, status: number) => {
+      this.logger.error(`Staging admin: ${what} failed (${status}).`);
+      return new AppError('The staging admin account could not be set up. Check SUPABASE_SERVICE_ROLE_KEY.', 502);
+    };
+
+    let profile = await this.db.one<{ id: string; role: string }>('select id, role from public.profiles where email = $1', [admin.email]);
+    if (!profile) {
+      const res = await fetch(`${sb.url}/auth/v1/admin/users`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ email: admin.email, password: admin.password, email_confirm: true, user_metadata: { first_name: admin.username } }),
+      });
+      if (!res.ok) throw failed('creating the account', res.status);
+      const created = (await res.json()) as { id: string };
+      profile = { id: created.id, role: 'customer' };
+      this.logger.log(`Staging admin: created ${admin.email} for username "${admin.username}".`);
+    }
+    if (profile.role !== 'owner') await this.db.exec("update public.profiles set role = 'owner' where id = $1", [profile.id]);
+
+    const credentials = { email: admin.email, password: admin.password };
+    try {
+      return await this.session(await this.gotrue('password', credentials));
+    } catch (error) {
+      if (!(error instanceof AppError && error.status === 401)) throw error;
+      // STAGING_ADMIN_PASSWORD changed after the account was created: bring Supabase in line and retry once.
+      const res = await fetch(`${sb.url}/auth/v1/admin/users/${profile.id}`, { method: 'PUT', headers, body: JSON.stringify({ password: admin.password }) });
+      if (!res.ok) throw failed('updating the password', res.status);
+      this.logger.log(`Staging admin: password for ${admin.email} updated from STAGING_ADMIN_PASSWORD.`);
+      return this.session(await this.gotrue('password', credentials));
+    }
   }
 
   private async devLogin(email: string, password: string) {

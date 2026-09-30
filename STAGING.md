@@ -52,5 +52,25 @@ on a new API route.
    It refuses to run against production or a database that already has products.
 6. **Sign in**: create an account on the staging site. `OWNER_EMAILS` makes you the owner there too.
 
+## Admin sign-in on staging
+
+Staging has a fixed owner login so anyone testing can open `/admin` without an account. On the
+sign-in form, type the username in the email box:
+
+| | |
+|---|---|
+| Username | `SpinHobby` |
+| Password | `123456` |
+
+It is set by `STAGING_ADMIN_USERNAME` / `STAGING_ADMIN_PASSWORD` in `render.staging.yaml` (or the
+service's Environment tab on Render). The first sign-in creates a real owner account in the
+staging Supabase project (`spinhobby@staging.spinhobby.com`, no email is ever sent), so sessions,
+refresh and sign-out behave like any other account. Changing the password in the environment
+updates the account on the next sign-in.
+
+The login only works when `APP_ENV=staging`, and never against the production Supabase project,
+so these variables have no effect if they are ever copied to production. Pick a stronger password
+before loading anything sensitive into staging.
+
 Free-plan notes: the staging API sleeps after ~15 minutes idle (first request takes ~1 minute),
 and Supabase pauses a free project after a week without activity (restore it from the dashboard).

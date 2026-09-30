@@ -1,5 +1,6 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import type { Response } from 'express';
+import { stagingAdmin } from '../auth/staging-admin.js';
 import { env } from '../config/env.js';
 import { Db } from '../db/db.service.js';
 import { MigrationService } from '../migrations/migration.service.js';
@@ -114,7 +115,7 @@ export class HealthController {
         const r = await timed(() => fetch(`${sbUrl}/auth/v1/settings`, { headers: { apikey: sbKey } }));
         if (r.ok) {
           const s = (await r.json()) as { external?: Record<string, boolean> };
-          checks.auth = { ok: true, password: Boolean(s.external?.email), google: Boolean(s.external?.google), discord: Boolean(s.external?.discord) };
+          checks.auth = { ok: true, password: Boolean(s.external?.email), google: Boolean(s.external?.google), discord: Boolean(s.external?.discord), ...(stagingAdmin() && { stagingAdmin: true }) };
         } else {
           checks.auth = { ok: false, error: r.status === 401 ? 'key_rejected' : `http_${r.status}`, hint: 'Check SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY belong to the same project.' };
         }
