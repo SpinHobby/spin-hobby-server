@@ -4,7 +4,7 @@ import { env, envList } from '../config/env.js';
 import { Db } from '../db/db.service.js';
 
 export type AppRole = 'customer' | 'staff' | 'owner';
-export interface AppUser { id: string; email: string; role: AppRole }
+export interface AppUser { id: string; email: string; role: AppRole; firstName: string | null }
 
 /**
  * Verifies Supabase Auth access tokens (the same tokens the storefront already sends)
@@ -49,7 +49,7 @@ export class AuthService {
       await this.db.exec('update public.profiles set role = $2 where id = $1', [profile.id, role]);
       this.logger.log(`Promoted ${profile.email} to ${role} from OWNER_EMAILS/STAFF_EMAILS.`);
     }
-    return { id: profile.id, email: profile.email, role };
+    return { id: profile.id, email: profile.email, role, firstName: firstNameFrom(payload) };
   }
 
   /** Revokes every session for this user via Supabase Auth. */
@@ -63,6 +63,13 @@ export class AuthService {
     });
     if (!res.ok && res.status !== 401) throw new Error(`Supabase sign-out failed (${res.status}).`);
   }
+}
+
+/** First name for greetings: set at sign-up, or given by Google/Discord (Supabase copies it into the token). */
+export function firstNameFrom(payload: JWTPayload): string | null {
+  const meta = (payload.user_metadata ?? {}) as Record<string, unknown>;
+  const pick = [meta.first_name, meta.given_name, meta.full_name, meta.name].find((v) => typeof v === 'string' && v.trim());
+  return typeof pick === 'string' ? pick.trim().split(/\s+/)[0].slice(0, 80) : null;
 }
 
 /** Env-listed emails get at least that role. Never demotes a role set by hand. */

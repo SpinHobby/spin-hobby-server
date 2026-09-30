@@ -33,7 +33,7 @@ describe('migrations on start', () => {
     expect(bucket.rows).toEqual([{ public: true }]);
     const history = await pglite.query<{ version: string; name: string }>('select version, name from supabase_migrations.schema_migrations order by version');
     expect(history.rows.map((r) => r.version)).toEqual(FILES.map((f) => f.slice(0, 14)));
-    expect(history.rows.at(-1)!.name).toBe('store_categories');
+    expect(history.rows.at(-1)!.name).toBe(FILES.at(-1)!.slice(15, -4));
 
     const again = await service.run();
     expect(again).toMatchObject({ state: 'ok', applied: [], pending: [] });

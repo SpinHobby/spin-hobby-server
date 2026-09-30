@@ -69,8 +69,8 @@ export async function signUp(pglite: PGlite, email: string, role?: 'customer' | 
 }
 
 /** A Supabase-style access token for an existing auth user. */
-export async function tokenFor(id: string, email: string) {
-  const jwt = new SignJWT({ email, role: 'authenticated' }).setProtectedHeader({ alg: 'HS256' });
+export async function tokenFor(id: string, email: string, userMetadata?: Record<string, unknown>) {
+  const jwt = new SignJWT({ email, role: 'authenticated', ...(userMetadata && { user_metadata: userMetadata }) }).setProtectedHeader({ alg: 'HS256' });
   // Supabase tokens carry iss = <SUPABASE_URL>/auth/v1, which the server checks when SUPABASE_URL is set.
   if (process.env.SUPABASE_URL) jwt.setIssuer(`${process.env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`);
   return jwt

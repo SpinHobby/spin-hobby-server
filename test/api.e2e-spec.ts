@@ -248,7 +248,9 @@ describe('accounts', () => {
   });
 
   it('returns the profile and promotes OWNER_EMAILS on sign-in', async () => {
-    expect((await http.get('/auth/me').set('Authorization', shopper.auth).expect(200)).body.user).toMatchObject({ email: 'fan@example.com', role: 'customer' });
+    expect((await http.get('/auth/me').set('Authorization', shopper.auth).expect(200)).body.user).toMatchObject({ email: 'fan@example.com', role: 'customer', firstName: null });
+    const named = await tokenFor(shopper.id, 'fan@example.com', { full_name: '  Aki Tanaka ' });
+    expect((await http.get('/auth/me').set('Authorization', `Bearer ${named}`).expect(200)).body.user.firstName).toBe('Aki');
     expect((await http.get('/auth/me').set('Authorization', owner.auth).expect(200)).body.user.role).toBe('owner');
     const row = await pglite.query<{ role: string }>('select role from public.profiles where id = $1', [owner.id]);
     expect(row.rows[0].role).toBe('owner');
