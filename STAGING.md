@@ -6,7 +6,7 @@ A full copy of the stack for testing before anything reaches spinhobby.com.
 |---|---|---|
 | Git branch (both repos) | `main` | `staging` |
 | Storefront (Netlify) | https://spinhobby.com | https://staging--spinhobby.netlify.app |
-| API (Render) | https://spin-hobby-server.onrender.com | https://spin-hobby-api-staging.onrender.com |
+| API (Render) | https://spin-hobby-server.onrender.com | https://spin-hobby-server-staging.onrender.com |
 | Database / auth / photos (Supabase) | project `zmlltsytckexrmybvnof` | its own project (`spin-hobby-staging`) |
 | Payments | per Admin → Settings | sandbox only |
 
@@ -39,11 +39,11 @@ on a new API route.
    - `DATABASE_URL`: Connect → Session pooler → URI (with the staging DB password)
    - PayPal / Square: sandbox credentials, or leave blank.
 
-   If Render names the URL differently from `spin-hobby-api-staging.onrender.com`, update
+   If Render names the URL differently from `spin-hobby-server-staging.onrender.com`, update
    `VITE_API_URL` in the storefront's `netlify.toml`.
 3. **Netlify**: Site configuration → Build & deploy → Branches and deploy contexts →
    Branch deploys → *Let me add individual branches* → `staging`.
-4. **Check it**: `https://spin-hobby-api-staging.onrender.com/health` should say
+4. **Check it**: `https://spin-hobby-server-staging.onrender.com/health` should say
    `"environment":"staging"` with every check `ok`.
 5. **Sample data** (optional): load ~17 products, a category tree and a few orders:
    ```sh

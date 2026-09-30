@@ -4,7 +4,7 @@
 # only; never paste production keys here. See STAGING.md.
 services:
   - type: web
-    name: spin-hobby-api-staging
+    name: spin-hobby-server-staging
     runtime: docker
     plan: free
     dockerfilePath: ./Dockerfile
