@@ -2,7 +2,9 @@
 FROM node:22-slim AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+# Same npm major as development machines: Node 22's bundled npm 10 rejects lockfiles written by
+# npm 11 ("Missing: ... from lock file"), which silently blocked every deploy.
+RUN npm install -g npm@11 && npm ci
 COPY tsconfig.json tsconfig.build.json nest-cli.json ./
 COPY src ./src
 RUN npm run build && npm prune --omit=dev
