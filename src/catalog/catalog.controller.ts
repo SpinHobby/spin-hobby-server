@@ -71,6 +71,7 @@ export class CatalogController {
   async squareItem(@Param('id') id: string) {
     const row = await this.catalog.product(id);
     if (!row) throw notFound('Catalog item');
-    return { success: true, item: publicProduct(row) };
+    // The detail view also gets the description (left out of list responses to keep them small).
+    return { success: true, item: { ...publicProduct(row), description: row.description ?? null } };
   }
 }

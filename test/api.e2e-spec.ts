@@ -617,13 +617,14 @@ describe('hand-entered merchandise', () => {
     await http.post('/admin/products').set('Authorization', staff.auth).send({ name: 'Keychain', priceCents: 900, availability: 'preorder' }).expect(400, { success: false, error: 'Pre-orders need an order-by date.' });
     await http.post('/admin/products').set('Authorization', staff.auth).send({ name: 'Keychain', priceCents: 900, imageUrls: ['http://insecure/img.png'] }).expect(400);
     const res = await http.post('/admin/products').set('Authorization', staff.auth).send({
-      name: 'Acrylic Keychain — Con Exclusive', category: 'Keychains', priceCents: 1400, stockCount: 12, series: 'Spin Hobby Originals',
+      name: 'Acrylic Keychain — Con Exclusive', category: 'Keychains', priceCents: 1400, stockCount: 12, series: 'Spin Hobby Originals', description: 'Double-sided, 6cm.',
       imageUrls: ['https://proj.supabase.co/storage/v1/object/public/product-images/products/a.webp', 'https://proj.supabase.co/b.webp'],
     }).expect(200);
     itemId = res.body.product.id;
     expect(itemId).toMatch(/^manual-/);
     expect(res.body.product).toMatchObject({ name: 'Acrylic Keychain — Con Exclusive', category: 'Keychains', priceCents: 1400, stockCount: 12, status: 'in', series: 'Spin Hobby Originals', source: 'manual' });
     expect(res.body.product.images).toHaveLength(2);
+    expect((await http.get(`/square/catalog/${itemId}`)).body.item.description).toBe('Double-sided, 6cm.');
     const listed = (await http.get('/products?category=Keychains')).body.items;
     expect(listed.map((p: any) => p.id)).toEqual([itemId]);
     const admin = (await http.get('/admin/products?limit=60').set('Authorization', staff.auth)).body.items.find((p: any) => p.id === itemId);
