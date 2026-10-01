@@ -1,5 +1,6 @@
-import { Body, Controller, Get, HttpCode, Ip, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Query } from '@nestjs/common';
 import { SignJWT } from 'jose';
+import { Access } from './access.js';
 import { AppError } from '../common/errors.js';
 import { jsonBody, stringValue } from '../common/validation.js';
 import { env, envList, originAllowed } from '../config/env.js';
@@ -37,6 +38,29 @@ function allowSignup(ip: string) {
 /** Local development only: sign in as a seeded account without Supabase (see scripts/dev-local.mjs). */
 function devLoginEnabled() {
   return env('NODE_ENV') !== 'production' && env('AUTH_DEV_LOGIN') === 'true' && Boolean(env('SUPABASE_JWT_SECRET'));
+}
+
+/** Password-recovery requests per IP per window; same shape as the sign-up limiter. */
+const RECOVER_LIMIT = 5;
+const RECOVER_WINDOW_MS = 60 * 60 * 1000;
+const recoverAttempts = new Map<string, number[]>();
+function allowRecover(ip: string) {
+  const now = Date.now();
+  const recent = (recoverAttempts.get(ip) ?? []).filter((t) => now - t < RECOVER_WINDOW_MS);
+  if (recent.length >= RECOVER_LIMIT) { recoverAttempts.set(ip, recent); return false; }
+  recent.push(now);
+  recoverAttempts.set(ip, recent);
+  if (recoverAttempts.size > 10_000) recoverAttempts.clear();
+  return true;
+}
+
+/** Only ever redirect to an allow-listed site or localhost (used for OAuth and recovery links alike). */
+function validateRedirect(target: string): string {
+  let origin: string;
+  try { origin = new URL(target).origin; } catch { throw new AppError('Invalid redirectTo.'); }
+  const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+  if (!originAllowed(origin) && !local) throw new AppError('redirectTo is not an allowed site.');
+  return target;
 }
 
 /**
@@ -121,15 +145,56 @@ export class AuthController {
   @Get('oauth-url')
   oauthUrl(@Query('provider') provider: string, @Query('redirectTo') redirectTo: string) {
     if (!PROVIDERS.includes(provider as Provider)) throw new AppError('Unknown sign-in provider.');
-    const target = stringValue(redirectTo, 'redirectTo', 500);
-    let origin: string;
-    try { origin = new URL(target).origin; } catch { throw new AppError('Invalid redirectTo.'); }
-    const local = /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-    if (!originAllowed(origin) && !local) throw new AppError('redirectTo is not an allowed site.');
+    const target = validateRedirect(stringValue(redirectTo, 'redirectTo', 500));
     const sb = supabase();
     if (!sb) throw new AppError('Sign-in is not configured.', 503);
     const url = `${sb.url}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(target)}`;
     return { success: true, url };
+  }
+
+  /**
+   * Sends a password-reset email. Supabase redirects back to `redirectTo` with recovery tokens
+   * in the URL hash (same mechanism as oauth-url above, just type=recovery instead of oauth).
+   * Always reports success, even for an unknown email, so this can't be used to enumerate accounts.
+   */
+  @Post('recover')
+  @HttpCode(200)
+  async recover(@Body() body: unknown, @Ip() ip: string) {
+    const p = jsonBody(body);
+    const email = stringValue(p.email, 'email', 254).toLowerCase();
+    const target = validateRedirect(stringValue(p.redirectTo, 'redirectTo', 500));
+    const sb = supabase();
+    if (sb && allowRecover(ip || 'unknown')) {
+      await fetch(`${sb.url}/auth/v1/recover?redirect_to=${encodeURIComponent(target)}`, {
+        method: 'POST',
+        headers: { apikey: sb.key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      }).catch(() => undefined);
+    }
+    return { success: true };
+  }
+
+  /** Sets a new password for the signed-in caller — a normal session or a temporary recovery one. */
+  @Post('update-password')
+  @HttpCode(200)
+  @Access('user')
+  async updatePassword(@Body() body: unknown, @Headers('authorization') authorization: string) {
+    const password = stringValue(jsonBody(body).password, 'password', 200);
+    if (password.length < 8) throw new AppError('Use a password with at least 8 characters.');
+    const sb = supabase();
+    if (!sb) throw new AppError('Sign-in is not configured.', 503);
+    const res = await fetch(`${sb.url}/auth/v1/user`, {
+      method: 'PUT',
+      headers: { apikey: sb.key, Authorization: authorization, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as Record<string, any>;
+      const message = String(data.msg ?? data.message ?? data.error_description ?? '');
+      if (data.error_code === 'weak_password' || /password/i.test(message)) throw new AppError(message || 'Choose a stronger password.');
+      throw new AppError('Could not update your password.', 502);
+    }
+    return { success: true };
   }
 
   private async gotrue(grant: 'password' | 'refresh_token', payload: Record<string, string>) {
