@@ -18,7 +18,7 @@ export const squareEnvIsProduction = () => (env('SQUARE_ENV') ?? env('SQUARE_ENV
 export const paypalIsLive = () => env('PAYPAL_ENV') === 'live';
 
 /** The staging storefront and Netlify deploy previews, allowed whenever APP_ENV=staging. */
-const STAGING_ORIGINS = ['https://staging--spinhobby.netlify.app', 'https://*--spinhobby.netlify.app'];
+const STAGING_ORIGINS = ['https://spin-hobby-staging.netlify.app', 'https://staging--spinhobby.netlify.app', 'https://*--spinhobby.netlify.app'];
 
 /** Storefront origins always allowed (plus the staging ones on staging), plus ALLOWED_ORIGINS (comma separated). */
 export function allowedOrigins(): string[] {

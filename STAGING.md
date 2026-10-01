@@ -5,7 +5,7 @@ A full copy of the stack for testing before anything reaches spinhobby.com.
 | | Production | Staging |
 |---|---|---|
 | Git branch (both repos) | `main` | `staging` |
-| Storefront (Netlify) | https://spinhobby.com | https://staging--spinhobby.netlify.app |
+| Storefront (Netlify) | https://spinhobby.com | https://spin-hobby-staging.netlify.app |
 | API (Render) | https://spin-hobby-server.onrender.com | https://spin-hobby-server-staging.onrender.com |
 | Database / auth / photos (Supabase) | project `zmlltsytckexrmybvnof` | its own project (`spin-hobby-staging`) |
 | Payments | per Admin → Settings | sandbox only |
