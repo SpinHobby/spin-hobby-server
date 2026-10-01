@@ -1,9 +1,11 @@
-import { Body, Controller, Get, HttpCode, Ip, Logger, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Ip, Logger, Post, Query, Req } from '@nestjs/common';
+import type { Request } from 'express';
 import { SignJWT } from 'jose';
 import { AppError } from '../common/errors.js';
 import { jsonBody, stringValue } from '../common/validation.js';
 import { env, envList, originAllowed } from '../config/env.js';
 import { Db } from '../db/db.service.js';
+import { Access } from './access.js';
 import { AuthService } from './auth.service.js';
 import { isStagingAdminLogin, secretsMatch, stagingAdmin, type StagingAdmin } from './staging-admin.js';
 
@@ -123,6 +125,68 @@ export class AuthController {
       throw new AppError('Could not create your account.', 502);
     }
     return this.session(await this.gotrue('password', { email, password }));
+  }
+
+  /**
+   * Emails a password-reset link through Supabase Auth. The link opens the storefront's
+   * /reset-password page signed in (redirectTo must be one of our sites, and must also be listed under
+   * Authentication > URL Configuration > Redirect URLs in Supabase), where a new password is chosen.
+   * Always answers OK for a well-formed address, so addresses can't be probed.
+   */
+  @Post('reset')
+  @HttpCode(200)
+  async reset(@Body() body: unknown) {
+    const p = jsonBody(body);
+    const email = stringValue(p.email, 'email', 254).trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AppError('Enter a valid email address.');
+    let redirect = '';
+    if (typeof p.redirectTo === 'string' && p.redirectTo) {
+      const target = p.redirectTo.slice(0, 500);
+      let origin: string;
+      try { origin = new URL(target).origin; } catch { throw new AppError('Invalid redirectTo.'); }
+      if (!originAllowed(origin) && !/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) throw new AppError('redirectTo is not an allowed site.');
+      redirect = `?redirect_to=${encodeURIComponent(target)}`;
+    }
+    const sb = supabase();
+    if (devLoginEnabled() || !sb) throw new AppError('Password reset is not available right now.', 503);
+    const res = await fetch(`${sb.url}/auth/v1/recover${redirect}`, {
+      method: 'POST',
+      headers: { apikey: sb.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) {
+      if (res.status === 429) throw new AppError('Too many reset emails were requested. Wait a few minutes and try again.', 429);
+      const data = (await res.json().catch(() => ({}))) as Record<string, any>;
+      this.logger.warn(`Password reset email failed (${res.status}): ${String(data.msg ?? data.message ?? data.error_description ?? '')}`);
+      throw new AppError('The reset email could not be sent. Try again later.', 502);
+    }
+    return { success: true };
+  }
+
+  /** Sets a new password for the signed-in account. A reset link signs the person in first, then lands here. */
+  @Post('password')
+  @Access('user')
+  @HttpCode(200)
+  async password(@Body() body: unknown, @Req() req: Request) {
+    const password = stringValue(jsonBody(body).password, 'password', 200);
+    if (password.length < 8) throw new AppError('Use a password with at least 8 characters.');
+    const sb = supabase();
+    if (devLoginEnabled() || !sb) throw new AppError('Changing passwords is not available right now.', 503);
+    const token = (req.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    const res = await fetch(`${sb.url}/auth/v1/user`, {
+      method: 'PUT',
+      headers: { apikey: sb.key, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as Record<string, any>;
+      const message = String(data.msg ?? data.message ?? data.error_description ?? '');
+      if (res.status === 401) throw new AppError('Your reset link has expired. Request a new one.', 401, 'session_expired');
+      if (data.error_code === 'same_password') throw new AppError('Choose a password you have not used before.');
+      if (data.error_code === 'weak_password' || /password/i.test(message)) throw new AppError(message || 'Choose a stronger password.');
+      throw new AppError('The password could not be changed.', 502);
+    }
+    return { success: true };
   }
 
   @Post('refresh')
