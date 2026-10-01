@@ -5,14 +5,15 @@ A full copy of the stack for testing before anything reaches spinhobby.com.
 | | Production | Staging |
 |---|---|---|
 | Git branch (both repos) | `main` | `staging` |
-| Storefront (Netlify) | https://spinhobby.com | https://staging--spinhobby.netlify.app |
+| Storefront (Netlify) | https://spinhobby.com | https://spin-hobby-staging.netlify.app |
 | API (Render) | https://spin-hobby-server.onrender.com | https://spin-hobby-server-staging.onrender.com |
 | Database / auth / photos (Supabase) | project `zmlltsytckexrmybvnof` | its own project (`spin-hobby-staging`) |
 | Payments | per Admin → Settings | sandbox only |
 
 The staging site shows a yellow **STAGING** badge on every page, is kept out of search engines,
 and never talks to the production API or database. Netlify pull-request previews also use the
-staging API.
+staging API. The staging API allows those Netlify origins whenever `APP_ENV=staging`, so no
+`ALLOWED_ORIGINS` entry is needed for them.
 
 ## Everyday workflow
 
@@ -45,12 +46,35 @@ on a new API route.
    Branch deploys → *Let me add individual branches* → `staging`.
 4. **Check it**: `https://spin-hobby-server-staging.onrender.com/health` should say
    `"environment":"staging"` with every check `ok`.
-5. **Sample data** (optional): load ~17 products, a category tree and a few orders:
+5. **Sample data**: nothing to do. The first time the staging API starts against an empty catalog it
+   loads the sample set from `src/sample` (about 110 products across every category and status, with
+   pictures the API draws itself at `/sample-images/...`, homepage banners and a month of orders).
+   `SAMPLE_DATA=false` on the service turns this off. To reload after changing the sample data:
    ```sh
-   STAGING_DATABASE_URL='<staging session pooler URI>' npm run seed:staging
+   STAGING_DATABASE_URL='<staging session pooler URI>' npm run seed:staging -- --replace
    ```
-   It refuses to run against production or a database that already has products.
+   It refuses to run against production.
 6. **Sign in**: create an account on the staging site. `OWNER_EMAILS` makes you the owner there too.
+
+## Admin sign-in on staging
+
+Staging has a fixed owner login so anyone testing can open `/admin` without an account. On the
+sign-in form, type the username in the email box:
+
+| | |
+|---|---|
+| Username | `SpinHobby` |
+| Password | `123456` |
+
+It is set by `STAGING_ADMIN_USERNAME` / `STAGING_ADMIN_PASSWORD` in `render.staging.yaml` (or the
+service's Environment tab on Render). The first sign-in creates a real owner account in the
+staging Supabase project (`spinhobby@staging.spinhobby.com`, no email is ever sent), so sessions,
+refresh and sign-out behave like any other account. Changing the password in the environment
+updates the account on the next sign-in.
+
+The login only works when `APP_ENV=staging`, and never against the production Supabase project,
+so these variables have no effect if they are ever copied to production. Pick a stronger password
+before loading anything sensitive into staging.
 
 Free-plan notes: the staging API sleeps after ~15 minutes idle (first request takes ~1 minute),
 and Supabase pauses a free project after a week without activity (restore it from the dashboard).

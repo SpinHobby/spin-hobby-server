@@ -1,12 +1,14 @@
-// Loads the sample catalog (categories, products, a few orders) into the STAGING database so
-// there is something to test against. Run once after the staging API has started (it applies
-// the schema on start):
+// Loads the sample catalog (src/sample) into the STAGING database by hand. The staging API already
+// does this itself the first time it starts against an empty catalog; use this to reload after
+// changing the sample data:
 //
-//   STAGING_DATABASE_URL='postgresql://...' npm run seed:staging
+//   STAGING_DATABASE_URL='postgresql://...' npm run seed:staging -- --replace
 //
-// Refuses to touch the production project, and refuses a database that already has products.
+// --replace removes the previous sample set (products, their orders, banners) first. Pictures are
+// served by the staging API; STAGING_API_URL overrides which host the picture URLs point at.
+// Refuses to touch the production project, and without --replace refuses a catalog that has products.
+import { execSync } from 'node:child_process';
 import pg from 'pg';
-import { seedSample } from './seed-data.mjs';
 
 const PRODUCTION_REF = 'zmlltsytckexrmybvnof';
 const url = process.env.STAGING_DATABASE_URL;
@@ -18,19 +20,24 @@ if (url.includes(PRODUCTION_REF)) {
   console.error('That connection string is the PRODUCTION database. Refusing to seed it.');
   process.exit(1);
 }
+const replace = process.argv.includes('--replace');
+const imageBase = process.env.STAGING_API_URL ?? 'https://spin-hobby-server-staging.onrender.com';
+
+execSync('npm run build', { stdio: 'inherit' });
+const { seedSample, clearSample, countProducts } = await import('../dist/sample/seed.js');
 
 const client = new pg.Client({ connectionString: url, ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false } });
 await client.connect();
 try {
   const { rows } = await client.query("select to_regclass('public.catalog_products') as t");
   if (!rows[0].t) throw new Error('The schema is missing. Start the staging API once (it applies migrations), then re-run this.');
-  const existing = await client.query('select count(*)::int as n from public.catalog_products');
-  if (existing.rows[0].n > 0) throw new Error(`The staging catalog already has ${existing.rows[0].n} products; not adding sample data on top.`);
-
   await client.query('begin');
-  const seeded = await seedSample(client);
+  if (replace) await clearSample(client);
+  const existing = await countProducts(client);
+  if (existing > 0) throw new Error(`The staging catalog already has ${existing} products; use --replace to swap the sample set, or clear them first.`);
+  const seeded = await seedSample(client, imageBase);
   await client.query('commit');
-  console.log(`Seeded staging: ${seeded.products} products, ${seeded.categories} categories, ${seeded.orders} orders.`);
+  console.log(`Seeded staging: ${seeded.products} products, ${seeded.categories} categories, ${seeded.orders} orders, ${seeded.slides} banners (pictures from ${imageBase}/sample-images).`);
 } catch (e) {
   await client.query('rollback').catch(() => undefined);
   console.error(e instanceof Error ? e.message : e);

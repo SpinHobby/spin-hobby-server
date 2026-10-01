@@ -9,15 +9,18 @@
 import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
-import { spawn } from 'node:child_process';
+import { execSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { seedSample } from './seed-data.mjs';
 
 const DB_PORT = Number(process.env.DEV_DB_PORT ?? 54329);
 const root = join(import.meta.dirname, '..');
 const migrations = join(root, 'supabase', 'migrations');
+
+// The sample catalog is part of the API (src/sample), so build once and load it from dist.
+execSync('npx nest build', { cwd: root, stdio: 'inherit' });
+const { seedSample } = await import(new URL('../dist/sample/seed.js', import.meta.url));
 
 const db = await PGlite.create({ extensions: { pgcrypto } });
 await db.exec(`
@@ -39,7 +42,7 @@ for (const [email, role] of [['owner@spinhobby.test', 'owner'], ['staff@spinhobb
 }
 
 // ---- seed: catalog, categories and orders
-const seeded = await seedSample(db);
+const seeded = await seedSample(db, `http://localhost:${process.env.PORT ?? '8080'}`);
 
 const server = new PGLiteSocketServer({ db, port: DB_PORT, host: '127.0.0.1' });
 await server.start();

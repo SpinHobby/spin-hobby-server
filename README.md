@@ -109,7 +109,8 @@ src/
   webhooks/      Square (HMAC) and PayPal webhooks
   db/            pg pool + transactions
 supabase/        database migrations + Auth config
-scripts/         dev-local.mjs (seeded local Postgres + API)
+scripts/         dev-local.mjs (seeded local Postgres + API), seed-staging.mjs
+src/sample/      the sample catalog (products, pictures, orders) used by staging and local development
 legacy/          the previous Express server and the retired edge functions
 test/            e2e suite + PGlite harness
 ```

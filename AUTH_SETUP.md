@@ -57,3 +57,21 @@ Authentication → Providers.
 Supabase's built-in mailer is rate-limited (a few emails per hour). For launch, add SMTP
 under Authentication → SMTP Settings (the storefront already uses Resend for restock
 emails, and Resend provides SMTP credentials).
+
+## Password reset
+
+"Forgot your password?" on the sign-in form calls `POST /auth/reset`, which asks Supabase Auth to
+email a reset link. The link opens `/reset-password` on the storefront, signed in, where a new
+password is chosen (`POST /auth/password`).
+
+For the link to point at the real site rather than `localhost`, set these in the Supabase dashboard
+under **Authentication > URL Configuration** (for each project: production and staging):
+
+- **Site URL**: `https://spinhobby.com` (staging: `https://spin-hobby-staging.netlify.app`)
+- **Redirect URLs**: `https://spinhobby.com/reset-password`, `https://www.spinhobby.com/reset-password`
+  (staging: `https://spin-hobby-staging.netlify.app/reset-password`). Local development can add
+  `http://localhost:5173/reset-password`.
+
+If a link still lands on the home page, the storefront forwards it to `/reset-password` itself. Supabase's
+built-in mailer allows only a few emails per hour; for anything beyond occasional use, configure custom SMTP
+under **Authentication > Emails > SMTP Settings** (Resend works and the API already has a `RESEND_API_KEY`).

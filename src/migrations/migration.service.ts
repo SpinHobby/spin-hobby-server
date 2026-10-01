@@ -29,6 +29,9 @@ const LOCK_KEY = 72_4_2026; // arbitrary constant for pg_advisory_lock
 export class MigrationService implements OnModuleInit {
   private readonly logger = new Logger(MigrationService.name);
   status: MigrationStatus = { state: 'not-run', applied: [], pending: [], latest: null };
+  private resolveReady!: (status: MigrationStatus) => void;
+  /** Settles once the start-up run has finished, whatever its outcome, for work that must wait for the schema. */
+  readonly ready = new Promise<MigrationStatus>((resolve) => { this.resolveReady = resolve; });
 
   constructor(private readonly db: Db) {}
 
@@ -46,13 +49,15 @@ export class MigrationService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    if (env('MIGRATE_ON_START') === 'false') { this.status = { ...this.status, state: 'skipped', message: 'MIGRATE_ON_START=false' }; return; }
-    if (!env('DATABASE_URL')) { this.status = { ...this.status, state: 'skipped', message: 'DATABASE_URL is not set.' }; return; }
     try {
+      if (env('MIGRATE_ON_START') === 'false') { this.status = { ...this.status, state: 'skipped', message: 'MIGRATE_ON_START=false' }; return; }
+      if (!env('DATABASE_URL')) { this.status = { ...this.status, state: 'skipped', message: 'DATABASE_URL is not set.' }; return; }
       await this.run();
     } catch (error) {
       this.status = { ...this.status, state: 'failed', message: (error as Error).message.split('\n')[0] };
       this.logger.error(`Migrations failed: ${this.status.message}`);
+    } finally {
+      this.resolveReady(this.status);
     }
   }
 
