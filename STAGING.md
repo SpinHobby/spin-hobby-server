@@ -12,7 +12,8 @@ A full copy of the stack for testing before anything reaches spinhobby.com.
 
 The staging site shows a yellow **STAGING** badge on every page, is kept out of search engines,
 and never talks to the production API or database. Netlify pull-request previews also use the
-staging API.
+staging API. The staging API allows those Netlify origins whenever `APP_ENV=staging`, so no
+`ALLOWED_ORIGINS` entry is needed for them.
 
 ## Everyday workflow
 
@@ -45,11 +46,14 @@ on a new API route.
    Branch deploys → *Let me add individual branches* → `staging`.
 4. **Check it**: `https://spin-hobby-server-staging.onrender.com/health` should say
    `"environment":"staging"` with every check `ok`.
-5. **Sample data** (optional): load ~17 products, a category tree and a few orders:
+5. **Sample data**: nothing to do. The first time the staging API starts against an empty catalog it
+   loads the sample set from `src/sample` (about 110 products across every category and status, with
+   pictures the API draws itself at `/sample-images/...`, homepage banners and a month of orders).
+   `SAMPLE_DATA=false` on the service turns this off. To reload after changing the sample data:
    ```sh
-   STAGING_DATABASE_URL='<staging session pooler URI>' npm run seed:staging
+   STAGING_DATABASE_URL='<staging session pooler URI>' npm run seed:staging -- --replace
    ```
-   It refuses to run against production or a database that already has products.
+   It refuses to run against production.
 6. **Sign in**: create an account on the staging site. `OWNER_EMAILS` makes you the owner there too.
 
 ## Admin sign-in on staging

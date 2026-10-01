@@ -25,6 +25,8 @@ import { HealthController } from './health/health.controller.js';
 import { MigrationService } from './migrations/migration.service.js';
 import { OpsController } from './ops/ops.controller.js';
 import { PayPalClient } from './payments/paypal.client.js';
+import { SampleImagesController } from './sample/sample.controller.js';
+import { SampleDataService } from './sample/sample.service.js';
 import { SquareClient } from './payments/square.client.js';
 import { SquareSyncController } from './square-sync/square-sync.controller.js';
 import { SquareSyncService } from './square-sync/square-sync.service.js';
@@ -49,6 +51,7 @@ import { WebhooksController } from './webhooks/webhooks.controller.js';
     SquareSyncController,
     CashierController,
     OpsController,
+    SampleImagesController,
   ],
   providers: [
     { provide: APP_GUARD, useClass: AccessGuard },
@@ -67,6 +70,7 @@ import { WebhooksController } from './webhooks/webhooks.controller.js';
     IdentifyService,
     StorageService,
     MigrationService,
+    SampleDataService,
   ],
 })
 export class AppModule {}

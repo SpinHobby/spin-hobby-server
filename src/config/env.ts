@@ -17,9 +17,13 @@ export function requireEnv(name: string, feature: string): string {
 export const squareEnvIsProduction = () => (env('SQUARE_ENV') ?? env('SQUARE_ENVIRONMENT')) === 'production';
 export const paypalIsLive = () => env('PAYPAL_ENV') === 'live';
 
-/** Storefront origins always allowed, plus ALLOWED_ORIGINS (comma separated). */
+/** The staging storefront and Netlify deploy previews, allowed whenever APP_ENV=staging. */
+const STAGING_ORIGINS = ['https://staging--spinhobby.netlify.app', 'https://*--spinhobby.netlify.app'];
+
+/** Storefront origins always allowed (plus the staging ones on staging), plus ALLOWED_ORIGINS (comma separated). */
 export function allowedOrigins(): string[] {
-  return [...new Set(['https://spinhobby.com', 'https://www.spinhobby.com', ...envList('ALLOWED_ORIGINS')])];
+  const staging = env('APP_ENV') === 'staging' ? STAGING_ORIGINS : [];
+  return [...new Set(['https://spinhobby.com', 'https://www.spinhobby.com', ...staging, ...envList('ALLOWED_ORIGINS')])];
 }
 
 /**
