@@ -4,6 +4,7 @@ import { QuoteService, type Quote, type QuoteInput } from '../checkout/quote.ser
 import { AppError } from '../common/errors.js';
 import { env, orderHoldMinutes } from '../config/env.js';
 import { Db, type Row } from '../db/db.service.js';
+import { EmailService } from '../email/email.service.js';
 import { StoreService } from '../store/store.service.js';
 
 export interface OrderDetails { email: string; billing: unknown; shipping: unknown }
@@ -23,7 +24,12 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(OrdersService.name);
   private timer?: NodeJS.Timeout;
 
-  constructor(private readonly db: Db, private readonly quotes: QuoteService, private readonly store: StoreService) {}
+  constructor(
+    private readonly db: Db,
+    private readonly quotes: QuoteService,
+    private readonly store: StoreService,
+    private readonly email: EmailService,
+  ) {}
 
   onModuleInit() {
     const minutes = Number(env('ORDER_EXPIRY_INTERVAL_MINUTES') ?? 10);
@@ -108,6 +114,12 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
    * money really moved) order changes, so a retry or a second capture does nothing the second time.
    */
   async markPaid(orderId: number, paymentId: string, receiptUrl: string | null, data: Row): Promise<{ status: string; first: boolean }> {
+    const result = await this.recordPayment(orderId, paymentId, receiptUrl, data);
+    if (result.first) await this.sendConfirmation(orderId);
+    return result;
+  }
+
+  private async recordPayment(orderId: number, paymentId: string, receiptUrl: string | null, data: Row): Promise<{ status: string; first: boolean }> {
     return this.db.transaction(async (tx) => {
       const current = await this.db.one<Row>('select status from public.orders where id = $1 for update', [orderId], tx);
       if (!current) throw new AppError('Checkout order not found.', 404);
@@ -138,6 +150,26 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
       await this.db.exec("insert into public.order_events (order_id, event_type, data) values ($1, 'paid', $2)", [orderId, JSON.stringify(event)], tx);
       return { status, first: true };
     });
+  }
+
+  /** Best-effort receipt, sent after the payment is safely recorded; a mail problem must never fail a paid checkout. */
+  private async sendConfirmation(orderId: number): Promise<void> {
+    if (!this.email.configured) return;
+    try {
+      const order = await this.db.one<Row>('select * from public.orders where id = $1', [orderId]);
+      if (!order?.billing_email) return;
+      const [items, settings] = await Promise.all([
+        this.db.many<Row>('select name, quantity, unit_price_cents, is_preorder from public.order_items where order_id = $1 order by id', [orderId]),
+        this.store.settings(),
+      ]);
+      const sent = await this.email.send(
+        order.billing_email, `Your Spin Hobby order #${orderId} is confirmed`,
+        this.email.confirmationHtml(order, items, { days_min: Number(settings.handling_days_min), days_max: Number(settings.handling_days_max) }),
+      );
+      if (sent) await this.db.exec("insert into public.order_events (order_id, event_type) values ($1, 'confirmation_emailed')", [orderId]);
+    } catch (e) {
+      this.logger.warn(`Confirmation email for order #${orderId} failed: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   /** Cancels checkouts nobody finished within the hold window and frees their stock. */
