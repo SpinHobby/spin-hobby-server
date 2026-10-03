@@ -21,12 +21,15 @@ export const orderHoldMinutes = () => {
 };
 
 /**
- * Proxies between the internet and this server whose X-Forwarded-For entries we believe (Render: Cloudflare + its
- * own proxy). Too low and every shopper looks like a Cloudflare address; too high and callers could spoof their IP.
+ * Proxies between the internet and this server whose X-Forwarded-For entries we believe. On Render the header reads
+ * `client, Cloudflare edge, Render's internal proxy`, so the client is three hops from the server; elsewhere assume one
+ * proxy. Too low and every shopper looks like a proxy address (limits stop being per shopper); too high and callers
+ * can spoof their address. Override with TRUST_PROXY_HOPS.
  */
 export const trustProxyHops = () => {
-  const hops = Number(env('TRUST_PROXY_HOPS') ?? 1);
-  return Number.isInteger(hops) && hops >= 0 ? hops : 1;
+  const fallback = env('RENDER') ? 3 : 1;
+  const hops = Number(env('TRUST_PROXY_HOPS') ?? fallback);
+  return Number.isInteger(hops) && hops >= 0 ? hops : fallback;
 };
 
 export const squareEnvIsProduction = () => (env('SQUARE_ENV') ?? env('SQUARE_ENVIRONMENT')) === 'production';

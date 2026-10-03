@@ -1,5 +1,5 @@
-import { Controller, Get, Req, Res } from '@nestjs/common';
-import type { Request, Response } from 'express';
+import { Controller, Get, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import { stagingAdmin } from '../auth/staging-admin.js';
 import { SkipRateLimit } from '../common/rate-limit.js';
 import { env } from '../config/env.js';
@@ -65,10 +65,8 @@ export class HealthController {
 
   /** Liveness only (used by the host's health check): the process is up. */
   @Get('live')
-  live(@Req() req: Request) {
-    // TEMPORARY (staging IP diagnosis): echo the caller's own forwarding headers. Remove before promoting.
-    const h = req.headers;
-    return { success: true, status: 'live', time: new Date().toISOString(), debug: { ip: req.ip, xff: h['x-forwarded-for'], cf: h['cf-connecting-ip'], tci: h['true-client-ip'], xri: h['x-real-ip'], fwd: h['forwarded'], socket: req.socket.remoteAddress } };
+  live() {
+    return { success: true, status: 'live', time: new Date().toISOString() };
   }
 
   /** Readiness + diagnostics. 200 when everything required works, 503 otherwise. */
