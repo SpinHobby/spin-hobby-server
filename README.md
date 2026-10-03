@@ -39,10 +39,13 @@ To run against a real Supabase project instead: `cp .env.example .env`, fill it 
 ## Run locally
 
 ```sh
-cp .env.example .env         # fill in DATABASE_URL + SUPABASE_URL at minimum
+cp .env.example .env         # fill in DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY (+ SUPABASE_SERVICE_ROLE_KEY for sign-up and uploads)
 npm install
 npm run start:dev            # http://localhost:8080/health
 ```
+
+`.env` is read automatically at startup (variables already set in the environment win). Whatever database
+`DATABASE_URL` points at is the one you'll be changing, so use a staging or throwaway project locally.
 
 Apply the schema to a new Supabase project with `supabase db push`. See
 [`AUTH_SETUP.md`](AUTH_SETUP.md) for Google sign-in and making yourself an owner
