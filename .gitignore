@@ -13,3 +13,6 @@
 .env~
 /coverage
 *.tsbuildinfo
+
+# Supabase CLI scratch (project ref, CLI version cache)
+/supabase/.temp

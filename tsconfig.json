@@ -20,5 +20,5 @@
     "strictPropertyInitialization": false,
     "types": ["vitest/globals", "node"]
   },
-  "exclude": ["node_modules", "dist", "legacy", "supabase"]
+  "exclude": ["node_modules", "dist", "supabase"]
 }

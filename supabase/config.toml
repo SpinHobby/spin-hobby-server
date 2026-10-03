@@ -41,5 +41,4 @@ secret = "env(SUPABASE_AUTH_EXTERNAL_DISCORD_SECRET)"
 [storage]
 enabled = true
 
-# Edge functions retired: all API logic runs in the NestJS server (src/). The old
-# functions are kept for reference in legacy/supabase-edge-functions.
+# Edge functions retired: all API logic runs in the NestJS server (src/).

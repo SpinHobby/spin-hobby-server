@@ -10,9 +10,9 @@ browser ──► spin-hobby API (this repo) ──► Supabase Postgres · Supa
                                         └─► Square · PayPal · Resend · Claude
 ```
 
-The Supabase edge functions that used to do this are retired (kept for reference in
-`legacy/supabase-edge-functions`). Supabase is still the database, identity provider and
-file storage; `supabase/migrations` is the schema.
+The Supabase edge functions that used to do this are retired (they and the old Express server
+are in git history). Supabase is still the database, identity provider and file storage;
+`supabase/migrations` is the schema.
 
 | | |
 |---|---|
@@ -78,6 +78,17 @@ Square dashboard and the environment.
 A separate staging stack (branch `staging`, its own Render service and Supabase project, sandbox
 payments) for testing before production. See [`STAGING.md`](STAGING.md).
 
+## How stock works
+
+- Square-sourced products: Square owns the count (sync + inventory webhook). Hand-entered products: this server owns it
+  and takes sold units off when an order is paid.
+- A shopper starting checkout holds those units for `ORDER_HOLD_MINUTES` (default 30). Availability everywhere is
+  `stock − holds`, so two people can't buy the last one; abandoned checkouts are cancelled by a background job and a payment
+  that arrives for an expired checkout is refused (`ORDER_EXPIRED`) before any charge.
+- A Square sale that Square hasn't reported back yet still counts until the next sync/webhook passes it.
+- The catalog sync hides Square-sourced products deleted in Square (never hand-entered ones), unless it would hide more than
+  `SQUARE_SYNC_RETIRE_MAX_RATIO` of them. Limit: PayPal sales of Square-sourced items never reach Square's count.
+
 ## Routes
 
 Access: **public** · **user** (signed in) · **staff** (staff or owner) · **owner**.
@@ -102,7 +113,9 @@ Errors are always `{ "success": false, "error": "…", "code"?: "…" }`.
 src/
   auth/          Supabase token verification, access guard, OWNER_EMAILS bootstrap
   catalog/       storefront product queries (storefront_products view)
-  checkout/      server-side quote, order intent, PayPal/Square capture
+  checkout/      server-side quote (price, tax, stock minus holds) and the checkout routes
+  orders/        order lifecycle: create + hold stock, mark paid, expire abandoned checkouts, receipt email
+  payments/      PayPal and Square clients; PaymentsService runs order creation and capture
   admin/         dashboard, products, orders, settings, slides, events
   square-sync/   Square catalog + inventory mirror
   cashier/       photo → Claude → Square item tool, AI budget
@@ -111,6 +124,5 @@ src/
 supabase/        database migrations + Auth config
 scripts/         dev-local.mjs (seeded local Postgres + API), seed-staging.mjs
 src/sample/      the sample catalog (products, pictures, orders) used by staging and local development
-legacy/          the previous Express server and the retired edge functions
 test/            e2e suite + PGlite harness
 ```
