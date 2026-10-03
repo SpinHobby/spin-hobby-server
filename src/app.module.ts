@@ -19,6 +19,7 @@ import { CheckoutController } from './checkout/checkout.controller.js';
 import { QuoteService } from './checkout/quote.service.js';
 import { AdminLog } from './common/admin-log.service.js';
 import { JsonErrorFilter } from './common/http-exception.filter.js';
+import { RateLimitGuard } from './common/rate-limit.js';
 import { DbModule } from './db/db.module.js';
 import { EmailService } from './email/email.service.js';
 import { HealthController } from './health/health.controller.js';
@@ -55,6 +56,9 @@ import { WebhooksController } from './webhooks/webhooks.controller.js';
     SampleImagesController,
   ],
   providers: [
+    // Limits run before AccessGuard so abusive traffic never costs a profile lookup.
+    RateLimitGuard,
+    { provide: APP_GUARD, useExisting: RateLimitGuard },
     { provide: APP_GUARD, useClass: AccessGuard },
     { provide: APP_FILTER, useClass: JsonErrorFilter },
     AuthService,

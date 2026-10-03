@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import { SignJWT } from 'jose';
 import { Access } from './access.js';
 import { AppError } from '../common/errors.js';
+import { RateLimit, RateLimiter } from '../common/rate-limit.js';
 import { jsonBody, stringValue } from '../common/validation.js';
 import { env, envList, originAllowed } from '../config/env.js';
 import { Db } from '../db/db.service.js';
@@ -23,19 +24,9 @@ function serviceKey() {
 }
 
 /** Sign-ups per IP address per window; keeps bots from mass-creating accounts. */
-const SIGNUP_LIMIT = 5;
-const SIGNUP_WINDOW_MS = 60 * 60 * 1000;
-const signupAttempts = new Map<string, number[]>();
-export function resetSignupLimits() { signupAttempts.clear(); }
-function allowSignup(ip: string) {
-  const now = Date.now();
-  const recent = (signupAttempts.get(ip) ?? []).filter((t) => now - t < SIGNUP_WINDOW_MS);
-  if (recent.length >= SIGNUP_LIMIT) { signupAttempts.set(ip, recent); return false; }
-  recent.push(now);
-  signupAttempts.set(ip, recent);
-  if (signupAttempts.size > 10_000) signupAttempts.clear();
-  return true;
-}
+const signupLimiter = new RateLimiter();
+export function resetSignupLimits() { signupLimiter.reset(); }
+const allowSignup = (ip: string) => signupLimiter.hit(ip, 5, 60 * 60 * 1000).allowed;
 
 /** Local development only: sign in as a seeded account without Supabase (see scripts/dev-local.mjs). */
 function devLoginEnabled() {
@@ -82,6 +73,7 @@ export class AuthController {
   }
 
   /** Email + password, or (staging only) the admin username + password. */
+  @RateLimit({ limit: 10, windowMs: 60_000 })
   @Post('login')
   @HttpCode(200)
   async login(@Body() body: unknown) {
@@ -142,6 +134,7 @@ export class AuthController {
    * Authentication > URL Configuration > Redirect URLs in Supabase), where a new password is chosen.
    * Always answers OK for a well-formed address, so addresses can't be probed.
    */
+  @RateLimit({ limit: 5, windowMs: 60 * 60_000 })
   @Post('reset')
   @HttpCode(200)
   async reset(@Body() body: unknown) {
@@ -173,6 +166,7 @@ export class AuthController {
   }
 
   /** Sets a new password for the signed-in account. A reset link signs the person in first, then lands here. */
+  @RateLimit({ limit: 10, windowMs: 60_000 })
   @Post('password')
   @Access('user')
   @HttpCode(200)
@@ -198,6 +192,7 @@ export class AuthController {
     return { success: true };
   }
 
+  @RateLimit({ limit: 30, windowMs: 60_000 })
   @Post('refresh')
   @HttpCode(200)
   async refresh(@Body() body: unknown) {

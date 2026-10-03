@@ -2,6 +2,7 @@ import { Body, Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AppError } from '../common/errors.js';
+import { RateLimit } from '../common/rate-limit.js';
 import { email as validEmail, jsonBody, positiveInteger, stringValue, type Json } from '../common/validation.js';
 import { env, paypalIsLive, squareEnvIsProduction } from '../config/env.js';
 import { Db, type Row } from '../db/db.service.js';
@@ -45,12 +46,14 @@ export class CheckoutController {
     };
   }
 
+  @RateLimit({ limit: 60, windowMs: 60_000 })
   @Post('cart/quote')
   @HttpCode(200)
   async quote(@Body() body: unknown) {
     return { success: true, ...(await this.quotes.quote(parseQuoteInput(jsonBody(body)))) };
   }
 
+  @RateLimit({ limit: 10, windowMs: 60_000 })
   @Post('checkout/intent')
   @HttpCode(200)
   async intent(@CurrentUser() user: AppUser | null, @Body() body: unknown) {
@@ -82,6 +85,7 @@ export class CheckoutController {
     return { success: true, orderId: order.id, provider: 'square', amountCents: quote.totalCents, currency: 'CAD', idempotencyKey: `spin-hobby-${order.id}` };
   }
 
+  @RateLimit({ limit: 20, windowMs: 60_000 })
   @Post('paypal/capture')
   @HttpCode(200)
   async capturePayPal(@Body() body: unknown) {
@@ -103,6 +107,7 @@ export class CheckoutController {
     return { success: true, orderId: order.id, status };
   }
 
+  @RateLimit({ limit: 10, windowMs: 60_000 })
   @Post('square/payments')
   @HttpCode(200)
   async captureSquare(@Body() body: unknown) {

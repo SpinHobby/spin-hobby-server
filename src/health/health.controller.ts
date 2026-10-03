@@ -1,6 +1,7 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { stagingAdmin } from '../auth/staging-admin.js';
+import { SkipRateLimit } from '../common/rate-limit.js';
 import { env } from '../config/env.js';
 import { Db } from '../db/db.service.js';
 import { MigrationService } from '../migrations/migration.service.js';
@@ -57,6 +58,7 @@ async function timed<T>(fn: () => Promise<T>, ms = 12_000): Promise<T> {
   return Promise.race([fn(), new Promise<T>((_, reject) => setTimeout(() => reject(Object.assign(new Error('timeout'), { code: 'ETIMEDOUT' })), ms))]);
 }
 
+@SkipRateLimit()
 @Controller('health')
 export class HealthController {
   constructor(private readonly db: Db, private readonly migrations: MigrationService) {}

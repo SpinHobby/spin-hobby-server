@@ -1,6 +1,7 @@
 import { ArgumentsHost, Catch, ExceptionFilter, HttpException, Logger } from '@nestjs/common';
 import type { Response } from 'express';
 import { AppError } from './errors.js';
+import { reportError } from './sentry.js';
 
 /** Every error leaves as { success: false, error, code? } - the shape the storefront and admin expect. */
 @Catch()
@@ -21,7 +22,9 @@ export class JsonErrorFilter implements ExceptionFilter {
       return;
     }
     // Postgres constraint messages are useful to staff but not safe to echo verbatim; log them instead.
-    this.logger.error(exception instanceof Error ? exception.stack ?? exception.message : String(exception));
-    res.status(500).json({ success: false, error: 'An unexpected server error occurred.' });
+    const requestId = res.locals?.requestId as string | undefined;
+    this.logger.error(`${requestId ? `[${requestId}] ` : ''}${exception instanceof Error ? exception.stack ?? exception.message : String(exception)}`);
+    reportError(exception, requestId);
+    res.status(500).json({ success: false, error: 'An unexpected server error occurred.', ...(requestId ? { requestId } : {}) });
   }
 }

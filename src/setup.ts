@@ -1,6 +1,8 @@
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
+import helmet from 'helmet';
+import { requestContext } from './common/request-context.js';
 import { env, originAllowed } from './config/env.js';
 import { localUploadDir } from './storage/storage.service.js';
 
@@ -8,6 +10,9 @@ import { localUploadDir } from './storage/storage.service.js';
 export function configureApp(app: INestApplication) {
   // Base64 photo uploads (already resized in the browser) need more than the 100 kB default.
   (app as NestExpressApplication).useBodyParser('json', { limit: '8mb' });
+  app.use(requestContext());
+  // The storefront loads sample images from this origin, so the default same-origin resource policy would block them.
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   // Outside production, any localhost port may call the API (Vite picks ports dynamically).
   const localDev = env('NODE_ENV') !== 'production';
   const allowed = (origin: string) => originAllowed(origin) || (localDev && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
@@ -24,6 +29,7 @@ export function configureApp(app: INestApplication) {
     origin: (origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) => cb(null, !origin || allowed(origin)),
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'x-client-info', 'apikey', 'content-type', 'idempotency-key'],
+    exposedHeaders: ['x-request-id', 'retry-after'],
     maxAge: 86400,
   });
   const prefix = env('API_PREFIX');

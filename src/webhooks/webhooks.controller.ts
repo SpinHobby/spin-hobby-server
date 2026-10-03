@@ -2,11 +2,13 @@ import { Controller, Headers, HttpCode, Logger, Post, Req, type RawBodyRequest }
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
 import { AppError } from '../common/errors.js';
+import { SkipRateLimit } from '../common/rate-limit.js';
 import { stringValue } from '../common/validation.js';
 import { env } from '../config/env.js';
 import { Db, type Row } from '../db/db.service.js';
 import { PayPalClient } from '../payments/paypal.client.js';
 
+@SkipRateLimit()
 @Controller('webhooks')
 export class WebhooksController {
   private readonly logger = new Logger(WebhooksController.name);

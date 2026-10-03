@@ -1,9 +1,11 @@
 import { Controller, Get, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
+import { SkipRateLimit } from '../common/rate-limit.js';
 import { sampleImageFor } from './images.js';
 import { sampleImagesEnabled } from './sample.service.js';
 
 /** Pictures for the sample catalog, drawn on request: /sample-images/<product slug>.svg and banner-<n>.svg. */
+@SkipRateLimit()
 @Controller('sample-images')
 export class SampleImagesController {
   @Get(':file')
