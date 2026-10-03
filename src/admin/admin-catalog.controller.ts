@@ -7,6 +7,7 @@ import { jsonBody } from '../common/validation.js';
 import { categoryId } from './admin-categories.controller.js';
 import { CatalogService, type ProductQuery } from '../catalog/catalog.service.js';
 import { Db, type Row } from '../db/db.service.js';
+import { CatalogSearchService, type CatalogQuery } from './catalog-search.service.js';
 import { EmailService } from '../email/email.service.js';
 
 const EDITABLE = ['availability', 'release_month', 'order_by_date', 'series', 'character', 'manufacturer', 'jan_code',
@@ -16,7 +17,7 @@ const INTEGER_FIELDS = new Set(['compare_at_cents', 'max_per_customer', 'deposit
 @Controller('admin')
 @Access('staff')
 export class AdminCatalogController {
-  constructor(private readonly db: Db, private readonly catalog: CatalogService, private readonly log: AdminLog, private readonly email: EmailService) {}
+  constructor(private readonly db: Db, private readonly catalog: CatalogService, private readonly search: CatalogSearchService, private readonly log: AdminLog, private readonly email: EmailService) {}
 
   @Get('dashboard')
   async dashboard() {
@@ -53,6 +54,16 @@ export class AdminCatalogController {
         .sort((a, b) => String(a.order_by_date).localeCompare(String(b.order_by_date)))
         .slice(0, 8),
     };
+  }
+
+  /**
+   * Every item in the catalog (including retired, hidden and unsellable ones) with search, filters, sorting and paging,
+   * plus totals for the filter chips. The storefront-shaped GET products below only lists what shoppers can see.
+   */
+  @Get('catalog')
+  async catalogItems(@Query() query: CatalogQuery) {
+    const [page, counts] = await Promise.all([this.search.search(query), this.search.counts()]);
+    return { success: true, ...page, counts };
   }
 
   /** Storefront products plus the admin-only fields the edit drawer needs. */

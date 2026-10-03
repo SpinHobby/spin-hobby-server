@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AccountController } from './account/account.controller.js';
 import { AdminCatalogController } from './admin/admin-catalog.controller.js';
+import { CatalogSearchService } from './admin/catalog-search.service.js';
 import { AdminCategoriesController } from './admin/admin-categories.controller.js';
 import { AdminContentController } from './admin/admin-content.controller.js';
 import { AdminMerchController } from './admin/admin-merch.controller.js';
@@ -66,6 +67,7 @@ import { WebhooksController } from './webhooks/webhooks.controller.js';
     AdminLog,
     StoreService,
     CatalogService,
+    CatalogSearchService,
     QuoteService,
     OrdersService,
     PaymentsService,
