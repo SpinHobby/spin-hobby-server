@@ -231,4 +231,22 @@ describe('GET /admin/catalog', () => {
     const res = await http.get('/admin/products?limit=60').set('Authorization', staff.auth).expect(200);
     expect(res.body.items.map((i: any) => i.name)).not.toContain('Deleted In Square Keychain');
   });
+
+  describe('Square readiness', () => {
+    const readiness = async () => (await http.get('/admin/square/readiness').set('Authorization', staff.auth).expect(200)).body.readiness;
+
+    it('reports the last sync from Square items only', async () => {
+      expect((await readiness())).toMatchObject({ catalogAndInventorySyncing: true });
+      expect((await readiness()).lastSyncAt).toBeTruthy();
+    });
+
+    it('says nothing was synced when every item was added by hand or seeded', async () => {
+      await pglite.query("update public.catalog_products set source = 'manual'");
+      try {
+        expect(await readiness()).toMatchObject({ catalogAndInventorySyncing: false, lastSyncAt: null });
+      } finally {
+        await pglite.query("update public.catalog_products set source = 'square' where square_item_id <> 'A9'");
+      }
+    });
+  });
 });

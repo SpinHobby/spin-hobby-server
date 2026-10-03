@@ -202,7 +202,8 @@ export class AdminContentController {
   @Get('square/readiness')
   async readiness() {
     const [catalog, settings] = await Promise.all([
-      this.db.one<{ synced_at: string }>('select synced_at from public.catalog_products order by synced_at desc limit 1'),
+      // Only items that came from Square count: sample and hand-entered products carry a timestamp too, but nothing was synced.
+      this.db.one<{ synced_at: string | null }>("select max(synced_at) as synced_at from public.catalog_products where source = 'square'"),
       this.store.settings(),
     ]);
     return {
