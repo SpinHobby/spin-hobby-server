@@ -54,6 +54,10 @@ function defaultSlides(freeShippingDollars: number) {
   ].map(([headline, subheading], i) => ({ id: `default-${i}`, headline, subheading, image_url: null, link_url: null, sort_order: i, is_visible: true, is_default: true }));
 }
 
+const DEFAULT_EVENTS = ['Edmonton Collector Con', 'Calgary Expo', 'Otafest', 'Animethon', 'Edmonton Expo'].map((name, i) => ({
+  id: `default-${i}`, name, city: null, start_date: null, end_date: null, booth_info: null, is_visible: true, sort_order: i, is_default: true,
+}));
+
 @Injectable()
 export class CatalogService {
   constructor(private readonly db: Db) {}
@@ -150,11 +154,6 @@ export class CatalogService {
     return rows.filter(ok).map((r) => ({ id: r.id, parentId: r.parent_id, name: r.name, sortOrder: r.sort_order }));
   }
 
-  /** Public list for the Events page: visible events in date order, undated ones last. */
-  events() {
-    return this.db.many('select * from public.store_events where is_visible order by start_date asc nulls last, sort_order, created_at');
-  }
-
   async homepage() {
     const [slides, featured, preorders, ranking, newInStock, events, categories, settings, promo] = await Promise.all([
       this.db.many('select * from public.hero_slides where is_visible order by sort_order, created_at'),
@@ -174,13 +173,13 @@ export class CatalogService {
     const free = Number(settings?.free_shipping_threshold_cents ?? 7500) / 100;
     return {
       success: true as const,
-      // Until staff add their own, the storefront shows these welcome slides.
+      // Until staff add their own, the storefront shows these welcome slides and convention list.
       slides: slides.length ? slides : defaultSlides(free),
       featuredItems: featured.map(publicProduct),
       preorders: preorders.map(publicProduct),
       ranking: ranking.map(publicProduct),
       newInStock: newInStock.map(publicProduct),
-      events,
+      events: events.length ? events : DEFAULT_EVENTS,
       categories,
       // Numbers for the two promo cards beside the hero.
       promos: { closingSoon: promo?.closing_soon ?? 0, maxDiscountPct: promo?.max_discount ?? 0 },
