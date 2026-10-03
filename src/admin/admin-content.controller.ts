@@ -163,8 +163,10 @@ export class AdminContentController {
     const end = optionalString(p.endDate, 30);
     for (const d of [start, end]) if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new AppError('Dates must be YYYY-MM-DD.');
     if (start && end && end < start) throw new AppError('End date must be on or after the start date.');
-    return [stringValue(p.name, 'name', 160), optionalString(p.city, 120), optionalString(p.startDate, 30), optionalString(p.endDate, 30),
-      optionalString(p.boothInfo, 200), p.isVisible !== false, sortOrder(p.sortOrder)];
+    const link = optionalString(p.linkUrl, 500);
+    if (link && !/^https?:\/\/\S+$/i.test(link)) throw new AppError('The link must start with http:// or https://.');
+    return [stringValue(p.name, 'name', 160), optionalString(p.city, 120), start, end,
+      optionalString(p.boothInfo, 200), p.isVisible !== false, sortOrder(p.sortOrder), optionalString(p.venue, 200), link];
   }
 
   @Post('events')
@@ -172,8 +174,8 @@ export class AdminContentController {
   async createEvent(@CurrentUser() admin: AppUser, @Body() body: unknown) {
     const record = this.eventRecord(jsonBody(body));
     const event = await this.db.one(
-      `insert into public.store_events (name, city, start_date, end_date, booth_info, is_visible, sort_order)
-       values ($1, $2, $3, $4, $5, $6, $7) returning *`, record,
+      `insert into public.store_events (name, city, start_date, end_date, booth_info, is_visible, sort_order, venue, link_url)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning *`, record,
     );
     await this.log.write(admin.id, 'event.created', event!.id, { name: record[0] });
     return { success: true, event };
@@ -183,7 +185,8 @@ export class AdminContentController {
   async updateEvent(@CurrentUser() admin: AppUser, @Param('id', new ParseUUIDPipe()) id: string, @Body() body: unknown) {
     const record = this.eventRecord(jsonBody(body));
     const event = await this.db.one(
-      `update public.store_events set name = $2, city = $3, start_date = $4, end_date = $5, booth_info = $6, is_visible = $7, sort_order = $8
+      `update public.store_events set name = $2, city = $3, start_date = $4, end_date = $5, booth_info = $6, is_visible = $7, sort_order = $8,
+              venue = $9, link_url = $10
         where id = $1 returning *`, [id, ...record],
     );
     if (!event) throw notFound('Event');

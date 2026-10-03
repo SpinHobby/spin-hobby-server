@@ -34,6 +34,11 @@ export class CatalogController {
     return this.catalog.productPage({ ...query, status: 'in,low', sort: 'new' });
   }
 
+  @Get('events')
+  async events() {
+    return { success: true, events: await this.catalog.events() };
+  }
+
   @Get('categories')
   async categories() {
     return { success: true, categories: await this.catalog.categories() };

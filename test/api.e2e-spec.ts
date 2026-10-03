@@ -144,9 +144,9 @@ describe('storefront catalog', () => {
     expect(home.preorders.map((p: any) => p.id)).toEqual(['FIG1']);
     expect(home.newInStock.map((p: any) => p.id).sort()).toEqual(['CHB1', 'PRZ1']);
     expect(home.categories).toEqual([]);
-    // No slides/events configured yet: the server supplies the welcome defaults.
+    // No slides configured yet: the server supplies the welcome defaults. Events come from the migration's seed.
     expect(home.slides.map((sl: any) => sl.headline)).toEqual(['New arrivals every week', 'Free shipping on orders $75+', 'Join our Discord community']);
-    expect(home.events.map((e: any) => e.name)).toContain('Otafest');
+    expect(home.events.map((e: any) => e.name)).toContain('Calgary Expo');
     expect(home.promos).toEqual({ closingSoon: 1, maxDiscountPct: 19 }); // FIG1 closes in 20 days; CHB1 $64 vs $79
   });
 
@@ -590,6 +590,7 @@ describe('admin', () => {
     await http.delete(`/admin/homepage/slides/${a.id}`).set('Authorization', staff.auth).expect(200);
     expect((await http.get('/admin/homepage/slides').set('Authorization', staff.auth)).body.slides).toHaveLength(1);
 
+    await pglite.query('delete from public.store_events'); // start from none: the migration seeds the real schedule
     const ev = (await http.post('/admin/events').set('Authorization', staff.auth).send({ name: 'Otafest', city: 'Calgary', startDate: '2027-05-15', endDate: '2027-05-17' }).expect(200)).body.event;
     expect(ev).toMatchObject({ name: 'Otafest', city: 'Calgary', start_date: '2027-05-15', end_date: '2027-05-17', is_visible: true });
     await http.put(`/admin/events/${ev.id}`).set('Authorization', staff.auth).send({ name: 'Otafest 2027', startDate: '2027-05-15', endDate: '2027-05-10' })
