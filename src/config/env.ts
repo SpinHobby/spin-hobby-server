@@ -14,6 +14,12 @@ export function requireEnv(name: string, feature: string): string {
   return value;
 }
 
+/** How long an unpaid checkout keeps its items out of other shoppers' reach. */
+export const orderHoldMinutes = () => {
+  const minutes = Number(env('ORDER_HOLD_MINUTES') ?? 30);
+  return Number.isFinite(minutes) && minutes >= 1 ? Math.floor(minutes) : 30;
+};
+
 export const squareEnvIsProduction = () => (env('SQUARE_ENV') ?? env('SQUARE_ENVIRONMENT')) === 'production';
 export const paypalIsLive = () => env('PAYPAL_ENV') === 'live';
 

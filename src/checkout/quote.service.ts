@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../common/errors.js';
 import { positiveInteger, stringValue, type Json } from '../common/validation.js';
+import { orderHoldMinutes } from '../config/env.js';
 import { Db, type Queryable, type Row } from '../db/db.service.js';
 import { StoreService } from '../store/store.service.js';
 
@@ -31,7 +32,35 @@ export function parseQuoteInput(input: Json): QuoteInput {
 export class QuoteService {
   constructor(private readonly db: Db, private readonly store: StoreService) {}
 
-  async quote(input: QuoteInput, tx?: Queryable): Promise<Quote> {
+  /**
+   * Units of each variation that are spoken for but not yet reflected in its stock count:
+   *  - open checkouts (pending orders inside the hold window), and
+   *  - sales of Square-sourced items that Square hasn't reported back yet (paid after the stock
+   *    snapshot was last synced). Hand-entered items are decremented when paid, so they never appear here.
+   * `excludeOrderId` lets an order be re-checked against everyone else's holds.
+   */
+  async held(variationIds: string[], tx?: Queryable, excludeOrderId?: number): Promise<Map<string, number>> {
+    if (!variationIds.length) return new Map();
+    const rows = await this.db.many<Row>(
+      `select oi.square_variation_id as variation_id, sum(oi.quantity)::int as held
+         from public.order_items oi
+         join public.orders o on o.id = oi.order_id
+         left join public.inventory_snapshots i on i.square_variation_id = oi.square_variation_id
+         left join public.catalog_products p on p.square_item_id = oi.square_item_id
+        where oi.square_variation_id = any($1::text[])
+          and ($2::bigint is null or o.id <> $2::bigint)
+          and (
+            (o.status = 'pending' and o.created_at > now() - make_interval(mins => $3::int))
+            or (o.paid_at is not null and o.status not in ('pending', 'cancelled', 'refunded')
+                and coalesce(p.source, 'square') = 'square' and i.synced_at is not null and o.paid_at > i.synced_at)
+          )
+        group by 1`,
+      [variationIds, excludeOrderId ?? null, orderHoldMinutes()], tx,
+    );
+    return new Map(rows.map((r) => [r.variation_id as string, Number(r.held)]));
+  }
+
+  async quote(input: QuoteInput, tx?: Queryable, options: { excludeOrderId?: number } = {}): Promise<Quote> {
     const ids = input.items.map((i) => i.variationId);
     const rows = await this.db.many<Row>(
       `select v.square_variation_id, v.square_item_id, v.name as variation_name, v.price_cents, v.is_sellable,
@@ -47,6 +76,7 @@ export class QuoteService {
       [ids], tx,
     );
     if (rows.length !== ids.length) throw new AppError('One or more products are no longer available.');
+    const held = await this.held(ids, tx, options.excludeOrderId);
     const [settings, tax] = await Promise.all([
       this.store.settings(tx),
       this.db.one<{ rate: number }>('select rate from public.tax_rates where country = $1 and province = $2 and enabled', [input.country, input.province], tx),
@@ -65,7 +95,8 @@ export class QuoteService {
         continue;
       }
       if (closed) { warnings.push({ variationId, code: 'PREORDER_CLOSED', message: `${name} is no longer accepting pre-orders.` }); continue; }
-      const available = preorder || v.stock === null || v.stock === undefined ? requested : Math.min(requested, Math.max(0, Number(v.stock)));
+      const stockLeft = v.stock === null || v.stock === undefined ? null : Math.max(0, Number(v.stock) - (held.get(variationId) ?? 0));
+      const available = preorder || stockLeft === null ? requested : Math.min(requested, stockLeft);
       if (available < requested) {
         warnings.push({ variationId, code: available ? 'QTY_REDUCED' : 'OUT_OF_STOCK', message: available ? `Only ${available} of ${name} can be added.` : `${name} is sold out.` });
       }

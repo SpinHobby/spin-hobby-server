@@ -24,6 +24,7 @@ import { EmailService } from './email/email.service.js';
 import { HealthController } from './health/health.controller.js';
 import { MigrationService } from './migrations/migration.service.js';
 import { OpsController } from './ops/ops.controller.js';
+import { OrdersService } from './orders/orders.service.js';
 import { PayPalClient } from './payments/paypal.client.js';
 import { SampleImagesController } from './sample/sample.controller.js';
 import { SampleDataService } from './sample/sample.service.js';
@@ -61,6 +62,7 @@ import { WebhooksController } from './webhooks/webhooks.controller.js';
     StoreService,
     CatalogService,
     QuoteService,
+    OrdersService,
     PayPalClient,
     SquareClient,
     EmailService,
