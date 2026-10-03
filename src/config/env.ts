@@ -25,8 +25,8 @@ export const orderHoldMinutes = () => {
  * own proxy). Too low and every shopper looks like a Cloudflare address; too high and callers could spoof their IP.
  */
 export const trustProxyHops = () => {
-  const hops = Number(env('TRUST_PROXY_HOPS') ?? 2);
-  return Number.isInteger(hops) && hops >= 0 ? hops : 2;
+  const hops = Number(env('TRUST_PROXY_HOPS') ?? 1);
+  return Number.isInteger(hops) && hops >= 0 ? hops : 1;
 };
 
 export const squareEnvIsProduction = () => (env('SQUARE_ENV') ?? env('SQUARE_ENVIRONMENT')) === 'production';
