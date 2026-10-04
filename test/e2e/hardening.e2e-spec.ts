@@ -2,8 +2,8 @@ import type { PGlite } from '@electric-sql/pglite';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { RateLimitGuard } from '../src/common/guards/rate-limit.guard.js';
-import { createApp, createDatabase, JWT_SECRET } from './harness.js';
+import { RateLimitGuard } from '../../src/common/guards/rate-limit.guard.js';
+import { createApp, createDatabase, JWT_SECRET } from '../support/harness.js';
 
 let pglite: PGlite;
 let app: INestApplication;

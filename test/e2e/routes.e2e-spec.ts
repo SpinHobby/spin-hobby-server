@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { ModulesContainer } from '@nestjs/core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createApp, createDatabase } from './harness.js';
+import { createApp, createDatabase } from '../support/harness.js';
 
 /**
  * The public surface of the API: every route with who may call it and its rate limit.

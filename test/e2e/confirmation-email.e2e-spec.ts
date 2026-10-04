@@ -9,7 +9,7 @@ import {
   mockFetch,
   seedProduct,
   signUp,
-} from './harness.js';
+} from '../support/harness.js';
 
 let pglite: PGlite;
 let app: INestApplication;

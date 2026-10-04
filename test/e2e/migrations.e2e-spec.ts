@@ -2,11 +2,11 @@ import { mkdtempSync, readdirSync, writeFileSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Db } from '../src/database/db.service.js';
-import { MigrationService } from '../src/database/migrations/migration.service.js';
-import { createDatabase } from './harness.js';
+import { Db } from '../../src/database/db.service.js';
+import { MigrationService } from '../../src/database/migrations/migration.service.js';
+import { createDatabase } from '../support/harness.js';
 
-const SOURCE = join(import.meta.dirname, '..', 'supabase', 'migrations');
+const SOURCE = join(import.meta.dirname, '..', '..', 'supabase', 'migrations');
 const FILES = readdirSync(SOURCE)
   .filter((f) => f.endsWith('.sql'))
   .sort();

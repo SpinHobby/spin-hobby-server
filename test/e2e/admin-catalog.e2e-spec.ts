@@ -2,7 +2,7 @@ import type { PGlite } from '@electric-sql/pglite';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createApp, createDatabase, JWT_SECRET, seedProduct, signUp } from './harness.js';
+import { createApp, createDatabase, JWT_SECRET, seedProduct, signUp } from '../support/harness.js';
 
 let pglite: PGlite;
 let app: INestApplication;
