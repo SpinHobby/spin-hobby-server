@@ -4,7 +4,7 @@ import { SignJWT } from 'jose';
 import { Access } from './access.js';
 import { AppError } from '../../common/errors.js';
 import { RateLimit, RateLimiter } from '../../common/guards/rate-limit.guard.js';
-import { jsonBody, stringValue } from '../../common/validation.js';
+import { jsonBody, stringValue } from '../../common/validation/rules.js';
 import { env, envList, originAllowed } from '../../config/env.js';
 import { Db } from '../../database/db.service.js';
 import { AuthService } from './auth.service.js';

@@ -17,7 +17,7 @@ import {
   jsonBody,
   positiveInteger,
   stringValue,
-} from '../../common/validation.js';
+} from '../../common/validation/rules.js';
 import { env } from '../../config/env.js';
 import { Db } from '../../database/db.service.js';
 import { publicProduct } from '../catalog/product.mapper.js';

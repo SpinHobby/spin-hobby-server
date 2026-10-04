@@ -5,7 +5,12 @@ import type { AppUser } from '../auth/auth.service.js';
 import { AdminLog } from './admin-log.service.js';
 import { AppError, notFound } from '../../common/errors.js';
 import { env } from '../../config/env.js';
-import { jsonBody, optionalString, positiveInteger, stringValue } from '../../common/validation.js';
+import {
+  jsonBody,
+  optionalString,
+  positiveInteger,
+  stringValue,
+} from '../../common/validation/rules.js';
 import { Db, type Queryable, type Row } from '../../database/db.service.js';
 import { publicProduct } from '../catalog/product.mapper.js';
 import { StorageService } from '../../integrations/storage/storage.service.js';

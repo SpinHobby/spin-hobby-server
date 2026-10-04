@@ -3,7 +3,7 @@ import { Access, CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AdminLog } from './admin-log.service.js';
 import { AppError, notFound } from '../../common/errors.js';
-import { jsonBody } from '../../common/validation.js';
+import { jsonBody } from '../../common/validation/rules.js';
 import { categoryId } from './admin-categories.controller.js';
 import { CatalogService, type ProductQuery } from '../catalog/catalog.service.js';
 import { Db, type Row } from '../../database/db.service.js';

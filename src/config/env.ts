@@ -35,6 +35,10 @@ export const trustProxyHops = () => {
   return Number.isInteger(hops) && hops >= 0 ? hops : fallback;
 };
 
+/** The interactive API docs (Swagger UI at /docs) are for developers: on locally and on staging, never in production. */
+export const apiDocsEnabled = () =>
+  env('NODE_ENV') !== 'production' || env('APP_ENV') === 'staging';
+
 export const squareEnvIsProduction = () =>
   (env('SQUARE_ENV') ?? env('SQUARE_ENVIRONMENT')) === 'production';
 export const paypalIsLive = () => env('PAYPAL_ENV') === 'live';

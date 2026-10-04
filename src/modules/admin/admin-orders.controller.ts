@@ -3,7 +3,12 @@ import { Access, CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AdminLog } from './admin-log.service.js';
 import { AppError, notFound } from '../../common/errors.js';
-import { jsonBody, optionalString, positiveInteger, stringValue } from '../../common/validation.js';
+import {
+  jsonBody,
+  optionalString,
+  positiveInteger,
+  stringValue,
+} from '../../common/validation/rules.js';
 import { Db, type Row } from '../../database/db.service.js';
 import { EmailService } from '../../integrations/email/email.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';

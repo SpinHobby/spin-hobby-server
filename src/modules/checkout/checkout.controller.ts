@@ -9,7 +9,7 @@ import {
   positiveInteger,
   stringValue,
   type Json,
-} from '../../common/validation.js';
+} from '../../common/validation/rules.js';
 import { env, paypalIsLive, squareEnvIsProduction } from '../../config/env.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { StoreService } from '../store/store.service.js';

@@ -3,6 +3,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { requestContext } from './common/middleware/request-context.js';
+import { AppValidationPipe } from './common/validation/validation.pipe.js';
 import { env, originAllowed } from './config/env.js';
 import { localUploadDir } from './integrations/storage/storage.service.js';
 
@@ -44,6 +45,8 @@ export function configureApp(app: INestApplication) {
       maxAge: '1h',
     });
   }
+  // Request bodies are checked against their DTO class (see src/common/validation).
+  app.useGlobalPipes(new AppValidationPipe());
   app.enableShutdownHooks();
   return app;
 }

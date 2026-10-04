@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 import { Access } from '../auth/access.js';
 import { AppError } from '../../common/errors.js';
-import { jsonBody } from '../../common/validation.js';
+import { jsonBody } from '../../common/validation/rules.js';
 import { Db } from '../../database/db.service.js';
 import { AiUsageService } from '../cashier/ai-usage.service.js';
 import { CASHIER_AI_TOOL } from '../cashier/identify.service.js';

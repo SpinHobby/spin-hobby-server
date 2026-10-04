@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
-import { likePattern } from '../../common/validation.js';
+import { likePattern } from '../../common/validation/rules.js';
 import { Db, type Row } from '../../database/db.service.js';
 import { publicProduct, type PublicProduct } from './product.mapper.js';
 

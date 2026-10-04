@@ -11,7 +11,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
 import { AppError } from '../../common/errors.js';
 import { SkipRateLimit } from '../../common/guards/rate-limit.guard.js';
-import { stringValue } from '../../common/validation.js';
+import { stringValue } from '../../common/validation/rules.js';
 import { env } from '../../config/env.js';
 import { Db, type Row } from '../../database/db.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';

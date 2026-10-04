@@ -1,7 +1,8 @@
-import { AppError } from './errors.js';
+import { AppError } from '../errors.js';
 
-// Ported 1:1 from supabase/functions/_shared/http.ts so both servers reject the same input
-// with the same messages.
+// The rules for turning untrusted request input into clean values. Each one either returns the
+// cleaned value or throws an AppError with the message the shopper/staff member sees.
+// DTO classes use these through the decorators in decorators.ts.
 
 export type Json = Record<string, unknown>;
 

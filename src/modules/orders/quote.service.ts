@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
-import { positiveInteger, stringValue, type Json } from '../../common/validation.js';
+import { positiveInteger, stringValue, type Json } from '../../common/validation/rules.js';
 import { orderHoldMinutes } from '../../config/env.js';
 import { Db, type Queryable, type Row } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';

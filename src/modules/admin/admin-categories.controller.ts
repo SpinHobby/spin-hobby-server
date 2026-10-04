@@ -13,7 +13,7 @@ import { Access, CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AdminLog } from './admin-log.service.js';
 import { AppError, notFound } from '../../common/errors.js';
-import { jsonBody, stringValue } from '../../common/validation.js';
+import { jsonBody, stringValue } from '../../common/validation/rules.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

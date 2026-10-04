@@ -19,7 +19,7 @@ import {
   stringValue,
   boolValue,
   type Json,
-} from '../../common/validation.js';
+} from '../../common/validation/rules.js';
 import { env } from '../../config/env.js';
 import { Db, type Row } from '../../database/db.service.js';
 import { SquareSyncService } from '../square-sync/square-sync.service.js';
