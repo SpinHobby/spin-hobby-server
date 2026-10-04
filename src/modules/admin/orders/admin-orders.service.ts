@@ -5,7 +5,7 @@ import { Db } from '../../../database/db.service.js';
 import type { OrderRow, OrderWithDetails, OrderWithItems } from '../../../database/rows.js';
 import { EmailService } from '../../../integrations/email/email.service.js';
 import { PayPalClient } from '../../../integrations/paypal/paypal.client.js';
-import { SquareClient } from '../../../integrations/square/square.client.js';
+import { SquareHttpClient } from '../../../integrations/square/square-http.client.js';
 import { EVENTS_AS_JSON, ITEMS_AS_JSON } from '../../orders/order-sql.js';
 import { AdminLog } from '../admin-log.service.js';
 import type { RefundOrderDto, ShipOrderDto } from './dto/orders.dto.js';
@@ -33,7 +33,7 @@ export class AdminOrdersService {
     private readonly log: AdminLog,
     private readonly email: EmailService,
     private readonly paypal: PayPalClient,
-    private readonly square: SquareClient,
+    private readonly square: SquareHttpClient,
   ) {}
 
   /** Newest first, with their items; optionally only one status. */

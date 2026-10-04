@@ -180,7 +180,7 @@ also warns about badly formatted values (`config/validate-env.ts`).
 
 | Folder | Talks to |
 |---|---|
-| `square` | Square: a small HTTP client for payments, orders and sync, and the official SDK for the cashier tool's catalog edits |
+| `square` | Square, through two clients: `SquareHttpClient` (plain `fetch`: payments, orders, refunds, catalog sync) and `SquareCatalogClient` (the official SDK: the cashier tool's searches, item edits and stock counts) |
 | `paypal` | PayPal: create and capture orders, refunds, webhook verification |
 | `supabase` | Supabase Auth: sign in, sign up, password reset |
 | `storage` | Photo uploads (Supabase Storage, or the local disk in development) |

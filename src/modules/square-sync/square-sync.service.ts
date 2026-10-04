@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { AppError } from '../../common/errors.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 import type { CatalogProductRow } from '../../database/rows.js';
-import { SquareClient } from '../../integrations/square/square.client.js';
+import { SquareHttpClient } from '../../integrations/square/square-http.client.js';
 import {
   squareAccessToken,
   squareLocationId,
@@ -43,7 +43,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly db: Db,
-    private readonly square: SquareClient,
+    private readonly square: SquareHttpClient,
   ) {}
 
   onModuleInit() {

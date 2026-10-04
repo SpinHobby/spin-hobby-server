@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
-import { SquareCatalogService } from './square-catalog.service.js';
-import { SquareClient } from './square.client.js';
+import { SquareCatalogClient } from './square-catalog.client.js';
+import { SquareHttpClient } from './square-http.client.js';
 
-/** Everything that talks to Square: the HTTP client (payments, orders, sync) and the SDK catalog client (cashier tool). */
+/** Everything that talks to Square: `SquareHttpClient` (payments, orders, refunds, sync) and `SquareCatalogClient` (the official SDK, for the cashier tool). */
 @Module({
-  providers: [SquareClient, SquareCatalogService],
-  exports: [SquareClient, SquareCatalogService],
+  providers: [SquareHttpClient, SquareCatalogClient],
+  exports: [SquareHttpClient, SquareCatalogClient],
 })
 export class SquareModule {}

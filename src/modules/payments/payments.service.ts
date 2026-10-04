@@ -7,7 +7,7 @@ import type { OrderItemRow, OrderRow } from '../../database/rows.js';
 import { OrdersService, type OrderDetails } from '../orders/orders.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
 import { isManualId } from '../catalog/manual-id.js';
-import { SquareClient } from '../../integrations/square/square.client.js';
+import { SquareHttpClient } from '../../integrations/square/square-http.client.js';
 import { squareLocationId } from '../../config/square.config.js';
 
 export interface PaymentStarted {
@@ -33,7 +33,7 @@ export class PaymentsService {
     private readonly db: Db,
     private readonly orders: OrdersService,
     private readonly paypal: PayPalClient,
-    private readonly square: SquareClient,
+    private readonly square: SquareHttpClient,
   ) {}
 
   /** Creates the order (holding its stock) and prepares it for the store's active provider. */

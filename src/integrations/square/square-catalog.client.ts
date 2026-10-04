@@ -1,9 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { Currency, EcomVisibility, SquareClient, SquareEnvironment } from 'square';
+import { Currency, EcomVisibility, SquareClient as SquareSdk, SquareEnvironment } from 'square';
 import { processProductPhoto } from '../../modules/cashier/image-processing.js';
 import {
   CASHIER_CATEGORY_ID,
+  SQUARE_CATALOG_API_VERSION,
   squareAccessToken,
   squareBaseUrl,
   squareIsProduction,
@@ -13,17 +14,20 @@ import type { ExternalJson } from '../../common/external-json.js';
 
 /**
  * Square catalog calls for the cashier tool: searching items, creating and editing them, and stock counts.
- * (Checkout, refunds and the catalog sync use `SquareClient` instead.)
+ * (Checkout, refunds and the catalog sync use `SquareHttpClient` instead.)
+ *
+ * Most calls go through the official SDK. Creating and editing an item are the exception: they call the REST
+ * endpoint directly (see `batchUpsert`), because the SDK silently drops a field we need to send.
  */
 @Injectable()
-export class SquareCatalogService {
-  private readonly logger = new Logger(SquareCatalogService.name);
+export class SquareCatalogClient {
+  private readonly logger = new Logger(SquareCatalogClient.name);
 
   private warn(message: string, error?: unknown) {
     this.logger.warn(`${message} ${error instanceof Error ? error.message : (error ?? '')}`.trim());
   }
 
-  private readonly client = new SquareClient({
+  private readonly client = new SquareSdk({
     token: squareAccessToken(),
     environment: squareIsProduction() ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
   });
@@ -101,6 +105,53 @@ export class SquareCatalogService {
     return created.id;
   }
 
+  /** The categories an item belongs to: the shop category, plus the "not for the website" marker when hidden. */
+  private categoriesFor(categoryId: string | undefined, hidden: boolean) {
+    return [
+      ...(categoryId ? [{ id: categoryId }] : []),
+      ...(hidden && CASHIER_CATEGORY_ID ? [{ id: CASHIER_CATEGORY_ID }] : []),
+    ];
+  }
+
+  /**
+   * Creates or replaces one catalog ITEM through Square's REST endpoint and returns the saved object.
+   * The SDK's request serializer for catalog.batchUpsert doesn't know about `ecom_visibility` yet (a real,
+   * documented Square field that is present on read responses but silently stripped on write through the
+   * SDK), so this one write is made directly. `failureMessage` is used when Square gives no reason.
+   */
+  private async batchUpsert(object: Record<string, unknown>, failureMessage: string) {
+    const response = await fetch(`${squareBaseUrl()}/v2/catalog/batch-upsert`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${squareAccessToken()}`,
+        'Square-Version': SQUARE_CATALOG_API_VERSION,
+      },
+      body: JSON.stringify({ idempotency_key: randomUUID(), batches: [{ objects: [object] }] }),
+    });
+    const data: ExternalJson = await response.json();
+    if (!response.ok) throw new Error(data?.errors?.[0]?.detail || failureMessage);
+    return data.objects?.[0] || null;
+  }
+
+  /** Makes `photo` the item's primary picture. A failure is logged, never thrown: the item itself is already saved. */
+  private async attachPhoto(itemId: string, name: string, photo: Buffer) {
+    try {
+      const processedPhoto = await processProductPhoto(photo);
+      await this.client.catalog.images.create({
+        request: {
+          idempotencyKey: randomUUID(),
+          objectId: itemId,
+          isPrimary: true,
+          image: { type: 'IMAGE' as const, id: '#image', imageData: { name } },
+        },
+        imageFile: new Blob([new Uint8Array(processedPhoto)], { type: 'image/jpeg' }),
+      });
+    } catch (error) {
+      this.warn('Error attaching photo to Square catalog item:', error);
+    }
+  }
+
   // Create a single catalog item scoped to this location only (not present at
   // other locations the merchant may have). Used by the cashier tool for two
   // workflows: convention one-offs (hidden from the storefront, chargeable in
@@ -114,99 +165,46 @@ export class SquareCatalogService {
     categoryId?: string;
   }) {
     const locationId = squareLocationId();
-    const categories = [
-      ...(item.categoryId ? [{ id: item.categoryId }] : []),
-      ...(item.hidden && CASHIER_CATEGORY_ID ? [{ id: CASHIER_CATEGORY_ID }] : []),
-    ];
+    const categories = this.categoriesFor(item.categoryId, item.hidden);
 
-    // The SDK's request serializer for catalog.batchUpsert doesn't know about
-    // ecom_visibility yet (it's a real, documented Square API field - confirmed
-    // present on read responses - but gets silently stripped on write through
-    // the SDK). Call the REST endpoint directly for this one write instead.
-    const baseUrl = squareBaseUrl();
-
-    const upsertResponse = await fetch(`${baseUrl}/v2/catalog/batch-upsert`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${squareAccessToken()}`,
-        'Square-Version': '2025-10-16',
-      },
-      body: JSON.stringify({
-        idempotency_key: randomUUID(),
-        batches: [
-          {
-            objects: [
-              {
-                type: 'ITEM',
-                id: '#item',
-                present_at_all_locations: false,
-                present_at_location_ids: locationId ? [locationId] : undefined,
-                item_data: {
-                  name: item.name,
-                  description: item.description,
-                  // Square ignores ecom_visibility on write for this account (new
-                  // items auto-publish to Square Online regardless), and our own
-                  // storefront doesn't consult it anyway - it queries the catalog
-                  // directly. The real "hide from our website" signal is category
-                  // membership, filtered out in searchCatalog() below.
-                  ecom_visibility: item.hidden ? EcomVisibility.Hidden : EcomVisibility.Visible,
-                  categories: categories.length > 0 ? categories : undefined,
-                  reporting_category: item.categoryId ? { id: item.categoryId } : undefined,
-                  variations: [
-                    {
-                      type: 'ITEM_VARIATION',
-                      id: '#item-variation',
-                      present_at_all_locations: false,
-                      present_at_location_ids: locationId ? [locationId] : undefined,
-                      item_variation_data: {
-                        item_id: '#item',
-                        name: 'Regular',
-                        pricing_type: 'FIXED_PRICING',
-                        price_money: {
-                          amount: item.price,
-                          currency: Currency.Cad,
-                        },
-                      },
-                    },
-                  ],
-                },
+    const createdItem = await this.batchUpsert(
+      {
+        type: 'ITEM',
+        id: '#item',
+        present_at_all_locations: false,
+        present_at_location_ids: locationId ? [locationId] : undefined,
+        item_data: {
+          name: item.name,
+          description: item.description,
+          // Square ignores ecom_visibility on write for this account (new
+          // items auto-publish to Square Online regardless), and our own
+          // storefront doesn't consult it anyway - it queries the catalog
+          // directly. The real "hide from our website" signal is category
+          // membership (see CASHIER_CATEGORY_ID).
+          ecom_visibility: item.hidden ? EcomVisibility.Hidden : EcomVisibility.Visible,
+          categories: categories.length > 0 ? categories : undefined,
+          reporting_category: item.categoryId ? { id: item.categoryId } : undefined,
+          variations: [
+            {
+              type: 'ITEM_VARIATION',
+              id: '#item-variation',
+              present_at_all_locations: false,
+              present_at_location_ids: locationId ? [locationId] : undefined,
+              item_variation_data: {
+                item_id: '#item',
+                name: 'Regular',
+                pricing_type: 'FIXED_PRICING',
+                price_money: { amount: item.price, currency: Currency.Cad },
               },
-            ],
-          },
-        ],
-      }),
-    });
-
-    const upsertData: ExternalJson = await upsertResponse.json();
-    if (!upsertResponse.ok) {
-      throw new Error(upsertData?.errors?.[0]?.detail || 'Failed to create Square catalog item');
-    }
-
-    const createdItem = upsertData.objects?.[0] || null;
-
-    if (createdItem?.id && item.photo) {
-      try {
-        const processedPhoto = await processProductPhoto(item.photo.buffer);
-        await this.client.catalog.images.create({
-          request: {
-            idempotencyKey: randomUUID(),
-            objectId: createdItem.id,
-            isPrimary: true,
-            image: {
-              type: 'IMAGE' as const,
-              id: '#image',
-              imageData: { name: item.name },
             },
-          },
-          imageFile: new Blob([new Uint8Array(processedPhoto)], {
-            type: 'image/jpeg',
-          }),
-        });
-      } catch (error) {
-        this.warn('Error attaching photo to Square catalog item:', error);
-      }
-    }
+          ],
+        },
+      },
+      'Failed to create Square catalog item',
+    );
+
+    if (createdItem?.id && item.photo)
+      await this.attachPhoto(createdItem.id, item.name, item.photo.buffer);
 
     return createdItem;
   }
@@ -236,10 +234,7 @@ export class SquareCatalogService {
       throw new Error(`Item ${update.itemId} has no variation to update`);
     }
 
-    const categories = [
-      ...(update.categoryId ? [{ id: update.categoryId }] : []),
-      ...(update.hidden && CASHIER_CATEGORY_ID ? [{ id: CASHIER_CATEGORY_ID }] : []),
-    ];
+    const categories = this.categoriesFor(update.categoryId, update.hidden);
 
     // Square's catalog upsert fully replaces item_data - any field left out
     // of the request body (not just left `undefined` in JS) resets to
@@ -249,84 +244,38 @@ export class SquareCatalogService {
     // attach a replacement below).
     const imageIds = update.removePhoto || update.photo ? [] : existing.itemData?.imageIds || [];
 
-    const baseUrl = squareBaseUrl();
-
-    const upsertResponse = await fetch(`${baseUrl}/v2/catalog/batch-upsert`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${squareAccessToken()}`,
-        'Square-Version': '2025-10-16',
-      },
-      body: JSON.stringify({
-        idempotency_key: randomUUID(),
-        batches: [
-          {
-            objects: [
-              {
-                type: 'ITEM',
-                id: existing.id,
-                version: existing.version != null ? Number(existing.version) : undefined,
-                item_data: {
-                  name: update.name,
-                  description: update.description,
-                  ecom_visibility: update.hidden ? EcomVisibility.Hidden : EcomVisibility.Visible,
-                  categories: categories.length > 0 ? categories : undefined,
-                  reporting_category: update.categoryId ? { id: update.categoryId } : undefined,
-                  image_ids: imageIds,
-                  variations: [
-                    {
-                      type: 'ITEM_VARIATION',
-                      id: variation.id,
-                      version: variation.version != null ? Number(variation.version) : undefined,
-                      item_variation_data: {
-                        item_id: existing.id,
-                        name: 'Regular',
-                        pricing_type: 'FIXED_PRICING',
-                        price_money: {
-                          amount: update.price,
-                          currency: Currency.Cad,
-                        },
-                      },
-                    },
-                  ],
-                },
+    const updatedItem = await this.batchUpsert(
+      {
+        type: 'ITEM',
+        id: existing.id,
+        version: existing.version != null ? Number(existing.version) : undefined,
+        item_data: {
+          name: update.name,
+          description: update.description,
+          ecom_visibility: update.hidden ? EcomVisibility.Hidden : EcomVisibility.Visible,
+          categories: categories.length > 0 ? categories : undefined,
+          reporting_category: update.categoryId ? { id: update.categoryId } : undefined,
+          image_ids: imageIds,
+          variations: [
+            {
+              type: 'ITEM_VARIATION',
+              id: variation.id,
+              version: variation.version != null ? Number(variation.version) : undefined,
+              item_variation_data: {
+                item_id: existing.id,
+                name: 'Regular',
+                pricing_type: 'FIXED_PRICING',
+                price_money: { amount: update.price, currency: Currency.Cad },
               },
-            ],
-          },
-        ],
-      }),
-    });
-
-    const upsertData: ExternalJson = await upsertResponse.json();
-    if (!upsertResponse.ok) {
-      throw new Error(upsertData?.errors?.[0]?.detail || 'Failed to update Square catalog item');
-    }
-
-    const updatedItem = upsertData.objects?.[0] || null;
-
-    if (updatedItem?.id && update.photo) {
-      try {
-        const processedPhoto = await processProductPhoto(update.photo.buffer);
-        await this.client.catalog.images.create({
-          request: {
-            idempotencyKey: randomUUID(),
-            objectId: updatedItem.id,
-            isPrimary: true,
-            image: {
-              type: 'IMAGE' as const,
-              id: '#image',
-              imageData: { name: update.name },
             },
-          },
-          imageFile: new Blob([new Uint8Array(processedPhoto)], {
-            type: 'image/jpeg',
-          }),
-        });
-      } catch (error) {
-        this.warn('Error attaching photo to Square catalog item:', error);
-      }
-    }
+          ],
+        },
+      },
+      'Failed to update Square catalog item',
+    );
+
+    if (updatedItem?.id && update.photo)
+      await this.attachPhoto(updatedItem.id, update.name, update.photo.buffer);
 
     return updatedItem;
   }

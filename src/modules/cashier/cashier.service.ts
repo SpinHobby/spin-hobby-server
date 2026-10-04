@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError, notFound } from '../../common/errors.js';
-import { SquareCatalogService } from '../../integrations/square/square-catalog.service.js';
+import { SquareCatalogClient } from '../../integrations/square/square-catalog.client.js';
 import {
   categoryNames,
   classify,
@@ -38,7 +38,7 @@ const asCategories = (objects: unknown) => objects as SquareCategory[];
 export class CashierService {
   private readonly logger = new Logger(CashierService.name);
 
-  constructor(private readonly square: SquareCatalogService) {}
+  constructor(private readonly square: SquareCatalogClient) {}
 
   /** Creates a Square item (hidden by default), with its photo and starting stock. */
   async record(dto: RecordItemDto, file?: Upload) {

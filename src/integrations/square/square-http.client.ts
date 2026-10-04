@@ -3,9 +3,13 @@ import { AppError } from '../../common/errors.js';
 import { squareAccessToken, squareApiVersion, squareBaseUrl } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
 
-/** Thin REST client for the Square endpoints checkout, refunds and catalog sync use. */
+/**
+ * Square's REST API over plain `fetch`, for everything checkout needs: payments, orders, refunds and the
+ * catalog sync. (The cashier tool's catalog edits use the official SDK in `SquareCatalogClient` instead.)
+ * Every call is a POST with a JSON body; a Square error becomes an `AppError` carrying Square's own message.
+ */
 @Injectable()
-export class SquareClient {
+export class SquareHttpClient {
   async request(path: string, payload: unknown, idempotencyKey?: string): Promise<ExternalJson> {
     const token = squareAccessToken();
     if (!token) throw new AppError('Square is not configured.', 503);

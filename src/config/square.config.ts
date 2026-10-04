@@ -9,6 +9,12 @@ export const squareApplicationId = () => env('SQUARE_APPLICATION_ID');
 /** Pin the Square API version for the fetch-based client; unset uses the account's default. */
 export const squareApiVersion = () => env('SQUARE_API_VERSION');
 
+/**
+ * The Square API version the cashier tool's catalog writes are pinned to (they call the REST endpoint directly).
+ * Fixed on purpose: a new version could change how items are saved. Checkout uses `SQUARE_API_VERSION` instead.
+ */
+export const SQUARE_CATALOG_API_VERSION = '2025-10-16';
+
 /** `SQUARE_ENVIRONMENT` (or the older name `SQUARE_ENV`): `production` or `sandbox` (default sandbox). */
 const squareEnvironment = () => env('SQUARE_ENV') ?? env('SQUARE_ENVIRONMENT');
 export const squareIsProduction = () => squareEnvironment() === 'production';
