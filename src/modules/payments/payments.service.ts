@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { AppUser } from '../auth/auth.service.js';
-import type { QuoteInput } from '../checkout/quote.service.js';
+import type { QuoteInput } from '../orders/quote.service.js';
 import { AppError } from '../../common/errors.js';
 import { env } from '../../config/env.js';
 import { Db, type Row } from '../../database/db.service.js';

@@ -13,7 +13,7 @@ import {
 import { env, paypalIsLive, squareEnvIsProduction } from '../../config/env.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { StoreService } from '../store/store.service.js';
-import { parseQuoteInput, QuoteService } from './quote.service.js';
+import { parseQuoteInput, QuoteService } from '../orders/quote.service.js';
 
 @Controller()
 export class CheckoutController {

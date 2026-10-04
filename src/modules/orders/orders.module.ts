@@ -1,0 +1,13 @@
+import { Module } from '@nestjs/common';
+import { EmailModule } from '../../integrations/email/email.module.js';
+import { StoreModule } from '../store/store.module.js';
+import { OrdersService } from './orders.service.js';
+import { QuoteService } from './quote.service.js';
+
+/** Order lifecycle: pricing a cart (QuoteService) and creating, paying and expiring orders (OrdersService). */
+@Module({
+  imports: [StoreModule, EmailModule],
+  providers: [QuoteService, OrdersService],
+  exports: [QuoteService, OrdersService],
+})
+export class OrdersModule {}
