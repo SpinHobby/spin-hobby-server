@@ -18,7 +18,7 @@ function firstMessage(errors: ValidationError[]): string {
  *  - Fields the DTO doesn't declare are dropped, never rejected (the API has always ignored extras).
  *  - The first problem is reported as an AppError (HTTP 400, `{ success: false, error }`), the same
  *    shape every other error in the API uses.
- *  - A body that isn't a JSON object is refused outright.
+ *  - A body that isn't a JSON object is refused outright (unless the DTO sets `allowEmptyBody`).
  */
 export class AppValidationPipe extends ValidationPipe {
   constructor() {
@@ -32,6 +32,10 @@ export class AppValidationPipe extends ValidationPipe {
 
   override async transform(value: unknown, metadata: ArgumentMetadata) {
     const hasDto = metadata.type === 'body' && metadata.metatype && metadata.metatype !== Object;
+    // A DTO can say "no body is fine" with `static readonly allowEmptyBody = true` (see RefundOrderDto).
+    const allowsEmpty = (metadata.metatype as { allowEmptyBody?: boolean } | undefined)
+      ?.allowEmptyBody;
+    if (hasDto && allowsEmpty && (value === undefined || value === null)) value = {};
     if (hasDto && (!value || typeof value !== 'object' || Array.isArray(value))) {
       throw new AppError('Expected a JSON object.');
     }

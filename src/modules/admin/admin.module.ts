@@ -6,9 +6,9 @@ import { StorageModule } from '../../integrations/storage/storage.module.js';
 import { CatalogModule } from '../catalog/catalog.module.js';
 import { SquareSyncModule } from '../square-sync/square-sync.module.js';
 import { StoreModule } from '../store/store.module.js';
-import { AdminCategoriesController } from './admin-categories.controller.js';
 import { AdminLog } from './admin-log.service.js';
-import { AdminOrdersController } from './admin-orders.controller.js';
+import { AdminCategoriesController } from './categories/admin-categories.controller.js';
+import { AdminCategoriesService } from './categories/admin-categories.service.js';
 import { AdminDashboardController } from './dashboard/admin-dashboard.controller.js';
 import { AdminDashboardService } from './dashboard/admin-dashboard.service.js';
 import { AdminEventsController } from './events/admin-events.controller.js';
@@ -17,6 +17,8 @@ import { AdminHomepageController } from './homepage/admin-homepage.controller.js
 import { AdminHomepageService } from './homepage/admin-homepage.service.js';
 import { AdminMerchController } from './merch/admin-merch.controller.js';
 import { AdminMerchService } from './merch/admin-merch.service.js';
+import { AdminOrdersController } from './orders/admin-orders.controller.js';
+import { AdminOrdersService } from './orders/admin-orders.service.js';
 import { AdminProductsController } from './products/admin-products.controller.js';
 import { AdminProductsService } from './products/admin-products.service.js';
 import { CatalogSearchService } from './products/catalog-search.service.js';
@@ -53,6 +55,8 @@ import { AdminSquareService } from './square/admin-square.service.js';
     AdminDashboardService,
     AdminProductsService,
     AdminMerchService,
+    AdminCategoriesService,
+    AdminOrdersService,
     AdminSettingsService,
     AdminHomepageService,
     AdminEventsService,

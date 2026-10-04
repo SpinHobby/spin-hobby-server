@@ -1,16 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
+import { escapeHtml as escape } from '../../common/html.js';
 import { env } from '../../config/env.js';
 import type { Row } from '../../database/db.service.js';
 
 const money = (cents: unknown) => `$${(Number(cents) / 100).toFixed(2)}`;
-const escape = (value: unknown) =>
-  String(value ?? '').replace(
-    /[&<>"']/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[c] ?? c,
-  );
-
-/** Transactional email through Resend (same provider the edge function used). */
+/** Transactional email through Resend: order confirmations, shipping notices and restock alerts. */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
