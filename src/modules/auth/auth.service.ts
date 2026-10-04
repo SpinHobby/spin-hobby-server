@@ -65,9 +65,13 @@ export class AuthService {
     return { id: profile.id, email: profile.email, role, firstName: firstNameFrom(payload) };
   }
 
-  /** Revokes every session for this user via Supabase Auth. */
-  signOutEverywhere(authorization: string) {
-    return this.supabase.signOutEverywhere(authorization);
+  /**
+   * Signs the person out everywhere. Local dev sign-in has no Supabase session to revoke, so there the
+   * browser just drops its token.
+   */
+  async signOut(authorization: string) {
+    if (env('NODE_ENV') !== 'production' && env('AUTH_DEV_LOGIN') === 'true') return;
+    await this.supabase.signOutEverywhere(authorization);
   }
 }
 

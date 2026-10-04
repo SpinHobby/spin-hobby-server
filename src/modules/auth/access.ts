@@ -1,4 +1,5 @@
 import {
+  applyDecorators,
   CanActivate,
   createParamDecorator,
   ExecutionContext,
@@ -6,6 +7,7 @@ import {
   SetMetadata,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ApiBearerAuth } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { forbidden, unauthorized } from '../../common/errors.js';
 import { AuthService, type AppUser } from './auth.service.js';
@@ -13,7 +15,9 @@ import { AuthService, type AppUser } from './auth.service.js';
 /** public: anyone (user attached if signed in) · user: any signed-in account · staff: staff or owner · owner: owner only */
 export type AccessLevel = 'public' | 'user' | 'staff' | 'owner';
 const ACCESS_KEY = 'spinhobby:access';
-export const Access = (level: AccessLevel) => SetMetadata(ACCESS_KEY, level);
+/** Who may call a route. Anything above `public` is also shown as needing a bearer token in the API docs. */
+export const Access = (level: AccessLevel) =>
+  applyDecorators(SetMetadata(ACCESS_KEY, level), ...(level === 'public' ? [] : [ApiBearerAuth()]));
 
 export type AuthedRequest = Request & { user?: AppUser | null };
 
