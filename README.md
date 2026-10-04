@@ -31,6 +31,10 @@ npm install
 npm run dev:local     # API on http://localhost:8080 with a seeded in-process Postgres
 ```
 
+If `SQUARE_ACCESS_TOKEN` and `SQUARE_LOCATION_ID` are in your `.env` (a Square **sandbox** token works), `dev:local`
+also syncs the Square catalog each time it starts, so those items appear next to the samples (the database lives in
+memory, so it repeats on every start). Set `DEV_SYNC_SQUARE=false` to skip it.
+
 Sign in as `owner@spinhobby.test` / `spinhobby` (or `staff@spinhobby.test`). Then run the
 frontend with `VITE_API_URL=http://localhost:8080 npm run dev` in the spin-hobby repo.
 
