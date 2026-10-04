@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { AuthService, type AppUser } from './auth.service.js';
+import type { ExternalJson } from '../../common/external-json.js';
 
 /** What every successful sign-in returns; the storefront keeps it in localStorage. */
 export interface Session {
@@ -17,7 +18,7 @@ export interface Session {
 export class SessionService {
   constructor(private readonly auth: AuthService) {}
 
-  async fromTokens(data: Record<string, any>): Promise<Session> {
+  async fromTokens(data: ExternalJson): Promise<Session> {
     const user = await this.auth.userFromAuthorization(`Bearer ${data.access_token}`);
     if (!user) throw new AppError('Your account profile could not be loaded.', 500);
     return {

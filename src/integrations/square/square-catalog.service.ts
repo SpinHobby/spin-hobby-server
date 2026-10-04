@@ -9,6 +9,7 @@ import {
   squareIsProduction,
   squareLocationId,
 } from '../../config/square.config.js';
+import type { ExternalJson } from '../../common/external-json.js';
 
 // Ported from the legacy Express server (src/services/square.ts): only the methods the
 // cashier tool uses. Behaviour is unchanged.
@@ -75,7 +76,9 @@ export class SquareCatalogService {
   async getOrCreateCategoryId(name: string): Promise<string> {
     const existing = await this.listCategories();
     const match = existing.find(
-      (c: any) => c.categoryData?.name?.toLowerCase() === name.toLowerCase(),
+      (c) =>
+        (c as { categoryData?: { name?: string } }).categoryData?.name?.toLowerCase() ===
+        name.toLowerCase(),
     );
     if (match?.id) return match.id;
 
@@ -178,7 +181,7 @@ export class SquareCatalogService {
       }),
     });
 
-    const upsertData: any = await upsertResponse.json();
+    const upsertData: ExternalJson = await upsertResponse.json();
     if (!upsertResponse.ok) {
       throw new Error(upsertData?.errors?.[0]?.detail || 'Failed to create Square catalog item');
     }
@@ -298,7 +301,7 @@ export class SquareCatalogService {
       }),
     });
 
-    const upsertData: any = await upsertResponse.json();
+    const upsertData: ExternalJson = await upsertResponse.json();
     if (!upsertResponse.ok) {
       throw new Error(upsertData?.errors?.[0]?.detail || 'Failed to update Square catalog item');
     }

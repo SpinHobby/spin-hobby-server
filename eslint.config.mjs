@@ -25,8 +25,8 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
-      // Row types are being tightened (see src/database/rows.ts); until then `any` is a warning, not an error.
-      '@typescript-eslint/no-explicit-any': 'warn',
+      // Type database rows in src/database/rows.ts and outside payloads as ExternalJson; `any` stays out of the app.
+      '@typescript-eslint/no-explicit-any': 'error',
     },
   },
   {

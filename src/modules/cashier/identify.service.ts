@@ -52,13 +52,14 @@ const IDENTIFY_SCHEMA = {
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 /** Clamps a model- or form-supplied crop into a safe, always-in-bounds box (or drops it). */
-export function sanitizeArtworkCrop(raw: any): ArtworkCrop | undefined {
+export function sanitizeArtworkCrop(raw: unknown): ArtworkCrop | undefined {
   if (!raw || typeof raw !== 'object') return undefined;
-  const x = clamp(Number(raw.x), 0, 0.95);
-  const y = clamp(Number(raw.y), 0, 0.95);
-  const width = clamp(Number(raw.width), 0.05, 1 - x);
-  const height = clamp(Number(raw.height), 0.05, 1 - y);
-  const rotationDegrees = clamp(Number(raw.rotationDegrees) || 0, -45, 45);
+  const crop = raw as Record<string, unknown>;
+  const x = clamp(Number(crop.x), 0, 0.95);
+  const y = clamp(Number(crop.y), 0, 0.95);
+  const width = clamp(Number(crop.width), 0.05, 1 - x);
+  const height = clamp(Number(crop.height), 0.05, 1 - y);
+  const rotationDegrees = clamp(Number(crop.rotationDegrees) || 0, -45, 45);
   if (![x, y, width, height, rotationDegrees].every(Number.isFinite)) return undefined;
   return { x, y, width, height, rotationDegrees };
 }

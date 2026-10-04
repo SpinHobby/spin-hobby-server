@@ -27,7 +27,7 @@ export class JsonErrorFilter implements ExceptionFilter {
           ? 'Route not found.'
           : typeof body === 'string'
             ? body
-            : ((body as any)?.message ?? exception.message);
+            : ((body as { message?: string } | null)?.message ?? exception.message);
       res.status(status).json({
         success: false,
         error: Array.isArray(message) ? message.join(' ') : String(message),

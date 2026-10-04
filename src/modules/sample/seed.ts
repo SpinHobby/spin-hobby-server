@@ -13,6 +13,7 @@ import {
 
 /** Anything with a pg-style query(sql, params) returning { rows }: pg.Client, PGlite, or the API's driver. */
 export interface SampleDb {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- rows of an ad-hoc seed query
   query(sql: string, params?: unknown[]): Promise<{ rows: Record<string, any>[] }>;
 }
 

@@ -57,6 +57,8 @@ export function createPgDriver(connectionString: string): DbDriver {
   });
   // Idle client errors (e.g. the pooler restarting) must not crash the process.
   pool.on('error', (error) => new Logger('Db').error(`idle client error: ${error.message}`));
+  // The pg driver's own types do not line up with our generic `query<T>`, so this adapter is where the casts live.
+  /* eslint-disable @typescript-eslint/no-explicit-any */
   return {
     query: (sql, params) => pool.query(sql, params as any[]) as any,
     script: async (sql) => {
@@ -83,6 +85,7 @@ export function createPgDriver(connectionString: string): DbDriver {
     },
     close: () => pool.end(),
   };
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 }
 
 /** Used when DATABASE_URL is missing: the API still boots so /health can explain what's wrong. */

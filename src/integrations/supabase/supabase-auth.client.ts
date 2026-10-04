@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { supabasePublishableKey, supabaseServiceKey, supabaseSignOutKey, supabaseUrl } from '../../config/supabase.config.js';
+import type { ExternalJson } from '../../common/external-json.js';
 
-type Json = Record<string, any>;
+type Json = ExternalJson;
 
 /** The message Supabase attached to an error response, whichever field it used. */
 const messageOf = (data: Json) => String(data.msg ?? data.message ?? data.error_description ?? '');

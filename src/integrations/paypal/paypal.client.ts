@@ -6,6 +6,7 @@ import {
   paypalClientSecret,
   paypalWebhookId,
 } from '../../config/paypal.config.js';
+import type { ExternalJson } from '../../common/external-json.js';
 
 const base = () => paypalBaseUrl();
 const dollars = (cents: number) => (cents / 100).toFixed(2);
@@ -66,7 +67,7 @@ export class PayPalClient {
       `spin-hobby-capture-${orderId}`,
     );
     if (!res.ok) throw new AppError('PayPal could not capture this payment.', 502);
-    return (await res.json()) as any;
+    return (await res.json()) as ExternalJson;
   }
 
   async refund(captureId: string, orderId: number, amountCents: number) {
