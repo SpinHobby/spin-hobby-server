@@ -1,0 +1,36 @@
+# Runs the same checks you run locally (see CONTRIBUTING.md) on every pull request and on pushes to the
+# long-lived branches, so a broken build is caught before it reaches Render.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging]
+
+# A newer push to the same branch makes the older run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # Same npm major as the Dockerfile and our laptops: Node 22's bundled npm 10 rejects lockfiles written by npm 11.
+      - run: npm install -g npm@11
+      - run: npm ci
+
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm test
+      - run: npm run test:e2e
+      - run: npm run build
