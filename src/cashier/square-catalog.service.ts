@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { Currency, EcomVisibility, SquareClient, SquareEnvironment } from "square";
 import { env, squareEnvIsProduction } from "../config/env.js";
@@ -14,8 +14,10 @@ export const CASHIER_CATEGORY_ID = env("SQUARE_CASHIER_CATEGORY_ID") || "LNBIPZ6
 
 @Injectable()
 export class SquareCatalogService {
+  private readonly logger = new Logger(SquareCatalogService.name);
+
   private warn(message: string, error?: unknown) {
-    console.warn(`[SquareCatalog] ${message}`, error instanceof Error ? error.message : error ?? "");
+    this.logger.warn(`${message} ${error instanceof Error ? error.message : (error ?? "")}`.trim());
   }
 
   private readonly client = new SquareClient({

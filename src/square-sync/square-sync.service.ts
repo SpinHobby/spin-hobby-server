@@ -30,7 +30,10 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const minutes = Number(env('SQUARE_SYNC_INTERVAL_MINUTES') ?? 0);
     if (minutes > 0) {
-      this.timer = setInterval(() => this.run().catch((e) => this.logger.error(`Scheduled Square sync failed: ${e.message}`)), minutes * 60_000);
+      this.timer = setInterval(
+        () => void this.run().catch((e) => this.logger.error(`Scheduled Square sync failed: ${e.message}`)),
+        minutes * 60_000,
+      );
       this.timer.unref();
       this.logger.log(`Square sync scheduled every ${minutes} min.`);
     }

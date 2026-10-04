@@ -1,4 +1,8 @@
+import { Logger } from "@nestjs/common";
 import sharp from "sharp";
+
+const logger = new Logger("ImageProcessing");
+const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const CANVAS_SIZE = 1200;
 // Matches the storefront's off-white page background ($neutral-50) so product
@@ -65,7 +69,7 @@ export async function cropToArtworkRegion(
 
     return await working.toBuffer();
   } catch (error) {
-    console.error("Error cropping artwork region, using original photo:", error);
+    logger.error(`Error cropping artwork region, using original photo: ${errorText(error)}`);
     return buffer;
   }
 }
@@ -91,7 +95,7 @@ export async function processProductPhoto(buffer: Buffer): Promise<Buffer> {
       .jpeg({ quality: 90 })
       .toBuffer();
   } catch (error) {
-    console.error("Error processing product photo, using original:", error);
+    logger.error(`Error processing product photo, using original: ${errorText(error)}`);
     return buffer;
   }
 }

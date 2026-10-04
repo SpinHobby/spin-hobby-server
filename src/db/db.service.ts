@@ -50,7 +50,7 @@ export function createPgDriver(connectionString: string): DbDriver {
     ssl: env('DATABASE_SSL') === 'false' ? undefined : { rejectUnauthorized: false },
   });
   // Idle client errors (e.g. the pooler restarting) must not crash the process.
-  pool.on('error', (error) => console.error(`[Db] idle client error: ${error.message}`));
+  pool.on('error', (error) => new Logger('Db').error(`idle client error: ${error.message}`));
   return {
     query: (sql, params) => pool.query(sql, params as any[]) as any,
     script: async (sql) => { await pool.query(sql); },

@@ -3,7 +3,7 @@
  * coloured by series, a simple illustration of what the product is, the series and product
  * name, and a SAMPLE tag. Served by SampleImagesController at /sample-images/<slug>.svg.
  */
-import { sampleProductBySlug, type Kind, type SampleProduct } from './catalog.js';
+import { sampleProductBySlug, type SampleProduct } from './catalog.js';
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 

@@ -2,7 +2,7 @@ import type { PGlite } from '@electric-sql/pglite';
 import type { INestApplication } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import request from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { resetSignupLimits } from '../src/auth/auth.controller.js';
 import { createApp, createDatabase, JWT_SECRET, mockFetch, seedProduct, signUp, tokenFor } from './harness.js';
 
