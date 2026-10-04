@@ -71,7 +71,7 @@ The template asks for these. In short:
 Ask for a second pair of eyes before changing any of these. They involve money or can't be undone:
 
 - **Payments and refunds** (`modules/payments`, `modules/checkout`, `integrations/paypal`, `integrations/square`)
-- **Prices, tax and shipping** (`modules/orders/quote.service.ts`)
+- **Prices, tax and shipping** (`modules/orders/quote.service.ts`, `quote-math.ts`)
 - **Stock and holds** (`modules/orders`, `modules/square-sync`)
 - **Database migrations** (`supabase/migrations`): they run on real data when the server starts
 - **Who may do what** (`@Access(...)` levels, `modules/auth`)

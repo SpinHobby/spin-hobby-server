@@ -2,13 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { orderHoldMinutes } from '../../config/orders.config.js';
 import { Db, type Queryable } from '../../database/db.service.js';
-import type {
-  CatalogProductRow,
-  CatalogVariationRow,
-  InventorySnapshotRow,
-  ProductMetadataRow,
-} from '../../database/rows.js';
 import { StoreService } from '../store/store.service.js';
+import { cartTotals, priceCartLine, type QuoteRow } from './quote-math.js';
 
 export interface QuoteInput {
   items: { variationId: string; quantity: number }[];
@@ -41,20 +36,7 @@ export interface Quote {
   warnings: QuoteWarning[];
 }
 
-/** Server-side price/stock/tax check. Never trusts prices from the browser. */
-/** What the quote query selects: a variation with its product, availability rules and stock. */
-type QuoteRow = Pick<
-  CatalogVariationRow,
-  'square_variation_id' | 'square_item_id' | 'price_cents' | 'is_sellable'
-> &
-  Pick<CatalogProductRow, 'is_active' | 'is_visible'> &
-  Pick<ProductMetadataRow, 'availability' | 'order_by_date' | 'max_per_customer'> & {
-    variation_name: string | null;
-    product_name: string;
-    stock: InventorySnapshotRow['quantity'];
-    image_url: string | null;
-  };
-
+/** Server-side price/stock/tax check. Never trusts prices from the browser. The rules live in quote-math.ts. */
 @Injectable()
 export class QuoteService {
   constructor(
@@ -130,77 +112,14 @@ export class QuoteService {
     const byId = new Map(rows.map((r) => [r.square_variation_id, r]));
     const lines: QuoteLine[] = [];
     const warnings: QuoteWarning[] = [];
-    for (const { variationId, quantity: requested } of input.items) {
-      const v = byId.get(variationId)!;
-      const name = v.product_name as string;
-      const preorder = v.availability === 'preorder' || v.availability === 'backorder';
-      const closed =
-        preorder && v.order_by_date && new Date(v.order_by_date).getTime() < Date.now();
-      if (!v.is_active || !v.is_visible || v.availability === 'hidden' || !v.is_sellable) {
-        warnings.push({
-          variationId,
-          code: 'OUT_OF_STOCK',
-          message: `${v.variation_name ?? name ?? 'This item'} is unavailable.`,
-        });
-        continue;
-      }
-      if (closed) {
-        warnings.push({
-          variationId,
-          code: 'PREORDER_CLOSED',
-          message: `${name} is no longer accepting pre-orders.`,
-        });
-        continue;
-      }
-      const stockLeft =
-        v.stock === null || v.stock === undefined
-          ? null
-          : Math.max(0, Number(v.stock) - (held.get(variationId) ?? 0));
-      const available = preorder || stockLeft === null ? requested : Math.min(requested, stockLeft);
-      if (available < requested) {
-        warnings.push({
-          variationId,
-          code: available ? 'QTY_REDUCED' : 'OUT_OF_STOCK',
-          message: available
-            ? `Only ${available} of ${name} can be added.`
-            : `${name} is sold out.`,
-        });
-      }
-      if (!available) continue;
-      if (v.max_per_customer && available > v.max_per_customer) {
-        warnings.push({
-          variationId,
-          code: 'LIMIT_EXCEEDED',
-          message: `${name} is limited to ${v.max_per_customer} per customer.`,
-        });
-        continue;
-      }
-      const unit = Number(v.price_cents);
-      lines.push({
-        variationId,
-        itemId: v.square_item_id,
-        name,
-        imageUrl: v.image_url ?? null,
-        unitPriceCents: unit,
-        quantity: available,
-        isPreorder: preorder,
-        lineCents: unit * available,
-      });
+    for (const { variationId, quantity } of input.items) {
+      const priced = priceCartLine(byId.get(variationId)!, quantity, held.get(variationId) ?? 0);
+      warnings.push(...priced.warnings);
+      if (priced.line) lines.push(priced.line);
     }
-    const subtotalCents = lines.reduce((t, l) => t + l.lineCents, 0);
-    const shippingCents =
-      input.shippingMethod === 'express'
-        ? Number(settings.shipping_express_cents)
-        : subtotalCents >= Number(settings.free_shipping_threshold_cents)
-          ? 0
-          : Number(settings.shipping_standard_cents);
-    const taxCents = Math.round((subtotalCents + shippingCents) * Number(tax?.rate ?? 0));
     return {
       lines,
-      subtotalCents,
-      shippingCents,
-      taxCents,
-      totalCents: subtotalCents + shippingCents + taxCents,
+      ...cartTotals(lines, input.shippingMethod, settings, Number(tax?.rate ?? 0)),
       currency: 'CAD',
       warnings,
     };

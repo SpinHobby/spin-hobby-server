@@ -47,7 +47,7 @@ scripts/             dev-local.mjs (npm run dev:local) and the staging seed scri
 |---|---|
 | `catalog` | The public shop: product lists, filters, homepage content, categories |
 | `checkout` | The shopper's checkout routes: config, price a cart, start a payment |
-| `orders` | An order's life: price it (`QuoteService`), create it, hold stock, mark paid, expire it |
+| `orders` | An order's life: price it (`QuoteService`; the pricing rules are plain functions in `quote-math.ts`), create it, hold stock, mark paid, expire it |
 | `payments` | Charges the card through PayPal or Square and tells `orders` what happened |
 | `webhooks` | Messages Square and PayPal send *to us* (payment finished, stock changed) |
 | `square-sync` | Copies the Square catalog and stock into our database |
