@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { explainDbError } from './health.controller.js';
+import { explainDbError } from './db-error.js';
 
 describe('explainDbError', () => {
   it('maps connection problems to safe, actionable reasons', () => {
