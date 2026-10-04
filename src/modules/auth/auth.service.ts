@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { env, envList } from '../../config/env.js';
 import { Db } from '../../database/db.service.js';
+import { SupabaseAuthClient } from '../../integrations/supabase/supabase-auth.client.js';
 
 export type AppRole = 'customer' | 'staff' | 'owner';
 export interface AppUser {
@@ -21,7 +22,10 @@ export class AuthService {
   private readonly logger = new Logger(AuthService.name);
   private jwks?: ReturnType<typeof createRemoteJWKSet>;
 
-  constructor(private readonly db: Db) {}
+  constructor(
+    private readonly db: Db,
+    private readonly supabase: SupabaseAuthClient,
+  ) {}
 
   private async verify(token: string): Promise<JWTPayload | null> {
     const secret = env('SUPABASE_JWT_SECRET');
@@ -62,19 +66,8 @@ export class AuthService {
   }
 
   /** Revokes every session for this user via Supabase Auth. */
-  async signOutEverywhere(authorization: string) {
-    const supabaseUrl = env('SUPABASE_URL')?.replace(/\/$/, '');
-    const apiKey =
-      env('SUPABASE_PUBLISHABLE_KEY') ??
-      env('SUPABASE_ANON_KEY') ??
-      env('SUPABASE_SERVICE_ROLE_KEY');
-    if (!supabaseUrl || !apiKey)
-      throw new Error('SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required for sign-out.');
-    const res = await fetch(`${supabaseUrl}/auth/v1/logout?scope=global`, {
-      method: 'POST',
-      headers: { Authorization: authorization, apikey: apiKey },
-    });
-    if (!res.ok && res.status !== 401) throw new Error(`Supabase sign-out failed (${res.status}).`);
+  signOutEverywhere(authorization: string) {
+    return this.supabase.signOutEverywhere(authorization);
   }
 }
 
