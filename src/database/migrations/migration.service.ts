@@ -2,8 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Db } from '../db.service.js';
-import { databaseUrl, migrateOnStart } from '../../config/database.config.js';
-import { migrationsDir } from '../../config/database.config.js';
+import { databaseUrl, migrateOnStart, migrationsDir } from '../../config/database.config.js';
 
 export interface MigrationStatus {
   state: 'ok' | 'skipped' | 'failed' | 'not-run';

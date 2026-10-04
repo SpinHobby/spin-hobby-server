@@ -47,7 +47,7 @@ on a new API route.
 4. **Check it**: `https://spin-hobby-server-staging.onrender.com/health` should say
    `"environment":"staging"` with every check `ok`.
 5. **Sample data**: nothing to do. The first time the staging API starts against an empty catalog it
-   loads the sample set from `src/sample` (about 110 products across every category and status, with
+   loads the sample set from `src/modules/sample` (about 110 products across every category and status, with
    pictures the API draws itself at `/sample-images/...`, homepage banners and a month of orders).
    `SAMPLE_DATA=false` on the service turns this off. To reload after changing the sample data:
    ```sh

@@ -1,135 +1,115 @@
 # Spin Hobby server
 
-NestJS API for spinhobby.com. It is the **only backend**: the storefront, checkout and staff
-admin in [`SpinHobby/spin-hobby`](https://github.com/SpinHobby/spin-hobby) talk to it and
-nothing else. Sign-in, catalog filtering, category trees, checkout, payments, Square sync,
-the cashier tool and all admin actions run here.
+The API behind [spinhobby.com](https://spinhobby.com): the shop, checkout, payments, the staff
+admin and the in-store cashier tool all talk to this one server. It is written in
+[NestJS](https://nestjs.com) (TypeScript). The website lives in a separate repo,
+[`SpinHobby/spin-hobby`](https://github.com/SpinHobby/spin-hobby).
 
 ```
-browser ──► spin-hobby API (this repo) ──► Supabase Postgres · Supabase Auth · Supabase Storage
-                                        └─► Square · PayPal · Resend · Claude
+browser ──► this API ──► Postgres (Supabase)   products, orders, accounts
+                    ├──► Supabase Auth         sign-in
+                    ├──► Square                catalog, stock, card payments
+                    ├──► PayPal                payments
+                    ├──► Resend                emails
+                    └──► Claude                the cashier's photo identification
 ```
 
-The Supabase edge functions that used to do this are retired (they and the old Express server
-are in git history). Supabase is still the database, identity provider and file storage;
-`supabase/migrations` is the schema.
+**New here? Read [`docs/INTERNS.md`](docs/INTERNS.md) first.** It is a friendly, step-by-step
+guide for your first day and first week.
+
+## Run it on your computer (5 minutes)
+
+You need [Node.js 22 or newer](https://nodejs.org). No Docker, no accounts, no passwords.
+
+```sh
+npm install
+npm run dev:local
+```
+
+That builds the server, starts a throw-away database filled with sample products and orders, and
+starts the API:
 
 | | |
 |---|---|
-| Framework | NestJS 12 (ES modules), Node 22+ |
-| Database | Supabase Postgres, schema in [`supabase/migrations`](supabase/migrations) |
-| Sign-in | `POST /auth/login` etc., backed by Supabase Auth |
-| Payments | PayPal or Square (switchable in Admin → Settings) |
-| Catalog | Square sync + hand-entered products, shop category tree |
-| Email | Resend (restock alerts, shipping notices) |
-| Cashier AI | Claude (`claude-opus-5`) with a monthly budget cap |
+| API | http://localhost:8080 |
+| Interactive API docs | http://localhost:8080/docs (try any endpoint from the browser) |
+| Health check | http://localhost:8080/health |
+| Owner login | `owner@spinhobby.test` / `spinhobby` |
+| Staff login | `staff@spinhobby.test` / `spinhobby` |
 
-## Local development (no Docker, no Supabase account)
+The database is kept in memory, so every start begins from the same clean sample data.
+To see the website too, start the frontend repo with `VITE_API_URL=http://localhost:8080 npm run dev`.
 
-```sh
-npm install
-npm run dev:local     # API on http://localhost:8080 with a seeded in-process Postgres
-```
+Optional: put a Square **sandbox** token in `.env` (`SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID`) and
+`dev:local` also pulls those Square items in. Every setting is explained in
+[`.env.example`](.env.example).
 
-If `SQUARE_ACCESS_TOKEN` and `SQUARE_LOCATION_ID` are in your `.env` (a Square **sandbox** token works), `dev:local`
-also syncs the Square catalog each time it starts, so those items appear next to the samples (the database lives in
-memory, so it repeats on every start). Set `DEV_SYNC_SQUARE=false` to skip it.
+## Everyday commands
 
-Sign in as `owner@spinhobby.test` / `spinhobby` (or `staff@spinhobby.test`). Then run the
-frontend with `VITE_API_URL=http://localhost:8080 npm run dev` in the spin-hobby repo.
-
-To run against a real Supabase project instead: `cp .env.example .env`, fill it in, `npm run start:dev`.
-
-## Run locally
-
-```sh
-cp .env.example .env         # fill in DATABASE_URL, SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY (+ SUPABASE_SERVICE_ROLE_KEY for sign-up and uploads)
-npm install
-npm run start:dev            # http://localhost:8080/health
-```
-
-`.env` is read automatically at startup (variables already set in the environment win). Whatever database
-`DATABASE_URL` points at is the one you'll be changing, so use a staging or throwaway project locally.
-
-Apply the schema to a new Supabase project with `supabase db push`. See
-[`AUTH_SETUP.md`](AUTH_SETUP.md) for Google sign-in and making yourself an owner
-(`OWNER_EMAILS`).
-
-## Tests
-
-```sh
-npm test            # unit tests
-npm run test:e2e    # every HTTP route against a real Postgres (PGlite) with the real migrations
-```
-
-The e2e suite needs no network or Docker: PayPal, Square, Resend and Claude calls are
-intercepted, and sign-ins use locally signed tokens.
-
-## Deploy (Render)
-
-`render.yaml` is a Render Blueprint: **New → Blueprint → this repo**. It builds the Dockerfile,
-health-checks `/health`, auto-deploys `main`, and prompts for the secrets
-(`DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, payment/email keys). Then point the storefront's
-`VITE_API_URL` at the Render URL. Any other container host works too:
-
-```sh
-docker build -t spin-hobby-api .
-docker run -p 8080:8080 --env-file .env spin-hobby-api
-```
-
-Then set `SQUARE_WEBHOOK_URL` to `https://<your-host>/webhooks/square` in both the
-Square dashboard and the environment.
-
-## Staging
-
-A separate staging stack (branch `staging`, its own Render service and Supabase project, sandbox
-payments) for testing before production. See [`STAGING.md`](STAGING.md).
-
-## How stock works
-
-- Square-sourced products: Square owns the count (sync + inventory webhook). Hand-entered products: this server owns it
-  and takes sold units off when an order is paid.
-- A shopper starting checkout holds those units for `ORDER_HOLD_MINUTES` (default 30). Availability everywhere is
-  `stock − holds`, so two people can't buy the last one; abandoned checkouts are cancelled by a background job and a payment
-  that arrives for an expired checkout is refused (`ORDER_EXPIRED`) before any charge.
-- A Square sale that Square hasn't reported back yet still counts until the next sync/webhook passes it.
-- The catalog sync hides Square-sourced products deleted in Square (never hand-entered ones), unless it would hide more than
-  `SQUARE_SYNC_RETIRE_MAX_RATIO` of them. Limit: PayPal sales of Square-sourced items never reach Square's count.
-
-## Routes
-
-Access: **public** · **user** (signed in) · **staff** (staff or owner) · **owner**.
-
-| Area | Routes |
+| Command | What it does |
 |---|---|
-| Sign-in (public) | `GET /auth/providers` · `POST /auth/login` `/auth/refresh` · `GET /auth/oauth-url` |
-| Catalog (public) | `GET /products` (filters: `categoryId`, `group`, `ids`, `q`, `status`, `min`/`max`, `sort`) `/products/facets` `/categories` `/products/preorders` `/products/ranking` `/products/new-in-stock` `/homepage` `/square/catalog[/:id]` `/square/inventory` `/square/config` `/square/display-categories` |
-| Checkout (public) | `GET /checkout/config` · `POST /cart/quote` `/checkout/intent` `/paypal/capture` `/square/payments` · `GET /orders/lookup` |
-| Account (user) | `GET /auth/me` · `POST /auth/logout` · `GET/POST /wishlist` · `DELETE /wishlist/:id` · `GET /orders[/:id]` · `POST /alerts` (public) |
-| Admin (staff) | `GET /admin/dashboard` · `GET /admin/products` · `PATCH /admin/products/:id` · `POST /admin/products/:id/notify-restock` · `GET /admin/orders[/:id]` · `POST /admin/orders/:id/ship` · `GET /admin/orders/:id/packing-slip` · slides `GET/POST/PUT/DELETE /admin/homepage/slides[/:id\|/reorder]` · events `GET/POST/PUT/DELETE /admin/events[/:id]` · `GET /admin/square/readiness` · `GET /admin/settings` |
-| Admin (owner) | `PUT /admin/settings` · `GET/PUT /admin/tax-rates` · `POST /admin/orders/:id/refund` · `POST /admin/square/sync` |
-| Cashier (staff) | `POST /cashier/identify` `/cashier/record` · `GET /cashier/search` · `GET/PUT /cashier/item/:id` |
-| Ops (owner) | `GET /ops/ai-usage` · `PUT /ops/ai-usage/:tool` · `GET /ops/database` |
-| Integrations | `POST /webhooks/square` `/webhooks/paypal` · `POST /square-sync` (owner or `x-square-sync-secret`) · `GET /health` |
+| `npm run dev:local` | Run everything locally with sample data (use this most of the time) |
+| `npm run typecheck` | Check the TypeScript compiles |
+| `npm run lint` | Find likely bugs and rule breaks (`npm run lint:fix` fixes the easy ones) |
+| `npm run format` | Tidy the formatting (`npm run format:check` only checks) |
+| `npm test` | Fast unit tests (about 1 second) |
+| `npm run test:e2e` | Every route against a real in-memory Postgres (about 30 seconds) |
+| `npm run build` | Compile to `dist/` |
 
-Errors are always `{ "success": false, "error": "…", "code"?: "…" }`.
+Before you open a pull request, all of these must pass:
 
-## Layout
+```sh
+npm run typecheck && npm run lint && npm run format:check && npm test && npm run test:e2e
+```
+
+## Where to look
+
+| I want to… | Read |
+|---|---|
+| Get started as an intern | [`docs/INTERNS.md`](docs/INTERNS.md) |
+| Understand how the code is organised | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Add a new endpoint, step by step | [`docs/ADD-AN-ENDPOINT.md`](docs/ADD-AN-ENDPOINT.md) |
+| Know how to branch, commit and open a PR | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| See every setting the server reads | [`.env.example`](.env.example) |
+| Set up or use the staging site | [`STAGING.md`](STAGING.md) |
+| Set up sign-in (Google) or make someone an owner | [`AUTH_SETUP.md`](AUTH_SETUP.md) |
+| See every endpoint | `/docs` when running locally, or `test/e2e/routes.e2e-spec.ts` for the full list |
+
+## What is where (one-minute tour)
 
 ```
 src/
-  auth/          Supabase token verification, access guard, OWNER_EMAILS bootstrap
-  catalog/       storefront product queries (storefront_products view)
-  checkout/      server-side quote (price, tax, stock minus holds) and the checkout routes
-  orders/        order lifecycle: create + hold stock, mark paid, expire abandoned checkouts, receipt email
-  payments/      PayPal and Square clients; PaymentsService runs order creation and capture
-  admin/         dashboard, products, orders, settings, slides, events
-  square-sync/   Square catalog + inventory mirror
-  cashier/       photo → Claude → Square item tool, AI budget
-  webhooks/      Square (HMAC) and PayPal webhooks
-  db/            pg pool + transactions
-supabase/        database migrations + Auth config
-scripts/         dev-local.mjs (seeded local Postgres + API), seed-staging.mjs
-src/sample/      the sample catalog (products, pictures, orders) used by staging and local development
-test/            e2e suite + PGlite harness
+  modules/        one folder per feature: catalog, checkout, orders, admin, cashier, ...
+  integrations/   the code that talks to outside services: square, paypal, supabase, email, ...
+  common/         small shared helpers: errors, guards, validation
+  config/         every setting the server reads (the only place that touches environment variables)
+  database/       database access, typed table rows, and the migration runner
+supabase/migrations/   the database schema (SQL files, applied in order)
+test/             end-to-end tests (test/e2e) and their helpers (test/support)
+scripts/          dev-local.mjs and the staging seed script
 ```
+
+## Deploying
+
+You don't deploy by hand. Pushing to a branch deploys it on Render:
+
+| Branch | Environment | URL |
+|---|---|---|
+| `staging` | staging (sandbox payments, sample data) | https://spin-hobby-server-staging.onrender.com |
+| `main` | **production** (real customers, real money) | https://spin-hobby-server.onrender.com |
+
+New work goes to `staging` first, is tested there, and only then merged to `main`. Details in
+[`STAGING.md`](STAGING.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md). `render.yaml` and
+`render.staging.yaml` describe the two Render services, and the `Dockerfile` builds the image
+(it runs `node dist/main.js`; any container host works).
+
+## Good to know
+
+- **Money is always whole cents** (`price_cents: 3900` is $39.00). Never use decimals for money.
+- **Square owns the product catalog and stock** for items synced from Square. Staff can also
+  create hand-entered products in the admin; those live only in our database.
+- **Stock is held during checkout.** A shopper who starts paying holds those units for
+  `ORDER_HOLD_MINUTES` (30 by default) so two people can't buy the last one. Details in
+  [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md#stock-and-holds).
+- **Errors always look the same:** `{ "success": false, "error": "message" }`.
+- **The database schema only changes through a new migration file.** Never edit an old one.

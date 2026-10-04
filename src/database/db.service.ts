@@ -1,7 +1,10 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import pg from 'pg';
-import { databaseConnectTimeoutMs, databasePoolSize } from '../config/database.config.js';
-import { databaseSsl } from '../config/database.config.js';
+import {
+  databaseConnectTimeoutMs,
+  databasePoolSize,
+  databaseSsl,
+} from '../config/database.config.js';
 
 /**
  * The default result of a query that was given no type: a bag of unknown columns. Reading a field from it

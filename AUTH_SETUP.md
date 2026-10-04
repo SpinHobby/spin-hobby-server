@@ -5,25 +5,24 @@ Supabase Auth. Email sign-in links work out of the box; Google needs the steps b
 
 ## 1. Make yourself an owner
 
-Set the owner list as an edge-function secret, then redeploy `store-api`:
+Set the owner list as an environment variable on the API host (Render: the service's
+**Environment** tab), then let the service restart:
 
-```sh
-supabase secrets set OWNER_EMAILS="tingjayj@gmail.com" --project-ref zmlltsytckexrmybvnof
-# optional: STAFF_EMAILS="helper1@example.com,helper2@example.com"
-supabase functions deploy store-api --project-ref zmlltsytckexrmybvnof
+```
+OWNER_EMAILS=tingjayj@gmail.com
+# optional, comma separated: STAFF_EMAILS=helper1@example.com,helper2@example.com
 ```
 
-Running the NestJS server instead? Set `OWNER_EMAILS` (and `STAFF_EMAILS`) in that host's
-environment — it applies the same rule.
-
-The first time a listed email signs in, its profile is promoted automatically.
-Roles set by hand are never downgraded. Without redeploying, the SQL editor works too:
+The first time a listed email signs in, its profile is promoted automatically. Roles set by hand
+are never downgraded. Without restarting, the Supabase SQL editor works too:
 
 ```sql
 update public.profiles set role = 'owner' where email = 'tingjayj@gmail.com';
 ```
 
-(The profile row exists after that email has signed in once.)
+(The profile row exists after that email has signed in once.) Running locally with
+`npm run dev:local` needs none of this: it has built-in `owner@spinhobby.test` and
+`staff@spinhobby.test` accounts.
 
 ## 2. Allow redirects back to the site
 
