@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { notFound } from '../../../common/errors.js';
 import { Db } from '../../../database/db.service.js';
+import type { HeroSlideRow } from '../../../database/rows.js';
 import { AdminLog } from '../admin-log.service.js';
 import { sentFields } from '../dto/defined-fields.js';
 import type { CreateSlideDto, UpdateSlideDto } from './dto/slide.dto.js';
@@ -28,7 +29,7 @@ export class AdminHomepageService {
   }
 
   async create(adminId: string, dto: CreateSlideDto) {
-    const slide = await this.db.one(
+    const slide = await this.db.one<HeroSlideRow>(
       `insert into public.hero_slides (headline, subheading, image_url, link_url, is_visible, sort_order)
        values ($1, $2, $3, $4, $5, $6) returning *`,
       [dto.headline, dto.subheading, dto.imageUrl, dto.linkUrl, dto.isVisible, dto.sortOrder],

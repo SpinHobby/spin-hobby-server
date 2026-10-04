@@ -69,7 +69,13 @@ export class AdminCategoriesService {
     await this.assertParent(dto.parentId);
     const position = await this.nextPosition(dto.parentId);
     const category = await this.db
-      .one(
+      .one<{
+        id: string;
+        parentId: string | null;
+        name: string;
+        sortOrder: number;
+        isVisible: boolean;
+      }>(
         `insert into public.store_categories (parent_id, name, sort_order, is_visible) values ($1, $2, $3, $4)
          returning id, parent_id as "parentId", name, sort_order as "sortOrder", is_visible as "isVisible"`,
         [dto.parentId, dto.name, position, dto.isVisible],

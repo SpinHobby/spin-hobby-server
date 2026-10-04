@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { AppError, notFound } from '../../../common/errors.js';
-import { Db, type Queryable, type Row } from '../../../database/db.service.js';
+import { Db, type Queryable } from '../../../database/db.service.js';
+import type { CatalogProductRow, StorefrontProductRow } from '../../../database/rows.js';
 import { StorageService } from '../../../integrations/storage/storage.service.js';
 import { publicProduct } from '../../catalog/product.mapper.js';
 import { isManualId } from '../../catalog/manual-id.js';
@@ -108,16 +109,17 @@ export class AdminMerchService {
         tx,
       );
     });
-    const row = await this.db.one('select * from public.storefront_products where id = $1', [
-      itemId,
-    ]);
+    const row = await this.db.one<StorefrontProductRow>(
+      'select * from public.storefront_products where id = $1',
+      [itemId],
+    );
     return row ? { ...publicProduct(row), source: 'manual' } : { id: itemId };
   }
 
   /** Saves the fields that were sent. Only for hand-entered products. */
   async update(adminId: string, itemId: string, dto: UpdateManualProductDto) {
     if (!isManualId(itemId)) throw new AppError(SQUARE_OWNED);
-    const product = await this.db.one<Row>(
+    const product = await this.db.one<Pick<CatalogProductRow, 'default_variation_id'>>(
       'select default_variation_id from public.catalog_products where square_item_id = $1',
       [itemId],
     );

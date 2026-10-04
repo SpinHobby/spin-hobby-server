@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
+import type { StorefrontProductRow } from '../../database/rows.js';
 import { Db } from '../../database/db.service.js';
 import { publicProduct } from '../catalog/product.mapper.js';
 
@@ -10,7 +11,7 @@ export class WishlistService {
 
   /** Newest first, in the same shape as the storefront catalog (products that are no longer for sale drop out). */
   async list(userId: string) {
-    const rows = await this.db.many(
+    const rows = await this.db.many<StorefrontProductRow>(
       `select p.* from public.wishlist_items w
          join public.storefront_products p on p.id = w.square_item_id
         where w.user_id = $1 order by w.created_at desc`,

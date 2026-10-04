@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { AppError, notFound } from '../../../common/errors.js';
-import { Db, type Row } from '../../../database/db.service.js';
+import { Db } from '../../../database/db.service.js';
 import { EmailService } from '../../../integrations/email/email.service.js';
 import { CatalogService } from '../../catalog/catalog.service.js';
+import type { PublicProduct } from '../../catalog/product.mapper.js';
 import type { ProductQuery } from '../../catalog/dto/product-query.dto.js';
 import { AdminLog } from '../admin-log.service.js';
 import { sentFields } from '../dto/defined-fields.js';
@@ -39,7 +40,7 @@ export class AdminProductsService {
             ? 'pre'
             : query.status;
     const page = await this.catalog.productPage({ ...query, status });
-    let items: Row[] = page.items;
+    let items: PublicProduct[] = page.items;
     let total = page.total;
     if (filter === 'featured') {
       const featured = new Set(
@@ -54,7 +55,7 @@ export class AdminProductsService {
     return { ...page, items, total };
   }
 
-  private async withAdminFields(items: Row[]) {
+  private async withAdminFields(items: PublicProduct[]) {
     const ids = items.map((i) => i.id);
     const variations = items.map((i) => i.variationId).filter(Boolean);
     const [meta, catalog, alerts] = await Promise.all([

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Db } from '../../../database/db.service.js';
+import type { OrderRow, StorefrontProductRow } from '../../../database/rows.js';
 
 const DAY_MS = 86_400_000;
 /** Order statuses that count as a sale. */
@@ -12,13 +13,20 @@ export class AdminDashboardService {
 
   async summary() {
     const [orders, alerts, products, reserved] = await Promise.all([
-      this.db.many(
+      this.db.many<
+        Pick<OrderRow, 'id' | 'billing_email' | 'total_cents' | 'status' | 'created_at'>
+      >(
         'select id, billing_email, total_cents, status, created_at from public.orders order by created_at desc limit 100',
       ),
       this.db.one<{ count: number }>(
         'select count(*)::int as count from public.stock_alerts where notified_at is null',
       ),
-      this.db.many(
+      this.db.many<
+        Pick<
+          StorefrontProductRow,
+          'id' | 'name' | 'variation_id' | 'stock_count' | 'status' | 'order_by_date'
+        >
+      >(
         'select id, name, variation_id, stock_count, status, order_by_date from public.storefront_products',
       ),
       this.db.one<{ units: number }>(

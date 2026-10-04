@@ -3,11 +3,15 @@ import pg from 'pg';
 import { databaseConnectTimeoutMs, databasePoolSize } from '../config/database.config.js';
 import { databaseSsl } from '../config/database.config.js';
 
-export type Row = Record<string, any>;
+/**
+ * The default result of a query that was given no type: a bag of unknown columns. Reading a field from it
+ * is a compile error, which is the prompt to give the query a row type (see rows.ts).
+ */
+export type Row = Record<string, unknown>;
 
 /** Anything that can run a parameterised query: the pool, a transaction client, or PGlite in tests. */
 export interface Queryable {
-  query<T extends Row = Row>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
+  query<T extends object = Row>(sql: string, params?: unknown[]): Promise<{ rows: T[] }>;
   /** Runs a multi-statement SQL script (simple query protocol), e.g. a migration file. */
   script?(sql: string): Promise<void>;
 }
@@ -99,7 +103,7 @@ export class Db implements OnModuleDestroy {
   private readonly logger = new Logger(Db.name);
   constructor(@Inject(DB_DRIVER) private readonly driver: DbDriver) {}
 
-  async many<T extends Row = Row>(
+  async many<T extends object = Row>(
     sql: string,
     params: unknown[] = [],
     tx?: Queryable,
@@ -107,7 +111,7 @@ export class Db implements OnModuleDestroy {
     return (await (tx ?? this.driver).query<T>(sql, params)).rows;
   }
 
-  async one<T extends Row = Row>(
+  async one<T extends object = Row>(
     sql: string,
     params: unknown[] = [],
     tx?: Queryable,

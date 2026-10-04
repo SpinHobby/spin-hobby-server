@@ -1,9 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { likePattern } from '../../common/validation/rules.js';
-import { Db, type Row } from '../../database/db.service.js';
+import { Db } from '../../database/db.service.js';
+import type { StorefrontProductRow } from '../../database/rows.js';
 import type { ProductQuery } from './dto/product-query.dto.js';
-import { publicProduct, type PublicProduct } from './product.mapper.js';
+import { publicProduct } from './product.mapper.js';
 
 const SORTS: Record<string, string> = {
   featured: 'is_featured desc, case when is_featured then sort_order end, created_at desc, id',
@@ -137,7 +138,7 @@ export class CatalogService {
     const filter = where.length ? `where ${where.join(' and ')}` : '';
     const order = SORTS[query.sort ?? 'new'] ?? SORTS.new;
     const [rows, count] = await Promise.all([
-      this.db.many(
+      this.db.many<StorefrontProductRow>(
         `${CATEGORY_PATHS} select sp.* from public.storefront_products sp ${filter} order by ${order} limit ${limit} offset ${offset}`,
         params,
       ),
@@ -150,7 +151,7 @@ export class CatalogService {
     const next = offset + rows.length;
     return {
       success: true as const,
-      items: rows.map(publicProduct) as PublicProduct[],
+      items: rows.map(publicProduct),
       total,
       ...(next < total ? { cursor: String(next) } : {}),
     };
@@ -234,16 +235,16 @@ export class CatalogService {
         this.db.many(
           'select * from public.hero_slides where is_visible order by sort_order, created_at',
         ),
-        this.db.many(
+        this.db.many<StorefrontProductRow>(
           'select * from public.storefront_products where is_featured order by sort_order, id limit 8',
         ),
-        this.db.many(
+        this.db.many<StorefrontProductRow>(
           "select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12",
         ),
-        this.db.many(
+        this.db.many<StorefrontProductRow>(
           'select * from public.storefront_products where rank is not null order by rank, id limit 5',
         ),
-        this.db.many(
+        this.db.many<StorefrontProductRow>(
           "select * from public.storefront_products where status in ('in','low') order by updated_at desc, id limit 5",
         ),
         this.db.many(
@@ -276,8 +277,11 @@ export class CatalogService {
     };
   }
 
-  async product(id: string): Promise<Row | null> {
-    return this.db.one('select * from public.storefront_products where id = $1', [id]);
+  async product(id: string): Promise<StorefrontProductRow | null> {
+    return this.db.one<StorefrontProductRow>(
+      'select * from public.storefront_products where id = $1',
+      [id],
+    );
   }
 
   async inventory(variationIds: string[]) {

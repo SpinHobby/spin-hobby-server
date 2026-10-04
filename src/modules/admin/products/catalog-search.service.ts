@@ -1,7 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../../common/errors.js';
 import { likePattern } from '../../../common/validation/rules.js';
-import { Db, type Row } from '../../../database/db.service.js';
+import { Db } from '../../../database/db.service.js';
+import type {
+  CatalogProductRow,
+  CatalogVariationRow,
+  InventorySnapshotRow,
+  ProductImageRow,
+  ProductMetadataRow,
+} from '../../../database/rows.js';
 import type { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
 
 /**
@@ -79,6 +86,54 @@ items as (
   cross join public.store_settings s
 )`;
 
+/** One row of the `items` CTE above: a catalog item with its default variation's price and stock. */
+type ItemRow = Pick<
+  CatalogProductRow,
+  | 'name'
+  | 'description'
+  | 'source'
+  | 'is_active'
+  | 'is_visible'
+  | 'created_at'
+  | 'updated_at'
+  | 'synced_at'
+  | 'square_updated_at'
+> &
+  Pick<
+    ProductMetadataRow,
+    | 'series'
+    | 'character'
+    | 'manufacturer'
+    | 'jan_code'
+    | 'compare_at_cents'
+    | 'order_by_date'
+    | 'release_month'
+    | 'max_per_customer'
+    | 'is_featured'
+    | 'sort_order'
+    | 'category_id'
+  > &
+  Pick<CatalogVariationRow, 'price_cents' | 'sku'> & {
+    id: string;
+    variation_id: string | null;
+    sellable: boolean;
+    availability: ProductMetadataRow['availability'];
+    category: string | null;
+    stock_count: InventorySnapshotRow['quantity'];
+    rank: number | null;
+    status: string;
+    state: AdminState;
+    variation_count: number;
+    alerts_waiting: number;
+    has_photo: boolean;
+  };
+
+/** A variation as listed under its item (`catalog_variations` plus its stock). */
+type VariationListRow = Pick<
+  CatalogVariationRow,
+  'square_item_id' | 'square_variation_id' | 'name' | 'sku' | 'price_cents' | 'is_sellable'
+> & { quantity: InventorySnapshotRow['quantity'] };
+
 /** Admin catalog search: every item Square (or staff) put in the catalog, with search, filters, sorting and paging. */
 @Injectable()
 export class CatalogSearchService {
@@ -150,7 +205,7 @@ export class CatalogSearchService {
     const filter = where.length ? `where ${where.join(' and ')}` : '';
 
     const [rows, count] = await Promise.all([
-      this.db.many(
+      this.db.many<ItemRow>(
         `${ITEMS} select * from items ${filter} order by ${SORTS[sortKey]} ${dir} nulls last, lower(name), id limit ${limit} offset ${offset}`,
         params,
       ),
@@ -170,7 +225,7 @@ export class CatalogSearchService {
 
   /** Totals for the filter chips, over the whole catalog (not the current filters). */
   async counts() {
-    const row = await this.db.one<Row>(
+    const row = await this.db.one<Record<string, number | string | null>>(
       `${ITEMS} select count(*)::int as total,
          ${ADMIN_STATES.map((s) => `count(*) filter (where state = '${s}')::int as "${s}"`).join(', ')},
          count(*) filter (where source = 'manual')::int as manual,
@@ -194,15 +249,15 @@ export class CatalogSearchService {
   }
 
   /** Adds the per-item lists (photos, variations) for just the rows on this page and maps to the API shape. */
-  private async decorate(rows: Row[]) {
+  private async decorate(rows: ItemRow[]) {
     if (!rows.length) return [];
     const ids = rows.map((r) => r.id);
     const [images, variations] = await Promise.all([
-      this.db.many(
+      this.db.many<Pick<ProductImageRow, 'square_item_id' | 'image_url'>>(
         'select square_item_id, image_url from public.product_images where square_item_id = any($1::text[]) order by sort_order',
         [ids],
       ),
-      this.db.many(
+      this.db.many<VariationListRow>(
         `select cv.square_item_id, cv.square_variation_id, cv.name, cv.sku, cv.price_cents, cv.is_sellable, i.quantity
            from public.catalog_variations cv left join public.inventory_snapshots i on i.square_variation_id = cv.square_variation_id
           where cv.square_item_id = any($1::text[]) order by cv.created_at, cv.square_variation_id`,
@@ -215,7 +270,7 @@ export class CatalogSearchService {
         ...(photosByItem.get(r.square_item_id) ?? []),
         r.image_url,
       ]);
-    const variationsByItem = new Map<string, Row[]>();
+    const variationsByItem = new Map<string, VariationListRow[]>();
     for (const v of variations)
       variationsByItem.set(v.square_item_id, [
         ...(variationsByItem.get(v.square_item_id) ?? []),
@@ -237,7 +292,7 @@ export class CatalogSearchService {
       compareAtCents: r.compare_at_cents,
       currency: 'CAD',
       status: r.status,
-      state: r.state as AdminState,
+      state: r.state,
       stockCount: r.stock_count,
       releaseMonth: r.release_month,
       orderByDate: r.order_by_date,

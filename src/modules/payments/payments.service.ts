@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import type { AppUser } from '../auth/auth.service.js';
 import type { QuoteInput } from '../orders/quote.service.js';
 import { AppError } from '../../common/errors.js';
-import { Db, type Row } from '../../database/db.service.js';
+import { Db } from '../../database/db.service.js';
+import type { OrderItemRow, OrderRow } from '../../database/rows.js';
 import { OrdersService, type OrderDetails } from '../orders/orders.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
 import { isManualId } from '../catalog/manual-id.js';
@@ -22,7 +23,8 @@ export interface PaymentResult {
   status: string;
 }
 
-const alreadyPaid = (order: Row) => order.status === 'paid' || order.status === 'preorder_reserved';
+const alreadyPaid = (order: Pick<OrderRow, 'status'>) =>
+  order.status === 'paid' || order.status === 'preorder_reserved';
 
 /** Talks to PayPal and Square on behalf of an order; OrdersService records what happened. */
 @Injectable()
@@ -75,7 +77,7 @@ export class PaymentsService {
   }
 
   async capturePayPal(paypalOrderId: string): Promise<PaymentResult> {
-    const order = await this.db.one<Row>(
+    const order = await this.db.one<OrderRow>(
       "select * from public.orders where provider = 'paypal' and provider_metadata ->> 'paypal_order_id' = $1",
       [paypalOrderId],
     );
@@ -91,7 +93,7 @@ export class PaymentsService {
     const { status } = await this.orders.markPaid(
       order.id,
       captureId,
-      result.links?.find((l: Row) => l.rel === 'self')?.href ?? null,
+      result.links?.find((l: { rel?: string; href?: string }) => l.rel === 'self')?.href ?? null,
       { paypal_order_id: paypalOrderId, capture_id: captureId },
     );
     return { orderId: order.id, status };
@@ -106,7 +108,7 @@ export class PaymentsService {
     const locationId = squareLocationId();
     if (!locationId) throw new AppError('Square Payments is not configured.', 503);
 
-    const order = await this.db.one<Row>(
+    const order = await this.db.one<OrderRow>(
       "select * from public.orders where id = $1 and provider = 'square' and billing_email = $2",
       [orderId, billingEmail],
     );
@@ -141,8 +143,8 @@ export class PaymentsService {
   }
 
   /** Mirrors our order into Square (so it shows in their dashboard and decrements their stock) and remembers its id. */
-  private async createSquareOrder(order: Row, locationId: string): Promise<string> {
-    const lines = await this.db.many(
+  private async createSquareOrder(order: OrderRow, locationId: string): Promise<string> {
+    const lines = await this.db.many<OrderItemRow>(
       'select * from public.order_items where order_id = $1 order by id',
       [order.id],
     );

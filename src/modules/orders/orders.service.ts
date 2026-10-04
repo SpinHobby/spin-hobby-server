@@ -2,7 +2,8 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import type { AppUser } from '../auth/auth.service.js';
 import { QuoteService, type Quote, type QuoteInput } from './quote.service.js';
 import { AppError } from '../../common/errors.js';
-import { Db, type Row } from '../../database/db.service.js';
+import { Db } from '../../database/db.service.js';
+import type { InventorySnapshotRow, OrderItemRow, OrderRow } from '../../database/rows.js';
 import { EmailService } from '../../integrations/email/email.service.js';
 import { StoreService } from '../store/store.service.js';
 import { orderExpiryIntervalMinutes, orderHoldMinutes } from '../../config/orders.config.js';
@@ -67,7 +68,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
       const quote = await this.quotes.quote(input, tx);
       if (!quote.lines.length || quote.warnings.length) return { changed: quote };
       const settings = await this.store.settings(tx);
-      const order = await this.db.one<Row>(
+      const order = await this.db.one<Pick<OrderRow, 'id' | 'total_cents' | 'provider'>>(
         `insert into public.orders (user_id, provider, subtotal_cents, shipping_cents, tax_cents, total_cents, shipping_method, billing_email, billing_address, shipping_address)
          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id, total_cents, provider`,
         [
@@ -107,14 +108,14 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
         tx,
       );
       return {
-        order: order as { id: number; total_cents: number; provider: 'paypal' | 'square' },
+        order: order!,
         quote,
       };
     });
   }
 
   /** Throws before any money moves when an order can't (or shouldn't) be charged any more. */
-  async assertCapturable(order: Row): Promise<void> {
+  async assertCapturable(order: Pick<OrderRow, 'id' | 'status' | 'created_at'>): Promise<void> {
     if (order.status === 'cancelled') throw new AppError(EXPIRED_MESSAGE, 409, 'ORDER_EXPIRED');
     if (order.status !== 'pending')
       throw new AppError('This order can no longer be captured.', 409);
@@ -122,15 +123,15 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     if (ageMs <= orderHoldMinutes() * 60_000) return;
 
     // The hold lapsed, so the stock may have gone to someone else: re-check against everyone else's holds.
-    const items = await this.db.many<Row>(
+    const items = await this.db.many<Pick<OrderItemRow, 'square_variation_id'> & { qty: number }>(
       'select square_variation_id, sum(quantity)::int as qty from public.order_items where order_id = $1 and not is_preorder group by 1',
       [order.id],
     );
     if (!items.length) return;
-    const ids = items.map((i) => i.square_variation_id as string);
+    const ids = items.map((i) => i.square_variation_id);
     const [held, stock] = await Promise.all([
       this.quotes.held(ids, undefined, order.id),
-      this.db.many<Row>(
+      this.db.many<Pick<InventorySnapshotRow, 'square_variation_id' | 'quantity'>>(
         'select square_variation_id, quantity from public.inventory_snapshots where square_variation_id = any($1::text[])',
         [ids],
       ),
@@ -159,7 +160,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     orderId: number,
     paymentId: string,
     receiptUrl: string | null,
-    data: Row,
+    data: Record<string, unknown>,
   ): Promise<{ status: string; first: boolean }> {
     const result = await this.recordPayment(orderId, paymentId, receiptUrl, data);
     if (result.first) await this.sendConfirmation(orderId);
@@ -170,17 +171,17 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     orderId: number,
     paymentId: string,
     receiptUrl: string | null,
-    data: Row,
+    data: Record<string, unknown>,
   ): Promise<{ status: string; first: boolean }> {
     return this.db.transaction(async (tx) => {
-      const current = await this.db.one<Row>(
+      const current = await this.db.one<Pick<OrderRow, 'status'>>(
         'select status from public.orders where id = $1 for update',
         [orderId],
         tx,
       );
       if (!current) throw new AppError('Checkout order not found.', 404);
       if (current.status !== 'pending' && current.status !== 'cancelled')
-        return { status: current.status as string, first: false };
+        return { status: current.status, first: false };
 
       const preorder = await this.db.one(
         'select 1 from public.order_items where order_id = $1 and is_preorder limit 1',
@@ -223,10 +224,12 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
   private async sendConfirmation(orderId: number): Promise<void> {
     if (!this.email.configured) return;
     try {
-      const order = await this.db.one<Row>('select * from public.orders where id = $1', [orderId]);
+      const order = await this.db.one<OrderRow>('select * from public.orders where id = $1', [
+        orderId,
+      ]);
       if (!order?.billing_email) return;
       const [items, settings] = await Promise.all([
-        this.db.many<Row>(
+        this.db.many<Pick<OrderItemRow, 'name' | 'quantity' | 'unit_price_cents' | 'is_preorder'>>(
           'select name, quantity, unit_price_cents, is_preorder from public.order_items where order_id = $1 order by id',
           [orderId],
         ),
@@ -255,7 +258,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
   /** Cancels checkouts nobody finished within the hold window and frees their stock. */
   async expireStale(): Promise<number> {
     return this.db.transaction(async (tx) => {
-      const rows = await this.db.many<Row>(
+      const rows = await this.db.many<Pick<OrderRow, 'id'>>(
         `update public.orders set status = 'cancelled'
           where status = 'pending' and created_at < now() - make_interval(mins => $1::int) returning id`,
         [orderHoldMinutes()],

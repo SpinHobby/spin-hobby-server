@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError, notFound } from '../../../common/errors.js';
 import { positiveInteger } from '../../../common/validation/rules.js';
-import { Db, type Row } from '../../../database/db.service.js';
+import { Db } from '../../../database/db.service.js';
+import type { OrderRow, OrderWithDetails, OrderWithItems } from '../../../database/rows.js';
 import { EmailService } from '../../../integrations/email/email.service.js';
 import { PayPalClient } from '../../../integrations/paypal/paypal.client.js';
 import { SquareClient } from '../../../integrations/square/square.client.js';
@@ -42,7 +43,7 @@ export class AdminOrdersService {
     if (filtered && !ORDER_STATUSES.includes(status!)) throw new AppError('Invalid order status.');
     const params = filtered ? [status] : [];
     const [items, count] = await Promise.all([
-      this.db.many(
+      this.db.many<OrderWithItems>(
         `select o.*, ${ITEMS_AS_JSON} from public.orders o ${filtered ? 'where o.status = $1::public.order_status' : ''} order by o.created_at desc limit ${limit}`,
         params,
       ),
@@ -56,7 +57,7 @@ export class AdminOrdersService {
 
   /** One order with its items and full history. */
   async detail(orderId: number) {
-    const order = await this.db.one(
+    const order = await this.db.one<OrderWithDetails>(
       `select o.*, ${ITEMS_AS_JSON}, ${EVENTS_AS_JSON} from public.orders o where o.id = $1`,
       [orderId],
     );
@@ -74,7 +75,7 @@ export class AdminOrdersService {
    */
   async ship(adminId: string, orderId: number, dto: ShipOrderDto) {
     const order = await this.db.transaction(async (tx) => {
-      const current = await this.db.one<Row>(
+      const current = await this.db.one<Pick<OrderRow, 'id' | 'status' | 'billing_email'>>(
         'select id, status, billing_email from public.orders where id = $1 for update',
         [orderId],
         tx,
@@ -119,7 +120,9 @@ export class AdminOrdersService {
 
   /** Refunds the whole order or part of it through the provider that took the payment. Returns the new status. */
   async refund(adminId: string, orderId: number, dto: RefundOrderDto) {
-    const order = await this.db.one<Row>('select * from public.orders where id = $1', [orderId]);
+    const order = await this.db.one<OrderRow>('select * from public.orders where id = $1', [
+      orderId,
+    ]);
     if (!order?.provider_payment_id || !REFUNDABLE.includes(order.status))
       throw new AppError('This order cannot be refunded.');
     const total = Number(order.total_cents);

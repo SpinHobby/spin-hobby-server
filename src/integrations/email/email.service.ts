@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { escapeHtml as escape } from '../../common/html.js';
-import type { Row } from '../../database/db.service.js';
+import type { OrderItemRow, OrderRow } from '../../database/rows.js';
 import { storefrontUrl } from '../../config/app.config.js';
 import { fromEmail, resendApiKey } from '../../config/email.config.js';
 
@@ -44,9 +44,13 @@ export class EmailService {
   }
 
   /** Receipt sent once an order is paid. `order`/`items` are rows from orders / order_items. */
-  confirmationHtml(order: Row, items: Row[], handling: { days_min: number; days_max: number }) {
+  confirmationHtml(
+    order: OrderRow,
+    items: Pick<OrderItemRow, 'name' | 'quantity' | 'unit_price_cents' | 'is_preorder'>[],
+    handling: { days_min: number; days_max: number },
+  ) {
     const site = storefrontUrl();
-    const a = (order.shipping_address ?? {}) as Record<string, unknown>;
+    const a = order.shipping_address ?? {};
     const address = [
       [a.firstName, a.lastName].filter(Boolean).join(' '),
       a.address1,

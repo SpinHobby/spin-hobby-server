@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { stringValue } from '../../common/validation/rules.js';
-import { Db, type Row } from '../../database/db.service.js';
+import { Db } from '../../database/db.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
 import { squareSignatureValid } from './square-signature.js';
 import { squareWebhookSignatureKey, squareWebhookUrl } from '../../config/square.config.js';
+import type { ExternalJson } from '../../common/external-json.js';
 
 /**
  * Receives notifications from Square and PayPal. Every delivery is checked against the provider's signature,
@@ -45,7 +46,7 @@ export class WebhooksService {
       squareWebhookUrl(),
     );
     if (!valid) throw new AppError('Invalid Square webhook signature.', 401);
-    const event = JSON.parse(raw) as Row;
+    const event = JSON.parse(raw) as ExternalJson;
     const eventId = stringValue(event.event_id, 'event_id', 200);
     if (await this.alreadySeen(eventId, 'square', event.type ?? 'unknown', event, false))
       return { duplicate: true };
@@ -61,7 +62,7 @@ export class WebhooksService {
   }
 
   /** Square sends absolute counts. Only in-stock counts for variations we know about are applied. */
-  private async applyInventoryCounts(counts: Row[], at: string) {
+  private async applyInventoryCounts(counts: ExternalJson[], at: string) {
     const inStock = counts.filter(
       (c) => c.catalog_object_id && (!c.state || c.state === 'IN_STOCK'),
     );
@@ -81,7 +82,7 @@ export class WebhooksService {
 
   /** PayPal: verified with PayPal's own API, then just recorded (payments are captured by the checkout flow). */
   async receivePayPal(raw: string, requestHeaders: Record<string, string | string[] | undefined>) {
-    const event = JSON.parse(raw) as Row;
+    const event = JSON.parse(raw) as ExternalJson;
     const headers = Object.fromEntries(
       Object.entries(requestHeaders).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]),
     );

@@ -1,7 +1,7 @@
-import type { Row } from '../../database/db.service.js';
+import type { StorefrontProductRow } from '../../database/rows.js';
 
 /** Public product shape - identical to the edge function's publicProduct(). */
-export function publicProduct(p: Row) {
+export function publicProduct(p: StorefrontProductRow) {
   return {
     id: p.id,
     variationId: p.variation_id,

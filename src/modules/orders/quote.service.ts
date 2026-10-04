@@ -1,7 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { orderHoldMinutes } from '../../config/orders.config.js';
-import { Db, type Queryable, type Row } from '../../database/db.service.js';
+import { Db, type Queryable } from '../../database/db.service.js';
+import type {
+  CatalogProductRow,
+  CatalogVariationRow,
+  InventorySnapshotRow,
+  ProductMetadataRow,
+} from '../../database/rows.js';
 import { StoreService } from '../store/store.service.js';
 
 export interface QuoteInput {
@@ -36,6 +42,19 @@ export interface Quote {
 }
 
 /** Server-side price/stock/tax check. Never trusts prices from the browser. */
+/** What the quote query selects: a variation with its product, availability rules and stock. */
+type QuoteRow = Pick<
+  CatalogVariationRow,
+  'square_variation_id' | 'square_item_id' | 'price_cents' | 'is_sellable'
+> &
+  Pick<CatalogProductRow, 'is_active' | 'is_visible'> &
+  Pick<ProductMetadataRow, 'availability' | 'order_by_date' | 'max_per_customer'> & {
+    variation_name: string | null;
+    product_name: string;
+    stock: InventorySnapshotRow['quantity'];
+    image_url: string | null;
+  };
+
 @Injectable()
 export class QuoteService {
   constructor(
@@ -56,7 +75,7 @@ export class QuoteService {
     excludeOrderId?: number,
   ): Promise<Map<string, number>> {
     if (!variationIds.length) return new Map();
-    const rows = await this.db.many<Row>(
+    const rows = await this.db.many<{ variation_id: string; held: number }>(
       `select oi.square_variation_id as variation_id, sum(oi.quantity)::int as held
          from public.order_items oi
          join public.orders o on o.id = oi.order_id
@@ -73,7 +92,7 @@ export class QuoteService {
       [variationIds, excludeOrderId ?? null, orderHoldMinutes()],
       tx,
     );
-    return new Map(rows.map((r) => [r.variation_id as string, Number(r.held)]));
+    return new Map(rows.map((r) => [r.variation_id, Number(r.held)]));
   }
 
   async quote(
@@ -82,7 +101,7 @@ export class QuoteService {
     options: { excludeOrderId?: number } = {},
   ): Promise<Quote> {
     const ids = input.items.map((i) => i.variationId);
-    const rows = await this.db.many<Row>(
+    const rows = await this.db.many<QuoteRow>(
       `select v.square_variation_id, v.square_item_id, v.name as variation_name, v.price_cents, v.is_sellable,
               p.name as product_name, p.is_active, p.is_visible,
               m.availability, m.order_by_date, m.max_per_customer,

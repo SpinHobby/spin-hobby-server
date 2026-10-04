@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { AppError, notFound } from '../../../common/errors.js';
 import { Db } from '../../../database/db.service.js';
+import type { StoreEventRow } from '../../../database/rows.js';
 import { AdminLog } from '../admin-log.service.js';
 import type { EventDto } from './dto/event.dto.js';
 
@@ -31,7 +32,7 @@ export class AdminEventsService {
   }
 
   async create(adminId: string, dto: EventDto) {
-    const event = await this.db.one(
+    const event = await this.db.one<StoreEventRow>(
       `insert into public.store_events (name, city, start_date, end_date, booth_info, is_visible, sort_order)
        values ($1, $2, $3, $4, $5, $6, $7) returning *`,
       this.values(dto),

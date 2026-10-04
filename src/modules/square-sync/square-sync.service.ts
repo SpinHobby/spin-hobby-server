@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
-import { Db, type Queryable, type Row } from '../../database/db.service.js';
+import { Db, type Queryable } from '../../database/db.service.js';
+import type { CatalogProductRow } from '../../database/rows.js';
 import { SquareClient } from '../../integrations/square/square.client.js';
 import {
   squareAccessToken,
@@ -8,6 +9,7 @@ import {
   squareSyncIntervalMinutes,
   squareSyncRetireMaxRatio,
 } from '../../config/square.config.js';
+import type { ExternalJson } from '../../common/external-json.js';
 
 export interface SyncResult {
   products: number;
@@ -89,7 +91,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
         limit: 100,
         ...(cursor ? { cursor } : {}),
       });
-      const items: Row[] = data.items ?? [];
+      const items: ExternalJson[] = data.items ?? [];
       const result = await this.db.transaction((tx) =>
         this.upsertPage(tx, items, data.related_objects ?? [], categories),
       );
@@ -134,8 +136,8 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
 
   private async upsertPage(
     tx: Queryable,
-    items: Row[],
-    related: Row[],
+    items: ExternalJson[],
+    related: ExternalJson[],
     categories: Map<string, string>,
   ) {
     const images = new Map(
@@ -146,16 +148,16 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
     const catalogItems = items.filter((i) => i.type === 'ITEM' && i.item_data);
     if (!catalogItems.length) return { products: 0, variations: 0 };
 
-    const productRows: Row[] = [];
-    const variationRows: Row[] = [];
-    const imageRows = new Map<string, Row>(); // keyed by Square image id; a shared image goes to the last item, as before
+    const productRows: ExternalJson[] = [];
+    const variationRows: ExternalJson[] = [];
+    const imageRows = new Map<string, ExternalJson>(); // keyed by Square image id; a shared image goes to the last item, as before
     for (const item of catalogItems) {
       const d = item.item_data;
       // Newer Square items carry `categories`; older ones only `category_id`.
       const categoryIds: string[] =
-        d.categories?.map((c: Row) => c.id) ?? (d.category_id ? [d.category_id] : []);
+        d.categories?.map((c: ExternalJson) => c.id) ?? (d.category_id ? [d.category_id] : []);
       const primary = d.reporting_category?.id ?? categoryIds[0] ?? null;
-      const live = (d.variations ?? []).filter((v: Row) => !v.is_deleted);
+      const live = (d.variations ?? []).filter((v: ExternalJson) => !v.is_deleted);
       productRows.push({
         id: item.id,
         name: d.name,
@@ -287,10 +289,10 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn('Square returned no items; nothing was retired.');
       return 0;
     }
-    const active = await this.db.many<Row>(
+    const active = await this.db.many<Pick<CatalogProductRow, 'square_item_id'>>(
       "select square_item_id from public.catalog_products where source = 'square' and is_active",
     );
-    const missing = active.map((r) => r.square_item_id as string).filter((id) => !seen.has(id));
+    const missing = active.map((r) => r.square_item_id).filter((id) => !seen.has(id));
     if (!missing.length) return 0;
     if (missing.length / active.length > retireMaxRatio()) {
       this.logger.warn(
