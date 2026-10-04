@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
-import { positiveInteger, stringValue, type Json } from '../../common/validation/rules.js';
 import { orderHoldMinutes } from '../../config/env.js';
 import { Db, type Queryable, type Row } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';
@@ -34,37 +33,6 @@ export interface Quote {
   totalCents: number;
   currency: 'CAD';
   warnings: QuoteWarning[];
-}
-
-export function parseQuoteInput(input: Json): QuoteInput {
-  if (!Array.isArray(input.items) || input.items.length === 0 || input.items.length > 40)
-    throw new AppError('Your cart must contain between 1 and 40 items.');
-  const shippingMethod =
-    input.shippingMethod === 'express' || input.shippingMethod === 'standard'
-      ? input.shippingMethod
-      : null;
-  const country = input.country === 'CA' || input.country === 'US' ? input.country : null;
-  const province = typeof input.province === 'string' ? input.province.toUpperCase().trim() : '';
-  if (!shippingMethod || !country || !province)
-    throw new AppError('A shipping method, country, and province are required.');
-  const quantities = new Map<string, number>();
-  for (const line of input.items) {
-    if (!line || typeof line !== 'object') throw new AppError('Invalid cart line.');
-    const value = line as Json;
-    const variationId = stringValue(value.variationId, 'variationId', 120);
-    quantities.set(
-      variationId,
-      (quantities.get(variationId) ?? 0) + positiveInteger(value.quantity, 'quantity'),
-    );
-  }
-  for (const q of quantities.values())
-    if (q > 99) throw new AppError('A product quantity cannot exceed 99.');
-  return {
-    items: [...quantities].map(([variationId, quantity]) => ({ variationId, quantity })),
-    shippingMethod,
-    country,
-    province,
-  };
 }
 
 /** Server-side price/stock/tax check. Never trusts prices from the browser. */

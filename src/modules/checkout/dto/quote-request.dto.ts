@@ -1,0 +1,87 @@
+import { AppError } from '../../../common/errors.js';
+import { Rule } from '../../../common/validation/decorators.js';
+import { positiveInteger, stringValue } from '../../../common/validation/rules.js';
+import type { QuoteInput } from '../../orders/quote.service.js';
+
+export const MAX_CART_LINES = 40;
+export const MAX_LINE_QUANTITY = 99;
+const SHIPPING_REQUIRED = 'A shipping method, country, and province are required.';
+
+// The cart rules as plain functions, so the /cart/quote DTO below and the checkout-intent DTO share them.
+
+/** 1 to 40 lines; repeated variations are merged into one line and no line may exceed 99 units. */
+export function cartItems(value: unknown): QuoteInput['items'] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_CART_LINES)
+    throw new AppError(`Your cart must contain between 1 and ${MAX_CART_LINES} items.`);
+  const quantities = new Map<string, number>();
+  for (const line of value) {
+    if (!line || typeof line !== 'object') throw new AppError('Invalid cart line.');
+    const { variationId: id, quantity } = line as Record<string, unknown>;
+    const variationId = stringValue(id, 'variationId', 120);
+    quantities.set(
+      variationId,
+      (quantities.get(variationId) ?? 0) + positiveInteger(quantity, 'quantity'),
+    );
+  }
+  for (const total of quantities.values())
+    if (total > MAX_LINE_QUANTITY)
+      throw new AppError(`A product quantity cannot exceed ${MAX_LINE_QUANTITY}.`);
+  return [...quantities].map(([variationId, quantity]) => ({ variationId, quantity }));
+}
+
+export function shippingMethod(value: unknown): QuoteInput['shippingMethod'] {
+  if (value === 'standard' || value === 'express') return value;
+  throw new AppError(SHIPPING_REQUIRED);
+}
+
+export function shipToCountry(value: unknown): QuoteInput['country'] {
+  if (value === 'CA' || value === 'US') return value;
+  throw new AppError(SHIPPING_REQUIRED);
+}
+
+/** Province or state code, upper-cased. */
+export function shipToProvince(value: unknown): string {
+  const province = typeof value === 'string' ? value.toUpperCase().trim() : '';
+  if (!province) throw new AppError(SHIPPING_REQUIRED);
+  return province;
+}
+
+/** A whole cart request as sent by the storefront (used where the cart is nested inside another request). */
+export function cartRequest(value: unknown): QuoteInput {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    throw new AppError('quoteInput is required.');
+  const cart = value as Record<string, unknown>;
+  return {
+    items: cartItems(cart.items),
+    shippingMethod: shippingMethod(cart.shippingMethod),
+    country: shipToCountry(cart.country),
+    province: shipToProvince(cart.province),
+  };
+}
+
+/** One line of the cart. (Describes the request in the API docs; the rules live in `cartItems`.) */
+export class CartLine {
+  /** The Square variation id. */
+  variationId!: string;
+  /** 1 to 99. */
+  quantity!: number;
+}
+
+/** What `POST /cart/quote` takes: the cart plus where it is going, so shipping and tax can be priced. */
+export class QuoteRequestDto implements QuoteInput {
+  /** Cart lines (1 to 40). Repeated variations are merged. */
+  @Rule(cartItems)
+  items!: CartLine[];
+
+  /** `standard` or `express`. */
+  @Rule(shippingMethod)
+  shippingMethod!: QuoteInput['shippingMethod'];
+
+  /** `CA` or `US`. */
+  @Rule(shipToCountry)
+  country!: QuoteInput['country'];
+
+  /** Province or state code, e.g. `AB`. */
+  @Rule(shipToProvince)
+  province!: string;
+}
