@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { registerDecorator, type ValidationOptions } from 'class-validator';
+import { registerDecorator, ValidateIf, type ValidationOptions } from 'class-validator';
 import {
   boolValue,
   email,
@@ -59,6 +59,13 @@ export function Rule(
     });
   };
 }
+
+/**
+ * For partial updates (PATCH-style bodies): only check this field when the client actually sent it.
+ * Put it above the rule: `@Provided() @Text('name', 160) name?: string;`. Leave such properties without
+ * an initializer, so "not sent" stays `undefined` and a service can tell it apart from `null`.
+ */
+export const Provided = () => ValidateIf((_object, value) => value !== undefined);
 
 /** Required text. The message is "<field> is required." */
 export const Text = (field: string, max = 500) => Rule((v) => stringValue(v, field, max));
