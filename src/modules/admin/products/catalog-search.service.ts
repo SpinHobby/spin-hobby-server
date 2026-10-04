@@ -256,15 +256,18 @@ export class CatalogSearchService {
       sellable: r.sellable,
       sku: r.sku,
       variationCount: r.variation_count,
-      variations: (variationsByItem.get(r.id) ?? []).map((v) => ({
-        id: v.square_variation_id,
-        name: v.name,
-        sku: v.sku,
-        priceCents: v.price_cents,
-        sellable: v.is_sellable,
-        stockCount: v.quantity,
-        isDefault: v.square_variation_id === r.variation_id,
-      })),
+      // Default variation first, then the rest in the order they were created (a stable sort keeps that order).
+      variations: (variationsByItem.get(r.id) ?? [])
+        .map((v) => ({
+          id: v.square_variation_id,
+          name: v.name,
+          sku: v.sku,
+          priceCents: v.price_cents,
+          sellable: v.is_sellable,
+          stockCount: v.quantity,
+          isDefault: v.square_variation_id === r.variation_id,
+        }))
+        .sort((a, b) => Number(b.isDefault) - Number(a.isDefault)),
       updatedAt: r.square_updated_at ?? r.updated_at,
       syncedAt: r.synced_at,
     }));

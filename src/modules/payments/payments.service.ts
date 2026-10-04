@@ -6,6 +6,7 @@ import { env } from '../../config/env.js';
 import { Db, type Row } from '../../database/db.service.js';
 import { OrdersService, type OrderDetails } from '../orders/orders.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
+import { isManualId } from '../catalog/manual-id.js';
 import { SquareClient } from '../../integrations/square/square.client.js';
 
 export interface PaymentStarted {
@@ -152,9 +153,7 @@ export class PaymentsService {
           location_id: locationId,
           reference_id: `spin-hobby-${order.id}`,
           line_items: lines.map((l) => ({
-            ...(l.square_item_id.startsWith('manual-')
-              ? {}
-              : { catalog_object_id: l.square_variation_id }),
+            ...(isManualId(l.square_item_id) ? {} : { catalog_object_id: l.square_variation_id }),
             name: l.name,
             quantity: String(l.quantity),
             base_price_money: { amount: l.unit_price_cents, currency: 'CAD' },

@@ -8,7 +8,6 @@ import { SquareSyncModule } from '../square-sync/square-sync.module.js';
 import { StoreModule } from '../store/store.module.js';
 import { AdminCategoriesController } from './admin-categories.controller.js';
 import { AdminLog } from './admin-log.service.js';
-import { AdminMerchController } from './admin-merch.controller.js';
 import { AdminOrdersController } from './admin-orders.controller.js';
 import { AdminDashboardController } from './dashboard/admin-dashboard.controller.js';
 import { AdminDashboardService } from './dashboard/admin-dashboard.service.js';
@@ -16,6 +15,8 @@ import { AdminEventsController } from './events/admin-events.controller.js';
 import { AdminEventsService } from './events/admin-events.service.js';
 import { AdminHomepageController } from './homepage/admin-homepage.controller.js';
 import { AdminHomepageService } from './homepage/admin-homepage.service.js';
+import { AdminMerchController } from './merch/admin-merch.controller.js';
+import { AdminMerchService } from './merch/admin-merch.service.js';
 import { AdminProductsController } from './products/admin-products.controller.js';
 import { AdminProductsService } from './products/admin-products.service.js';
 import { CatalogSearchService } from './products/catalog-search.service.js';
@@ -51,6 +52,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     CatalogSearchService,
     AdminDashboardService,
     AdminProductsService,
+    AdminMerchService,
     AdminSettingsService,
     AdminHomepageService,
     AdminEventsService,
