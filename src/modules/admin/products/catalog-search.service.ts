@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { AppError } from '../../common/errors.js';
-import { likePattern } from '../../common/validation/rules.js';
-import { Db, type Row } from '../../database/db.service.js';
+import { AppError } from '../../../common/errors.js';
+import { likePattern } from '../../../common/validation/rules.js';
+import { Db, type Row } from '../../../database/db.service.js';
+import type { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
 
 /**
  * What an admin sees an item as. Unlike the storefront view this covers every catalog row:
@@ -21,22 +22,6 @@ export const ADMIN_STATES = [
   'retired',
 ] as const;
 export type AdminState = (typeof ADMIN_STATES)[number];
-
-export interface CatalogQuery {
-  q?: string | null;
-  status?: string | null;
-  source?: string | null;
-  categoryId?: string | null;
-  featured?: string | null;
-  alerts?: string | null;
-  noPhoto?: string | null;
-  min?: string | null;
-  max?: string | null;
-  sort?: string | null;
-  dir?: string | null;
-  limit?: string | null;
-  cursor?: string | null;
-}
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const flag = (v: string | null | undefined) => v === '1' || v === 'true';
@@ -99,7 +84,7 @@ items as (
 export class CatalogSearchService {
   constructor(private readonly db: Db) {}
 
-  async search(query: CatalogQuery) {
+  async search(query: CatalogSearchQuery) {
     const limit = Math.min(Math.max(Number(query.limit ?? 50) || 50, 1), 100);
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
     const where: string[] = [];

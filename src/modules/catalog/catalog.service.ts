@@ -2,24 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { likePattern } from '../../common/validation/rules.js';
 import { Db, type Row } from '../../database/db.service.js';
+import type { ProductQuery } from './dto/product-query.dto.js';
 import { publicProduct, type PublicProduct } from './product.mapper.js';
-
-export interface ProductQuery {
-  limit?: string | null;
-  cursor?: string | null;
-  category?: string | null;
-  status?: string | null;
-  sort?: string | null;
-  min?: string | null;
-  max?: string | null;
-  q?: string | null;
-  /** Shop category id: matches the category and everything beneath it. */
-  categoryId?: string | null;
-  /** Storefront menu section: new, preorders, sale, figures, plushies, cards, goods, media. */
-  group?: string | null;
-  /** Comma-separated product ids (e.g. the shopper's wishlist). */
-  ids?: string | null;
-}
 
 const SORTS: Record<string, string> = {
   featured: 'is_featured desc, case when is_featured then sort_order end, created_at desc, id',

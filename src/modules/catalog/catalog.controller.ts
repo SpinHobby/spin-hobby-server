@@ -1,7 +1,8 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { notFound } from '../../common/errors.js';
 import { env } from '../../config/env.js';
-import { CatalogService, type ProductQuery } from './catalog.service.js';
+import { CatalogService } from './catalog.service.js';
+import { ProductQuery } from './dto/product-query.dto.js';
 import { publicProduct } from './product.mapper.js';
 
 @Controller()
