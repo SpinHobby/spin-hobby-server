@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { resetSignupLimits } from '../src/auth/auth.controller.js';
+import { resetSignupLimits } from '../src/modules/auth/auth.controller.js';
 import {
   createApp,
   createDatabase,

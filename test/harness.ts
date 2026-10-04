@@ -7,8 +7,8 @@ import { randomUUID } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { AppModule } from '../src/app.module.js';
-import { DB_DRIVER, type DbDriver } from '../src/db/db.service.js';
-import { configureApp } from '../src/setup.js';
+import { DB_DRIVER, type DbDriver } from '../src/database/db.service.js';
+import { configureApp } from '../src/app.setup.js';
 
 export const JWT_SECRET = 'test-secret-at-least-32-characters-long!!';
 const MIGRATIONS = join(import.meta.dirname, '..', 'supabase', 'migrations');

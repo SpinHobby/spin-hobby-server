@@ -5,8 +5,8 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
 import { trustProxyHops } from './config/env.js';
-import { initSentry } from './common/sentry.js';
-import { configureApp } from './setup.js';
+import { initSentry } from './integrations/sentry/sentry.js';
+import { configureApp } from './app.setup.js';
 
 async function bootstrap() {
   await initSentry();

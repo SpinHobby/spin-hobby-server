@@ -1,4 +1,4 @@
-// Loads the sample catalog (src/sample) into the STAGING database by hand. The staging API already
+// Loads the sample catalog (src/modules/sample) into the STAGING database by hand. The staging API already
 // does this itself the first time it starts against an empty catalog; use this to reload after
 // changing the sample data:
 //
@@ -26,7 +26,7 @@ const replace = process.argv.includes('--replace');
 const imageBase = process.env.STAGING_API_URL ?? 'https://spin-hobby-server-staging.onrender.com';
 
 execSync('npm run build', { stdio: 'inherit' });
-const { seedSample, clearSample, countProducts } = await import('../dist/sample/seed.js');
+const { seedSample, clearSample, countProducts } = await import('../dist/modules/sample/seed.js');
 
 const client = new pg.Client({
   connectionString: url,

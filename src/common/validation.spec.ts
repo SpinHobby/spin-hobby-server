@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { bootstrapRole } from '../auth/auth.service.js';
-import { sanitizeArtworkCrop } from '../cashier/identify.service.js';
-import { WebhooksController } from '../webhooks/webhooks.controller.js';
+import { bootstrapRole } from '../modules/auth/auth.service.js';
+import { sanitizeArtworkCrop } from '../modules/cashier/identify.service.js';
+import { WebhooksController } from '../modules/webhooks/webhooks.controller.js';
 import { likePattern, positiveInteger, stringValue } from './validation.js';
 
 describe('validation helpers', () => {
@@ -49,7 +49,7 @@ describe('sanitizeArtworkCrop', () => {
   });
 });
 
-import { explainDbError } from '../health/health.controller.js';
+import { explainDbError } from '../modules/health/health.controller.js';
 
 describe('explainDbError', () => {
   it('maps connection problems to safe, actionable reasons', () => {

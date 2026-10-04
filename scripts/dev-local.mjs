@@ -22,9 +22,9 @@ const DB_PORT = Number(process.env.DEV_DB_PORT ?? 54329);
 const root = join(import.meta.dirname, '..');
 const migrations = join(root, 'supabase', 'migrations');
 
-// The sample catalog is part of the API (src/sample), so build once and load it from dist.
+// The sample catalog is part of the API (src/modules/sample), so build once and load it from dist.
 execSync('npx nest build', { cwd: root, stdio: 'inherit' });
-const { seedSample } = await import(new URL('../dist/sample/seed.js', import.meta.url));
+const { seedSample } = await import(new URL('../dist/modules/sample/seed.js', import.meta.url));
 
 const db = await PGlite.create({ extensions: { pgcrypto } });
 await db.exec(`

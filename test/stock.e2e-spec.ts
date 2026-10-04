@@ -3,7 +3,7 @@ import type { INestApplication } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { OrdersService } from '../src/orders/orders.service.js';
+import { OrdersService } from '../src/modules/orders/orders.service.js';
 import {
   createApp,
   createDatabase,

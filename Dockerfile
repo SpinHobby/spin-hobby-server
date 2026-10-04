@@ -15,7 +15,7 @@ ENV NODE_ENV=production PORT=8080
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
-# Applied on start (see src/migrations): keeps the Supabase schema in step with the code.
+# Applied on start (see src/database/migrations): keeps the Supabase schema in step with the code.
 COPY supabase/migrations ./supabase/migrations
 USER node
 EXPOSE 8080
