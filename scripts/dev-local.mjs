@@ -36,10 +36,16 @@ await db.exec(`
   create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
   do $$ begin create role anon; create role authenticated; create role service_role; exception when others then null; end $$;
 `);
-for (const file of readdirSync(migrations).filter((f) => f.endsWith('.sql')).sort()) await db.exec(readFileSync(join(migrations, file), 'utf8'));
+for (const file of readdirSync(migrations)
+  .filter((f) => f.endsWith('.sql'))
+  .sort())
+  await db.exec(readFileSync(join(migrations, file), 'utf8'));
 
 // ---- seed: accounts
-for (const [email, role] of [['owner@spinhobby.test', 'owner'], ['staff@spinhobby.test', 'staff']]) {
+for (const [email, role] of [
+  ['owner@spinhobby.test', 'owner'],
+  ['staff@spinhobby.test', 'staff'],
+]) {
   const id = randomUUID();
   await db.query('insert into auth.users (id, email) values ($1, $2)', [id, email]);
   await db.query('update public.profiles set role = $2 where id = $1', [id, role]);
@@ -50,7 +56,9 @@ const seeded = await seedSample(db, `http://localhost:${process.env.PORT ?? '808
 
 const server = new PGLiteSocketServer({ db, port: DB_PORT, host: '127.0.0.1' });
 await server.start();
-console.log(`\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories`);
+console.log(
+  `\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories`,
+);
 console.log('  Sign in: owner@spinhobby.test / spinhobby  (or staff@spinhobby.test)\n');
 
 const api = spawn('npx', ['nest', 'start', '--watch'], {
@@ -71,29 +79,55 @@ const api = spawn('npx', ['nest', 'start', '--watch'], {
     ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:4173',
   },
 });
-const stop = async () => { api.kill('SIGTERM'); await server.stop(); await db.close(); process.exit(0); };
+const stop = async () => {
+  api.kill('SIGTERM');
+  await server.stop();
+  await db.close();
+  process.exit(0);
+};
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
-api.on('exit', (code) => { if (code) process.exit(code); });
+api.on('exit', (code) => {
+  if (code) process.exit(code);
+});
 
 // ---- optional: pull the Square catalog in once the API answers
 async function syncSquare() {
   if (process.env.DEV_SYNC_SQUARE === 'false') return;
   if (existsSync(join(root, '.env'))) {
-    try { process.loadEnvFile(join(root, '.env')); } catch { /* unreadable .env: carry on without it */ }
+    try {
+      process.loadEnvFile(join(root, '.env'));
+    } catch {
+      /* unreadable .env: carry on without it */
+    }
   }
   if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID) return;
   const base = `http://localhost:${process.env.PORT ?? '8080'}`;
   for (let i = 0; i < 120; i += 1) {
-    if (await fetch(`${base}/health/live`).then((r) => r.ok).catch(() => false)) break;
+    if (
+      await fetch(`${base}/health/live`)
+        .then((r) => r.ok)
+        .catch(() => false)
+    )
+      break;
     await new Promise((r) => setTimeout(r, 1000));
   }
   try {
-    const login = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'owner@spinhobby.test', password: 'spinhobby' }) });
+    const login = await fetch(`${base}/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'owner@spinhobby.test', password: 'spinhobby' }),
+    });
     const { accessToken } = await login.json();
-    const res = await fetch(`${base}/admin/square/sync`, { method: 'POST', headers: { authorization: `Bearer ${accessToken}` } });
+    const res = await fetch(`${base}/admin/square/sync`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${accessToken}` },
+    });
     const body = await res.json();
-    if (res.ok) console.log(`\n  Square sync: ${body.sync.products} products, ${body.sync.inventory} stock counts\n`);
+    if (res.ok)
+      console.log(
+        `\n  Square sync: ${body.sync.products} products, ${body.sync.inventory} stock counts\n`,
+      );
     else console.log(`\n  Square sync skipped: ${body.error ?? res.status}\n`);
   } catch (e) {
     console.log(`\n  Square sync skipped: ${e.message}\n`);

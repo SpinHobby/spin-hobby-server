@@ -5,20 +5,20 @@
 // is a bigger, separate cleanup. This list is only what new cashier-entered
 // items get classified into going forward.
 export const PRODUCT_CATEGORIES = [
-  "Bishoujo Figures",
-  "Action Figures",
-  "Nendoroids & Chibi Figures",
-  "Plushies",
-  "Keychains & Straps",
-  "Acrylic Stands",
-  "Badges & Pins",
-  "Trading Cards & TCG",
-  "Apparel",
-  "Home Goods",
-  "Posters & Tapestries",
-  "Stationery & Stickers",
-  "Cosplay",
-  "Other",
+  'Bishoujo Figures',
+  'Action Figures',
+  'Nendoroids & Chibi Figures',
+  'Plushies',
+  'Keychains & Straps',
+  'Acrylic Stands',
+  'Badges & Pins',
+  'Trading Cards & TCG',
+  'Apparel',
+  'Home Goods',
+  'Posters & Tapestries',
+  'Stationery & Stickers',
+  'Cosplay',
+  'Other',
 ] as const;
 
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];

@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { originAllowed } from './env.js';
 
 describe('originAllowed', () => {
-  afterEach(() => { delete process.env.ALLOWED_ORIGINS; });
+  afterEach(() => {
+    delete process.env.ALLOWED_ORIGINS;
+  });
 
   it('always allows the storefront and exact ALLOWED_ORIGINS entries', () => {
     process.env.ALLOWED_ORIGINS = 'https://staging--spinhobby.netlify.app';

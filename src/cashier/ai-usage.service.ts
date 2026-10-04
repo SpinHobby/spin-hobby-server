@@ -25,19 +25,34 @@ export class AiUsageService {
   }
 
   record(tool: string, costUsd: number, inputTokens?: number, outputTokens?: number) {
-    return this.db.exec('insert into public.ai_usage_log (tool, cost_usd, input_tokens, output_tokens) values ($1, $2, $3, $4)',
-      [tool, costUsd, inputTokens ?? null, outputTokens ?? null]);
+    return this.db.exec(
+      'insert into public.ai_usage_log (tool, cost_usd, input_tokens, output_tokens) values ($1, $2, $3, $4)',
+      [tool, costUsd, inputTokens ?? null, outputTokens ?? null],
+    );
   }
 
   async status(tool: string): Promise<BudgetStatus> {
     const [budget, spend] = await Promise.all([
-      this.db.one<{ warn_threshold_usd: number; stop_threshold_usd: number }>('select warn_threshold_usd, stop_threshold_usd from public.ai_budgets where tool = $1', [tool]),
-      this.db.one<{ total: number }>("select coalesce(sum(cost_usd), 0) as total from public.ai_usage_log where tool = $1 and created_at >= date_trunc('month', now())", [tool]),
+      this.db.one<{ warn_threshold_usd: number; stop_threshold_usd: number }>(
+        'select warn_threshold_usd, stop_threshold_usd from public.ai_budgets where tool = $1',
+        [tool],
+      ),
+      this.db.one<{ total: number }>(
+        "select coalesce(sum(cost_usd), 0) as total from public.ai_usage_log where tool = $1 and created_at >= date_trunc('month', now())",
+        [tool],
+      ),
     ]);
     const warnThresholdUsd = Number(budget?.warn_threshold_usd ?? 20);
     const stopThresholdUsd = Number(budget?.stop_threshold_usd ?? 30);
     const spendUsd = Number(spend?.total ?? 0);
-    return { tool, spendUsd, warnThresholdUsd, stopThresholdUsd, status: spendUsd >= stopThresholdUsd ? 'blocked' : spendUsd >= warnThresholdUsd ? 'warn' : 'ok' };
+    return {
+      tool,
+      spendUsd,
+      warnThresholdUsd,
+      stopThresholdUsd,
+      status:
+        spendUsd >= stopThresholdUsd ? 'blocked' : spendUsd >= warnThresholdUsd ? 'warn' : 'ok',
+    };
   }
 
   async setBudget(tool: string, warnThresholdUsd: number, stopThresholdUsd: number) {

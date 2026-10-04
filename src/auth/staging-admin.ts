@@ -7,7 +7,11 @@ export const PRODUCTION_SUPABASE_REF = 'zmlltsytckexrmybvnof';
 /** Reserved address for the staging admin account (no email is ever sent to it). */
 export const STAGING_ADMIN_DOMAIN = 'staging.spinhobby.com';
 
-export interface StagingAdmin { username: string; password: string; email: string }
+export interface StagingAdmin {
+  username: string;
+  password: string;
+  email: string;
+}
 
 /**
  * Staging only: a fixed owner login (STAGING_ADMIN_USERNAME / STAGING_ADMIN_PASSWORD, see
@@ -28,7 +32,10 @@ export function stagingAdmin(): StagingAdmin | null {
 }
 
 /** True when the sign-in form's email field holds the staging admin username (case-insensitive). */
-export function isStagingAdminLogin(admin: StagingAdmin | null, identifier: string): admin is StagingAdmin {
+export function isStagingAdminLogin(
+  admin: StagingAdmin | null,
+  identifier: string,
+): admin is StagingAdmin {
   return Boolean(admin) && identifier.trim().toLowerCase() === admin!.username.toLowerCase();
 }
 

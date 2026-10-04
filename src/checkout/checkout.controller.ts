@@ -3,7 +3,13 @@ import { CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AppError } from '../common/errors.js';
 import { RateLimit } from '../common/rate-limit.js';
-import { email as validEmail, jsonBody, positiveInteger, stringValue, type Json } from '../common/validation.js';
+import {
+  email as validEmail,
+  jsonBody,
+  positiveInteger,
+  stringValue,
+  type Json,
+} from '../common/validation.js';
 import { env, paypalIsLive, squareEnvIsProduction } from '../config/env.js';
 import { PaymentsService } from '../payments/payments.service.js';
 import { StoreService } from '../store/store.service.js';
@@ -53,12 +59,22 @@ export class CheckoutController {
   async intent(@CurrentUser() user: AppUser | null, @Body() body: unknown) {
     const payload = jsonBody(body);
     const rawQuote = (payload.quoteInput ?? payload.quote) as Json;
-    if (!rawQuote || typeof rawQuote !== 'object' || Array.isArray(rawQuote)) throw new AppError('quoteInput is required.');
+    if (!rawQuote || typeof rawQuote !== 'object' || Array.isArray(rawQuote))
+      throw new AppError('quoteInput is required.');
     const email = validEmail(payload.email);
-    if (!payload.billing || typeof payload.billing !== 'object' || !payload.shipping || typeof payload.shipping !== 'object') {
+    if (
+      !payload.billing ||
+      typeof payload.billing !== 'object' ||
+      !payload.shipping ||
+      typeof payload.shipping !== 'object'
+    ) {
       throw new AppError('Billing and shipping addresses are required.');
     }
-    const started = await this.payments.start(parseQuoteInput(rawQuote), { email, billing: payload.billing, shipping: payload.shipping }, user);
+    const started = await this.payments.start(
+      parseQuoteInput(rawQuote),
+      { email, billing: payload.billing, shipping: payload.shipping },
+      user,
+    );
     return { success: true, ...started };
   }
 
@@ -78,7 +94,11 @@ export class CheckoutController {
     const orderId = positiveInteger(payload.orderId, 'orderId', Number.MAX_SAFE_INTEGER);
     const sourceId = stringValue(payload.sourceId, 'sourceId', 500);
     const email = stringValue(payload.email, 'email', 254).toLowerCase();
-    const verificationToken = typeof payload.verificationToken === 'string' ? payload.verificationToken : undefined;
-    return { success: true, ...(await this.payments.captureSquare(orderId, email, sourceId, verificationToken)) };
+    const verificationToken =
+      typeof payload.verificationToken === 'string' ? payload.verificationToken : undefined;
+    return {
+      success: true,
+      ...(await this.payments.captureSquare(orderId, email, sourceId, verificationToken)),
+    };
   }
 }

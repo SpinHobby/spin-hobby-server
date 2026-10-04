@@ -5,7 +5,11 @@
  */
 import { sampleProductBySlug, type SampleProduct } from './catalog.js';
 
-const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const esc = (s: string) =>
+  s.replace(
+    /[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!,
+  );
 
 function hue(seed: string) {
   let h = 7;
@@ -19,20 +23,38 @@ function wrap(text: string, max: number): string[] {
   const lines: string[] = [];
   let line = '';
   for (const word of text.split(' ')) {
-    if (line && (line + ' ' + word).length > max) { lines.push(line); line = word; } else line = line ? `${line} ${word}` : word;
+    if (line && (line + ' ' + word).length > max) {
+      lines.push(line);
+      line = word;
+    } else line = line ? `${line} ${word}` : word;
   }
   if (line) lines.push(line);
-  if (lines.length > 2) { lines.length = 2; lines[1] = lines[1].slice(0, max - 1) + '…'; }
+  if (lines.length > 2) {
+    lines.length = 2;
+    lines[1] = lines[1].slice(0, max - 1) + '…';
+  }
   return lines;
 }
 
-interface Palette { acc: string; acc2: string; dark: string; light: string; skin: string }
+interface Palette {
+  acc: string;
+  acc2: string;
+  dark: string;
+  light: string;
+  skin: string;
+}
 
-const FONT = "font-family=\"'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif\"";
+const FONT =
+  "font-family=\"'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif\"";
 
 // ---- illustrations: each is centred around (400, 400) in an 800x800 picture
 
-function person(c: Palette, head: number, body: number, opts: { joints?: boolean; ribbon?: string } = {}) {
+function person(
+  c: Palette,
+  head: number,
+  body: number,
+  opts: { joints?: boolean; ribbon?: string } = {},
+) {
   const cx = 400;
   const hy = 150 + head;
   const bodyTop = hy + head - 12;
@@ -40,7 +62,8 @@ function person(c: Palette, head: number, body: number, opts: { joints?: boolean
   const skirt = 100 * body;
   const bottom = bodyTop + torso + skirt;
   const w = 60 * body;
-  const joint = (x: number, y: number) => `<circle cx="${x}" cy="${y}" r="9" fill="${c.dark}" opacity=".5"/>`;
+  const joint = (x: number, y: number) =>
+    `<circle cx="${x}" cy="${y}" r="9" fill="${c.dark}" opacity=".5"/>`;
   return `
     <ellipse cx="${cx}" cy="${bottom + 38}" rx="190" ry="26" fill="${c.dark}" opacity=".15"/>
     <rect x="${cx - 150}" y="${bottom + 12}" width="300" height="26" rx="13" fill="${c.acc2}"/>
@@ -69,7 +92,8 @@ const sparkle = (x: number, y: number, r: number, fill: string) =>
   `<path d="M${x} ${y - r} q${r * 0.15} ${r * 0.85} ${r} ${r} q-${r * 0.85} ${r * 0.15} -${r} ${r} q-${r * 0.15} -${r * 0.85} -${r} -${r} q${r * 0.85} -${r * 0.15} ${r} -${r} z" fill="${fill}"/>`;
 
 function mecha(c: Palette, armour: string, fin: boolean, label: string) {
-  const s = (x: number, y: number, w: number, h: number, r = 12, fill = armour) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${c.dark}" stroke-width="4"/>`;
+  const s = (x: number, y: number, w: number, h: number, r = 12, fill = armour) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${r}" fill="${fill}" stroke="${c.dark}" stroke-width="4"/>`;
   return `
     <ellipse cx="400" cy="630" rx="190" ry="24" fill="${c.dark}" opacity=".15"/>
     ${fin ? `<path d="M400 212 l-70 -62 l34 64 z M400 212 l70 -62 l-34 64 z" fill="${c.acc}"/>` : `<rect x="384" y="150" width="32" height="40" rx="6" fill="${c.acc}"/>`}
@@ -109,7 +133,8 @@ function nipper(c: Palette) {
 }
 
 function marker(c: Palette) {
-  const pen = (x: number, fill: string) => `<g transform="translate(${x} 0) rotate(-18 400 400)"><rect x="372" y="250" width="56" height="300" rx="14" fill="${fill}" stroke="${c.dark}" stroke-width="4"/><rect x="372" y="250" width="56" height="60" rx="14" fill="${c.dark}"/><path d="M386 550 l14 40 l14 -40 z" fill="${c.dark}"/></g>`;
+  const pen = (x: number, fill: string) =>
+    `<g transform="translate(${x} 0) rotate(-18 400 400)"><rect x="372" y="250" width="56" height="300" rx="14" fill="${fill}" stroke="${c.dark}" stroke-width="4"/><rect x="372" y="250" width="56" height="60" rx="14" fill="${c.dark}"/><path d="M386 550 l14 40 l14 -40 z" fill="${c.dark}"/></g>`;
   return pen(-120, c.acc) + pen(0, c.acc2) + pen(120, c.light);
 }
 
@@ -262,37 +287,75 @@ function bluray(c: Palette) {
 
 function illustration(p: SampleProduct, c: Palette): string {
   switch (p.kind) {
-    case 'figure': return person(c, 72, 1, {});
-    case 'prize': return person(c, 76, 0.9, { ribbon: 'PRIZE' });
-    case 'nendoroid': return person(c, 104, 0.6, {});
-    case 'figma': return person(c, 56, 1.1, { joints: true });
-    case 'gunpla': return mecha(c, '#f4f6fb', true, p.name.match(/^(HG|RG|MG|PG|Entry Grade)[^ ]*/)?.[0] ?? 'Gunpla');
-    case 'mecha': return mecha(c, c.light, /Evangelion/.test(p.series), p.series.slice(0, 12));
-    case 'car': return car(c);
-    case 'nipper': return nipper(c);
-    case 'marker': return marker(c);
-    case 'bottle': return bottle(c);
-    case 'plush': return plush(c);
-    case 'booster': return booster(c, 'BOOSTER');
-    case 'deck': return deck(c, 'SEALED');
-    case 'acrylic': return acrylic(c);
-    case 'badge': return badge(c, false);
-    case 'pin': return badge(c, true);
-    case 'keychain': return keychain(c);
-    case 'blindbox': return blindbox(c);
-    case 'shirt': case 'hoodie': case 'cap': return apparel(c, p.kind);
-    case 'tapestry': return hanging(c, false);
-    case 'poster': return hanging(c, true);
-    case 'manga': return book(c, p.name.match(/Vol\. \d+/)?.[0] ?? 'MANGA', false);
-    case 'artbook': return book(c, 'ART BOOK', true);
-    case 'cd': return disc(c);
-    case 'bluray': return bluray(c);
+    case 'figure':
+      return person(c, 72, 1, {});
+    case 'prize':
+      return person(c, 76, 0.9, { ribbon: 'PRIZE' });
+    case 'nendoroid':
+      return person(c, 104, 0.6, {});
+    case 'figma':
+      return person(c, 56, 1.1, { joints: true });
+    case 'gunpla':
+      return mecha(
+        c,
+        '#f4f6fb',
+        true,
+        p.name.match(/^(HG|RG|MG|PG|Entry Grade)[^ ]*/)?.[0] ?? 'Gunpla',
+      );
+    case 'mecha':
+      return mecha(c, c.light, /Evangelion/.test(p.series), p.series.slice(0, 12));
+    case 'car':
+      return car(c);
+    case 'nipper':
+      return nipper(c);
+    case 'marker':
+      return marker(c);
+    case 'bottle':
+      return bottle(c);
+    case 'plush':
+      return plush(c);
+    case 'booster':
+      return booster(c, 'BOOSTER');
+    case 'deck':
+      return deck(c, 'SEALED');
+    case 'acrylic':
+      return acrylic(c);
+    case 'badge':
+      return badge(c, false);
+    case 'pin':
+      return badge(c, true);
+    case 'keychain':
+      return keychain(c);
+    case 'blindbox':
+      return blindbox(c);
+    case 'shirt':
+    case 'hoodie':
+    case 'cap':
+      return apparel(c, p.kind);
+    case 'tapestry':
+      return hanging(c, false);
+    case 'poster':
+      return hanging(c, true);
+    case 'manga':
+      return book(c, p.name.match(/Vol\. \d+/)?.[0] ?? 'MANGA', false);
+    case 'artbook':
+      return book(c, 'ART BOOK', true);
+    case 'cd':
+      return disc(c);
+    case 'bluray':
+      return bluray(c);
   }
 }
 
 function palette(seed: string): Palette {
   const h = hue(seed);
-  return { acc: hsl(h, 62, 58), acc2: hsl(h + 36, 58, 44), dark: '#2b2d42', light: hsl(h + 180, 70, 90), skin: '#ffe6d3' };
+  return {
+    acc: hsl(h, 62, 58),
+    acc2: hsl(h + 36, 58, 44),
+    dark: '#2b2d42',
+    light: hsl(h + 180, 70, 90),
+    skin: '#ffe6d3',
+  };
 }
 
 /** The 800x800 picture of one sample product. */

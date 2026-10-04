@@ -1,17 +1,50 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Post, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Put,
+} from '@nestjs/common';
 import { Access, CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AdminLog } from '../common/admin-log.service.js';
 import { AppError, notFound } from '../common/errors.js';
-import { jsonBody, optionalString, stringValue, boolValue, type Json } from '../common/validation.js';
+import {
+  jsonBody,
+  optionalString,
+  stringValue,
+  boolValue,
+  type Json,
+} from '../common/validation.js';
 import { env } from '../config/env.js';
 import { Db, type Row } from '../db/db.service.js';
 import { SquareSyncService } from '../square-sync/square-sync.service.js';
 import { StoreService } from '../store/store.service.js';
 
-const SETTINGS_FIELDS = ['payment_provider', 'shipping_standard_cents', 'shipping_express_cents', 'free_shipping_threshold_cents',
-  'low_stock_threshold', 'fx_cad_usd', 'handling_days_min', 'handling_days_max', 'maintenance_mode', 'maintenance_message'] as const;
-const SETTINGS_INTEGERS = ['shipping_standard_cents', 'shipping_express_cents', 'free_shipping_threshold_cents', 'low_stock_threshold', 'handling_days_min', 'handling_days_max'];
+const SETTINGS_FIELDS = [
+  'payment_provider',
+  'shipping_standard_cents',
+  'shipping_express_cents',
+  'free_shipping_threshold_cents',
+  'low_stock_threshold',
+  'fx_cad_usd',
+  'handling_days_min',
+  'handling_days_max',
+  'maintenance_mode',
+  'maintenance_message',
+] as const;
+const SETTINGS_INTEGERS = [
+  'shipping_standard_cents',
+  'shipping_express_cents',
+  'free_shipping_threshold_cents',
+  'low_stock_threshold',
+  'handling_days_min',
+  'handling_days_max',
+];
 
 function sortOrder(value: unknown) {
   return Number.isInteger(Number(value)) ? Number(value) : 0;
@@ -20,7 +53,12 @@ function sortOrder(value: unknown) {
 @Controller('admin')
 @Access('staff')
 export class AdminContentController {
-  constructor(private readonly db: Db, private readonly store: StoreService, private readonly log: AdminLog, private readonly sync: SquareSyncService) {}
+  constructor(
+    private readonly db: Db,
+    private readonly store: StoreService,
+    private readonly log: AdminLog,
+    private readonly sync: SquareSyncService,
+  ) {}
 
   // ---------------------------------------------------------------- settings
   @Get('settings')
@@ -34,13 +72,21 @@ export class AdminContentController {
     const payload = jsonBody(body);
     const update: Row = {};
     for (const key of SETTINGS_FIELDS) if (key in payload) update[key] = payload[key];
-    if (update.payment_provider && !['paypal', 'square'].includes(update.payment_provider)) throw new AppError('Invalid payment provider.');
-    if (update.maintenance_mode !== undefined) update.maintenance_mode = boolValue(update.maintenance_mode, 'maintenance_mode');
-    if (update.maintenance_message !== undefined) update.maintenance_message = optionalString(update.maintenance_message, 1000);
+    if (update.payment_provider && !['paypal', 'square'].includes(update.payment_provider))
+      throw new AppError('Invalid payment provider.');
+    if (update.maintenance_mode !== undefined)
+      update.maintenance_mode = boolValue(update.maintenance_mode, 'maintenance_mode');
+    if (update.maintenance_message !== undefined)
+      update.maintenance_message = optionalString(update.maintenance_message, 1000);
     for (const key of SETTINGS_INTEGERS) {
-      if (update[key] !== undefined && (!Number.isInteger(Number(update[key])) || Number(update[key]) < 0)) throw new AppError(`Invalid ${key}.`);
+      if (
+        update[key] !== undefined &&
+        (!Number.isInteger(Number(update[key])) || Number(update[key]) < 0)
+      )
+        throw new AppError(`Invalid ${key}.`);
     }
-    if (update.fx_cad_usd !== undefined && !(Number(update.fx_cad_usd) > 0)) throw new AppError('Invalid fx_cad_usd.');
+    if (update.fx_cad_usd !== undefined && !(Number(update.fx_cad_usd) > 0))
+      throw new AppError('Invalid fx_cad_usd.');
     const keys = Object.keys(update);
     if (!keys.length) return { success: true, settings: await this.store.settings() };
     const current = await this.store.settings();
@@ -50,7 +96,8 @@ export class AdminContentController {
     const settings = await this.db.transaction(async (tx) => {
       const row = await this.db.one(
         `update public.store_settings set ${keys.map((k, i) => `${k} = $${i + 1}`).join(', ')} where id = true returning *`,
-        keys.map((k) => update[k]), tx,
+        keys.map((k) => update[k]),
+        tx,
       );
       await this.log.write(admin.id, 'settings.updated', 'store', update, tx);
       return row;
@@ -62,7 +109,10 @@ export class AdminContentController {
   @Get('tax-rates')
   @Access('owner')
   async taxRates() {
-    return { success: true, taxRates: await this.db.many('select * from public.tax_rates order by country, province') };
+    return {
+      success: true,
+      taxRates: await this.db.many('select * from public.tax_rates order by country, province'),
+    };
   }
 
   @Put('tax-rates')
@@ -72,7 +122,8 @@ export class AdminContentController {
     const country = payload.country === 'CA' || payload.country === 'US' ? payload.country : null;
     const province = stringValue(payload.province, 'province', 10).toUpperCase();
     const rate = Number(payload.rate);
-    if (!country || !Number.isFinite(rate) || rate < 0 || rate > 1) throw new AppError('Invalid tax rate.');
+    if (!country || !Number.isFinite(rate) || rate < 0 || rate > 1)
+      throw new AppError('Invalid tax rate.');
     const enabled = payload.enabled !== false;
     const taxRate = await this.db.one(
       `insert into public.tax_rates (country, province, rate, enabled) values ($1, $2, $3, $4)
@@ -86,7 +137,12 @@ export class AdminContentController {
   // ---------------------------------------------------------------- hero slides
   @Get('homepage/slides')
   async slides() {
-    return { success: true, slides: await this.db.many('select * from public.hero_slides order by sort_order, created_at') };
+    return {
+      success: true,
+      slides: await this.db.many(
+        'select * from public.hero_slides order by sort_order, created_at',
+      ),
+    };
   }
 
   @Post('homepage/slides')
@@ -96,8 +152,14 @@ export class AdminContentController {
     const slide = await this.db.one(
       `insert into public.hero_slides (headline, subheading, image_url, link_url, is_visible, sort_order)
        values ($1, $2, $3, $4, $5, $6) returning *`,
-      [stringValue(p.headline, 'headline', 160), optionalString(p.subheading, 300), optionalString(p.imageUrl, 1000),
-        optionalString(p.linkUrl, 1000), p.isVisible === true, sortOrder(p.sortOrder)],
+      [
+        stringValue(p.headline, 'headline', 160),
+        optionalString(p.subheading, 300),
+        optionalString(p.imageUrl, 1000),
+        optionalString(p.linkUrl, 1000),
+        p.isVisible === true,
+        sortOrder(p.sortOrder),
+      ],
     );
     await this.log.write(admin.id, 'homepage.slide_created', slide!.id);
     return { success: true, slide };
@@ -118,16 +180,26 @@ export class AdminContentController {
 
   private async reorder(admin: AppUser, body: unknown) {
     const ids = jsonBody(body).ids;
-    if (!Array.isArray(ids) || ids.length > 100 || ids.some((id) => typeof id !== 'string')) throw new AppError('ids is required.');
+    if (!Array.isArray(ids) || ids.length > 100 || ids.some((id) => typeof id !== 'string'))
+      throw new AppError('ids is required.');
     await this.db.transaction(async (tx) => {
-      for (const [i, id] of (ids as string[]).entries()) await this.db.exec('update public.hero_slides set sort_order = $2 where id::text = $1', [id, i], tx);
+      for (const [i, id] of (ids as string[]).entries())
+        await this.db.exec(
+          'update public.hero_slides set sort_order = $2 where id::text = $1',
+          [id, i],
+          tx,
+        );
       await this.log.write(admin.id, 'homepage.slides_reordered', 'hero_slides', {}, tx);
     });
     return { success: true };
   }
 
   @Put('homepage/slides/:id')
-  async updateSlide(@CurrentUser() admin: AppUser, @Param('id', new ParseUUIDPipe()) id: string, @Body() body: unknown) {
+  async updateSlide(
+    @CurrentUser() admin: AppUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: unknown,
+  ) {
     const p = jsonBody(body);
     const update: Row = {};
     if ('headline' in p) update.headline = stringValue(p.headline, 'headline', 160);
@@ -135,10 +207,14 @@ export class AdminContentController {
     if ('imageUrl' in p) update.image_url = optionalString(p.imageUrl, 1000);
     if ('linkUrl' in p) update.link_url = optionalString(p.linkUrl, 1000);
     if ('isVisible' in p) update.is_visible = p.isVisible === true;
-    if ('sortOrder' in p && Number.isInteger(Number(p.sortOrder))) update.sort_order = Number(p.sortOrder);
+    if ('sortOrder' in p && Number.isInteger(Number(p.sortOrder)))
+      update.sort_order = Number(p.sortOrder);
     const keys = Object.keys(update);
     const slide = keys.length
-      ? await this.db.one(`update public.hero_slides set ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} where id = $1 returning *`, [id, ...keys.map((k) => update[k])])
+      ? await this.db.one(
+          `update public.hero_slides set ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} where id = $1 returning *`,
+          [id, ...keys.map((k) => update[k])],
+        )
       : await this.db.one('select * from public.hero_slides where id = $1', [id]);
     if (!slide) throw notFound('Slide');
     await this.log.write(admin.id, 'homepage.slide_updated', id, update);
@@ -155,16 +231,30 @@ export class AdminContentController {
   // ---------------------------------------------------------------- events
   @Get('events')
   async events() {
-    return { success: true, events: await this.db.many('select * from public.store_events order by sort_order, created_at') };
+    return {
+      success: true,
+      events: await this.db.many(
+        'select * from public.store_events order by sort_order, created_at',
+      ),
+    };
   }
 
   private eventRecord(p: Json) {
     const start = optionalString(p.startDate, 30);
     const end = optionalString(p.endDate, 30);
-    for (const d of [start, end]) if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new AppError('Dates must be YYYY-MM-DD.');
-    if (start && end && end < start) throw new AppError('End date must be on or after the start date.');
-    return [stringValue(p.name, 'name', 160), optionalString(p.city, 120), optionalString(p.startDate, 30), optionalString(p.endDate, 30),
-      optionalString(p.boothInfo, 200), p.isVisible !== false, sortOrder(p.sortOrder)];
+    for (const d of [start, end])
+      if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) throw new AppError('Dates must be YYYY-MM-DD.');
+    if (start && end && end < start)
+      throw new AppError('End date must be on or after the start date.');
+    return [
+      stringValue(p.name, 'name', 160),
+      optionalString(p.city, 120),
+      optionalString(p.startDate, 30),
+      optionalString(p.endDate, 30),
+      optionalString(p.boothInfo, 200),
+      p.isVisible !== false,
+      sortOrder(p.sortOrder),
+    ];
   }
 
   @Post('events')
@@ -173,18 +263,24 @@ export class AdminContentController {
     const record = this.eventRecord(jsonBody(body));
     const event = await this.db.one(
       `insert into public.store_events (name, city, start_date, end_date, booth_info, is_visible, sort_order)
-       values ($1, $2, $3, $4, $5, $6, $7) returning *`, record,
+       values ($1, $2, $3, $4, $5, $6, $7) returning *`,
+      record,
     );
     await this.log.write(admin.id, 'event.created', event!.id, { name: record[0] });
     return { success: true, event };
   }
 
   @Put('events/:id')
-  async updateEvent(@CurrentUser() admin: AppUser, @Param('id', new ParseUUIDPipe()) id: string, @Body() body: unknown) {
+  async updateEvent(
+    @CurrentUser() admin: AppUser,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: unknown,
+  ) {
     const record = this.eventRecord(jsonBody(body));
     const event = await this.db.one(
       `update public.store_events set name = $2, city = $3, start_date = $4, end_date = $5, booth_info = $6, is_visible = $7, sort_order = $8
-        where id = $1 returning *`, [id, ...record],
+        where id = $1 returning *`,
+      [id, ...record],
     );
     if (!event) throw notFound('Event');
     await this.log.write(admin.id, 'event.updated', id, { name: record[0] });
@@ -203,7 +299,9 @@ export class AdminContentController {
   async readiness() {
     const [catalog, settings] = await Promise.all([
       // Only items that came from Square count: sample and hand-entered products carry a timestamp too, but nothing was synced.
-      this.db.one<{ synced_at: string | null }>("select max(synced_at) as synced_at from public.catalog_products where source = 'square'"),
+      this.db.one<{ synced_at: string | null }>(
+        "select max(synced_at) as synced_at from public.catalog_products where source = 'square'",
+      ),
       this.store.settings(),
     ]);
     return {

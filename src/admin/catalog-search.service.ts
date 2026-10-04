@@ -10,14 +10,32 @@ import { Db, type Row } from '../db/db.service.js';
  *  unavailable can't be bought: no sellable default variation
  *  otherwise   the storefront status: in, low, out, pre, closed
  */
-export const ADMIN_STATES = ['in', 'low', 'out', 'pre', 'closed', 'unavailable', 'hidden', 'retired'] as const;
+export const ADMIN_STATES = [
+  'in',
+  'low',
+  'out',
+  'pre',
+  'closed',
+  'unavailable',
+  'hidden',
+  'retired',
+] as const;
 export type AdminState = (typeof ADMIN_STATES)[number];
 
 export interface CatalogQuery {
-  q?: string | null; status?: string | null; source?: string | null; categoryId?: string | null;
-  featured?: string | null; alerts?: string | null; noPhoto?: string | null;
-  min?: string | null; max?: string | null; sort?: string | null; dir?: string | null;
-  limit?: string | null; cursor?: string | null;
+  q?: string | null;
+  status?: string | null;
+  source?: string | null;
+  categoryId?: string | null;
+  featured?: string | null;
+  alerts?: string | null;
+  noPhoto?: string | null;
+  min?: string | null;
+  max?: string | null;
+  sort?: string | null;
+  dir?: string | null;
+  limit?: string | null;
+  cursor?: string | null;
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -86,35 +104,52 @@ export class CatalogSearchService {
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
     const where: string[] = [];
     const params: unknown[] = [];
-    const add = (clause: (n: string) => string, value: unknown) => { params.push(value); where.push(clause(`$${params.length}`)); };
+    const add = (clause: (n: string) => string, value: unknown) => {
+      params.push(value);
+      where.push(clause(`$${params.length}`));
+    };
 
     // Every word must match somewhere: name, series, character, maker, JAN, category, SKU or a Square id.
     for (const term of (query.q ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 6)) {
       params.push(likePattern(term), term);
-      const like = `$${params.length - 1}`, exact = `$${params.length}`;
+      const like = `$${params.length - 1}`,
+        exact = `$${params.length}`;
       where.push(`(name ilike ${like} or series ilike ${like} or character ilike ${like} or manufacturer ilike ${like} or jan_code ilike ${like}
         or category ilike ${like} or id = ${exact} or variation_id = ${exact}
         or exists (select 1 from public.catalog_variations cv where cv.square_item_id = items.id
                     and (cv.sku ilike ${like} or cv.name ilike ${like} or cv.square_variation_id = ${exact})))`);
     }
 
-    const states = (query.status ?? '').split(',').map((s) => s.trim()).filter(Boolean);
-    for (const s of states) if (!(ADMIN_STATES as readonly string[]).includes(s)) throw new AppError(`Unknown status "${s}".`);
+    const states = (query.status ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const s of states)
+      if (!(ADMIN_STATES as readonly string[]).includes(s))
+        throw new AppError(`Unknown status "${s}".`);
     if (states.length) add((n) => `state = any(${n}::text[])`, states);
 
     if (query.source) {
-      if (query.source !== 'square' && query.source !== 'manual') throw new AppError('Source must be square or manual.');
+      if (query.source !== 'square' && query.source !== 'manual')
+        throw new AppError('Source must be square or manual.');
       add((n) => `source = ${n}`, query.source);
     }
     if (query.categoryId) {
       if (query.categoryId === 'none') where.push('category_id is null');
-      else if (UUID.test(query.categoryId)) add((n) => `category_id in (select id from cat_paths where ${n}::uuid = any(lineage))`, query.categoryId);
+      else if (UUID.test(query.categoryId))
+        add(
+          (n) => `category_id in (select id from cat_paths where ${n}::uuid = any(lineage))`,
+          query.categoryId,
+        );
       else throw new AppError('Invalid category.');
     }
     if (flag(query.featured)) where.push('is_featured');
     if (flag(query.alerts)) where.push('alerts_waiting > 0');
     if (flag(query.noPhoto)) where.push('not has_photo');
-    for (const [key, op] of [['min', '>='], ['max', '<=']] as const) {
+    for (const [key, op] of [
+      ['min', '>='],
+      ['max', '<='],
+    ] as const) {
       const raw = query[key];
       if (raw == null || raw === '') continue;
       const dollars = Number(raw);
@@ -130,12 +165,22 @@ export class CatalogSearchService {
     const filter = where.length ? `where ${where.join(' and ')}` : '';
 
     const [rows, count] = await Promise.all([
-      this.db.many(`${ITEMS} select * from items ${filter} order by ${SORTS[sortKey]} ${dir} nulls last, lower(name), id limit ${limit} offset ${offset}`, params),
-      this.db.one<{ total: number }>(`${ITEMS} select count(*)::int as total from items ${filter}`, params),
+      this.db.many(
+        `${ITEMS} select * from items ${filter} order by ${SORTS[sortKey]} ${dir} nulls last, lower(name), id limit ${limit} offset ${offset}`,
+        params,
+      ),
+      this.db.one<{ total: number }>(
+        `${ITEMS} select count(*)::int as total from items ${filter}`,
+        params,
+      ),
     ]);
     const total = count?.total ?? 0;
     const next = offset + rows.length;
-    return { items: await this.decorate(rows), total, ...(next < total ? { cursor: String(next) } : {}) };
+    return {
+      items: await this.decorate(rows),
+      total,
+      ...(next < total ? { cursor: String(next) } : {}),
+    };
   }
 
   /** Totals for the filter chips, over the whole catalog (not the current filters). */
@@ -154,7 +199,11 @@ export class CatalogSearchService {
     return {
       total: row?.total ?? 0,
       states: Object.fromEntries(ADMIN_STATES.map((s) => [s, Number(row?.[s] ?? 0)])),
-      manual: row?.manual ?? 0, square: row?.square ?? 0, featured: row?.featured ?? 0, alerts: row?.alerts ?? 0, noPhoto: row?.no_photo ?? 0,
+      manual: row?.manual ?? 0,
+      square: row?.square ?? 0,
+      featured: row?.featured ?? 0,
+      alerts: row?.alerts ?? 0,
+      noPhoto: row?.no_photo ?? 0,
       lastSyncedAt: row?.last_synced_at ?? null,
     };
   }
@@ -164,7 +213,10 @@ export class CatalogSearchService {
     if (!rows.length) return [];
     const ids = rows.map((r) => r.id);
     const [images, variations] = await Promise.all([
-      this.db.many('select square_item_id, image_url from public.product_images where square_item_id = any($1::text[]) order by sort_order', [ids]),
+      this.db.many(
+        'select square_item_id, image_url from public.product_images where square_item_id = any($1::text[]) order by sort_order',
+        [ids],
+      ),
       this.db.many(
         `select cv.square_item_id, cv.square_variation_id, cv.name, cv.sku, cv.price_cents, cv.is_sellable, i.quantity
            from public.catalog_variations cv left join public.inventory_snapshots i on i.square_variation_id = cv.square_variation_id
@@ -173,9 +225,17 @@ export class CatalogSearchService {
       ),
     ]);
     const photosByItem = new Map<string, string[]>();
-    for (const r of images) photosByItem.set(r.square_item_id, [...(photosByItem.get(r.square_item_id) ?? []), r.image_url]);
+    for (const r of images)
+      photosByItem.set(r.square_item_id, [
+        ...(photosByItem.get(r.square_item_id) ?? []),
+        r.image_url,
+      ]);
     const variationsByItem = new Map<string, Row[]>();
-    for (const v of variations) variationsByItem.set(v.square_item_id, [...(variationsByItem.get(v.square_item_id) ?? []), v]);
+    for (const v of variations)
+      variationsByItem.set(v.square_item_id, [
+        ...(variationsByItem.get(v.square_item_id) ?? []),
+        v,
+      ]);
 
     return rows.map((r) => ({
       id: r.id,
@@ -212,7 +272,12 @@ export class CatalogSearchService {
       sku: r.sku,
       variationCount: r.variation_count,
       variations: (variationsByItem.get(r.id) ?? []).map((v) => ({
-        id: v.square_variation_id, name: v.name, sku: v.sku, priceCents: v.price_cents, sellable: v.is_sellable, stockCount: v.quantity,
+        id: v.square_variation_id,
+        name: v.name,
+        sku: v.sku,
+        priceCents: v.price_cents,
+        sellable: v.is_sellable,
+        stockCount: v.quantity,
         isDefault: v.square_variation_id === r.variation_id,
       })),
       updatedAt: r.square_updated_at ?? r.updated_at,

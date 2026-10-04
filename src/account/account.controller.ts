@@ -1,15 +1,33 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { Access, CurrentUser } from '../auth/access.js';
 import { AuthService, type AppUser } from '../auth/auth.service.js';
 import { AppError, notFound } from '../common/errors.js';
-import { email as validEmail, jsonBody, positiveInteger, stringValue } from '../common/validation.js';
+import {
+  email as validEmail,
+  jsonBody,
+  positiveInteger,
+  stringValue,
+} from '../common/validation.js';
 import { env } from '../config/env.js';
 import { Db } from '../db/db.service.js';
 import { publicProduct } from '../catalog/product.mapper.js';
 
 @Controller()
 export class AccountController {
-  constructor(private readonly db: Db, private readonly auth: AuthService) {}
+  constructor(
+    private readonly db: Db,
+    private readonly auth: AuthService,
+  ) {}
 
   @Get('auth/me')
   @Access('user')
@@ -22,7 +40,8 @@ export class AccountController {
   @Access('user')
   async logout(@Headers('authorization') authorization: string) {
     // Local dev sign-in has no Supabase session to revoke; the browser just drops its token.
-    if (env('NODE_ENV') !== 'production' && env('AUTH_DEV_LOGIN') === 'true') return { success: true };
+    if (env('NODE_ENV') !== 'production' && env('AUTH_DEV_LOGIN') === 'true')
+      return { success: true };
     await this.auth.signOutEverywhere(authorization);
     return { success: true };
   }
@@ -45,7 +64,9 @@ export class AccountController {
   @Access('user')
   async addWishlist(@CurrentUser() user: AppUser, @Body() body: unknown) {
     const squareItemId = stringValue(jsonBody(body).squareItemId, 'squareItemId', 120);
-    const product = await this.db.one('select id from public.storefront_products where id = $1', [squareItemId]);
+    const product = await this.db.one('select id from public.storefront_products where id = $1', [
+      squareItemId,
+    ]);
     if (!product) throw new AppError('This product is not available.');
     await this.db.exec(
       'insert into public.wishlist_items (user_id, square_item_id) values ($1, $2) on conflict do nothing',
@@ -57,7 +78,10 @@ export class AccountController {
   @Delete('wishlist/:itemId')
   @Access('user')
   async removeWishlist(@CurrentUser() user: AppUser, @Param('itemId') itemId: string) {
-    await this.db.exec('delete from public.wishlist_items where user_id = $1 and square_item_id = $2', [user.id, itemId]);
+    await this.db.exec(
+      'delete from public.wishlist_items where user_id = $1 and square_item_id = $2',
+      [user.id, itemId],
+    );
     return { success: true };
   }
 
@@ -68,7 +92,10 @@ export class AccountController {
     const payload = jsonBody(body);
     const address = validEmail(payload.email);
     const variationId = stringValue(payload.variationId, 'variationId', 120);
-    const variation = await this.db.one('select 1 from public.catalog_variations where square_variation_id = $1', [variationId]);
+    const variation = await this.db.one(
+      'select 1 from public.catalog_variations where square_variation_id = $1',
+      [variationId],
+    );
     if (!variation) throw new AppError('This product variation is not available.');
     await this.db.exec(
       `insert into public.stock_alerts (email, square_variation_id, user_id, notified_at)
@@ -83,7 +110,10 @@ export class AccountController {
   @Get('orders')
   @Access('user')
   async orders(@CurrentUser() user: AppUser) {
-    const items = await this.db.many('select * from public.orders where user_id = $1 order by created_at desc', [user.id]);
+    const items = await this.db.many(
+      'select * from public.orders where user_id = $1 order by created_at desc',
+      [user.id],
+    );
     return { success: true, items };
   }
 

@@ -35,7 +35,8 @@ export function cleanConnectionString(raw: string) {
   try {
     const url = new URL(trimmed);
     // pg treats sslmode=require as verify-full, which rejects Supabase's certificate chain.
-    for (const key of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'ssl']) url.searchParams.delete(key);
+    for (const key of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert', 'ssl'])
+      url.searchParams.delete(key);
     return url.toString();
   } catch {
     return trimmed; // not a URL; let pg report the problem
@@ -53,14 +54,18 @@ export function createPgDriver(connectionString: string): DbDriver {
   pool.on('error', (error) => new Logger('Db').error(`idle client error: ${error.message}`));
   return {
     query: (sql, params) => pool.query(sql, params as any[]) as any,
-    script: async (sql) => { await pool.query(sql); },
+    script: async (sql) => {
+      await pool.query(sql);
+    },
     async transaction(fn) {
       const client = await pool.connect();
       try {
         await client.query('begin');
         const result = await fn({
           query: (sql, params) => client.query(sql, params as any[]) as any,
-          script: async (sql) => { await client.query(sql); }, // no values -> simple protocol, multi-statement OK
+          script: async (sql) => {
+            await client.query(sql);
+          }, // no values -> simple protocol, multi-statement OK
         });
         await client.query('commit');
         return result;
@@ -77,8 +82,15 @@ export function createPgDriver(connectionString: string): DbDriver {
 
 /** Used when DATABASE_URL is missing: the API still boots so /health can explain what's wrong. */
 export function createMissingDriver(): DbDriver {
-  const fail = () => Promise.reject(Object.assign(new Error('DATABASE_URL is not set.'), { code: 'CONFIG_MISSING' }));
-  return { query: fail as DbDriver['query'], transaction: fail as DbDriver['transaction'], close: async () => undefined };
+  const fail = () =>
+    Promise.reject(
+      Object.assign(new Error('DATABASE_URL is not set.'), { code: 'CONFIG_MISSING' }),
+    );
+  return {
+    query: fail as DbDriver['query'],
+    transaction: fail as DbDriver['transaction'],
+    close: async () => undefined,
+  };
 }
 
 @Injectable()
@@ -86,11 +98,19 @@ export class Db implements OnModuleDestroy {
   private readonly logger = new Logger(Db.name);
   constructor(@Inject(DB_DRIVER) private readonly driver: DbDriver) {}
 
-  async many<T extends Row = Row>(sql: string, params: unknown[] = [], tx?: Queryable): Promise<T[]> {
+  async many<T extends Row = Row>(
+    sql: string,
+    params: unknown[] = [],
+    tx?: Queryable,
+  ): Promise<T[]> {
     return (await (tx ?? this.driver).query<T>(sql, params)).rows;
   }
 
-  async one<T extends Row = Row>(sql: string, params: unknown[] = [], tx?: Queryable): Promise<T | null> {
+  async one<T extends Row = Row>(
+    sql: string,
+    params: unknown[] = [],
+    tx?: Queryable,
+  ): Promise<T | null> {
     return (await this.many<T>(sql, params, tx))[0] ?? null;
   }
 

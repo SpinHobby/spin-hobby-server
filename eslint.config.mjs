@@ -21,7 +21,10 @@ export default tseslint.config(
       '@typescript-eslint/await-thenable': 'error',
       // Use Nest's Logger so output carries a context name and respects log levels.
       'no-console': 'error',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       // Row types are being tightened (see src/database/rows.ts); until then `any` is a warning, not an error.
       '@typescript-eslint/no-explicit-any': 'warn',
     },

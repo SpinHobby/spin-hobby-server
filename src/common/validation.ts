@@ -6,7 +6,8 @@ import { AppError } from './errors.js';
 export type Json = Record<string, unknown>;
 
 export function jsonBody(body: unknown): Json {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AppError('Expected a JSON object.');
+  if (!body || typeof body !== 'object' || Array.isArray(body))
+    throw new AppError('Expected a JSON object.');
   return body as Json;
 }
 
@@ -19,19 +20,22 @@ export function stringValue(value: unknown, field: string, maxLength = 500): str
 
 export function optionalString(value: unknown, maxLength = 500): string | null {
   if (value === undefined || value === null || value === '') return null;
-  if (typeof value !== 'string' || value.trim().length > maxLength) throw new AppError('Invalid text value.');
+  if (typeof value !== 'string' || value.trim().length > maxLength)
+    throw new AppError('Invalid text value.');
   return value.trim();
 }
 
 export function positiveInteger(value: unknown, field: string, max = 99): number {
   const number = typeof value === 'number' ? value : Number(value);
-  if (!Number.isInteger(number) || number < 1 || number > max) throw new AppError(`${field} must be between 1 and ${max}.`);
+  if (!Number.isInteger(number) || number < 1 || number > max)
+    throw new AppError(`${field} must be between 1 and ${max}.`);
   return number;
 }
 
 export function email(value: unknown): string {
   const address = stringValue(value, 'email', 254).toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) throw new AppError('Enter a valid email address.');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
+    throw new AppError('Enter a valid email address.');
   return address;
 }
 

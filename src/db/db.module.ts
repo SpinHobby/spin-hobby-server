@@ -10,7 +10,9 @@ import { createMissingDriver, createPgDriver, Db, DB_DRIVER } from './db.service
       useFactory: () => {
         const url = env('DATABASE_URL');
         if (!url) {
-          new Logger('Db').error('DATABASE_URL is not set: database routes will fail until it is. See GET /health.');
+          new Logger('Db').error(
+            'DATABASE_URL is not set: database routes will fail until it is. See GET /health.',
+          );
           return createMissingDriver();
         }
         return createPgDriver(url);

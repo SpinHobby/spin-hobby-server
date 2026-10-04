@@ -8,11 +8,19 @@ import { AppError } from './errors.js';
 export class RateLimiter {
   private readonly hits = new Map<string, number[]>();
 
-  hit(key: string, limit: number, windowMs: number, now = Date.now()): { allowed: boolean; retryAfterSeconds: number } {
+  hit(
+    key: string,
+    limit: number,
+    windowMs: number,
+    now = Date.now(),
+  ): { allowed: boolean; retryAfterSeconds: number } {
     const recent = (this.hits.get(key) ?? []).filter((t) => now - t < windowMs);
     if (recent.length >= limit) {
       this.hits.set(key, recent);
-      return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((recent[0] + windowMs - now) / 1000)) };
+      return {
+        allowed: false,
+        retryAfterSeconds: Math.max(1, Math.ceil((recent[0] + windowMs - now) / 1000)),
+      };
     }
     recent.push(now);
     this.hits.set(key, recent);
@@ -26,12 +34,16 @@ export class RateLimiter {
 
   /** Bounds memory under a flood of distinct addresses: drop idle keys, and everything if that isn't enough. */
   private prune(windowMs: number, now: number) {
-    for (const [key, times] of this.hits) if (!times.some((t) => now - t < windowMs)) this.hits.delete(key);
+    for (const [key, times] of this.hits)
+      if (!times.some((t) => now - t < windowMs)) this.hits.delete(key);
     if (this.hits.size > 10_000) this.hits.clear();
   }
 }
 
-export interface RateLimitRule { limit: number; windowMs: number }
+export interface RateLimitRule {
+  limit: number;
+  windowMs: number;
+}
 const RULE_KEY = 'spinhobby:rate-limit';
 const SKIP_KEY = 'spinhobby:rate-limit-skip';
 /** Per-route limit, counted per IP in addition to the global one. */
@@ -60,15 +72,26 @@ export class RateLimitGuard implements CanActivate {
     const ip = http.getRequest<Request>().ip ?? 'unknown';
 
     const globalLimit = Number(env('RATE_LIMIT_PER_MINUTE') ?? 300);
-    const checks: { bucket: string; rule: RateLimitRule }[] = [{ bucket: 'global', rule: { limit: Number.isFinite(globalLimit) && globalLimit > 0 ? globalLimit : 300, windowMs: 60_000 } }];
+    const checks: { bucket: string; rule: RateLimitRule }[] = [
+      {
+        bucket: 'global',
+        rule: {
+          limit: Number.isFinite(globalLimit) && globalLimit > 0 ? globalLimit : 300,
+          windowMs: 60_000,
+        },
+      },
+    ];
     const rule = this.reflector.getAllAndOverride<RateLimitRule | undefined>(RULE_KEY, targets);
-    if (rule) checks.push({ bucket: `${context.getClass().name}.${context.getHandler().name}`, rule });
+    if (rule)
+      checks.push({ bucket: `${context.getClass().name}.${context.getHandler().name}`, rule });
 
     for (const { bucket, rule: r } of checks) {
       const result = this.limiter.hit(`${bucket}|${ip}`, r.limit, r.windowMs);
       if (!result.allowed) {
         http.getResponse<Response>().setHeader('Retry-After', String(result.retryAfterSeconds));
-        throw new AppError(MESSAGE, 429, 'RATE_LIMITED', { retryAfterSeconds: result.retryAfterSeconds });
+        throw new AppError(MESSAGE, 429, 'RATE_LIMITED', {
+          retryAfterSeconds: result.retryAfterSeconds,
+        });
       }
     }
     return true;

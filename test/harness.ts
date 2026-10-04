@@ -37,21 +37,37 @@ export async function createDatabase(options: { migrations?: string[] } = {}) {
     },
   });
   await pglite.exec(SUPABASE_STUBS);
-  for (const file of options.migrations ?? readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()) {
+  for (const file of options.migrations ??
+    readdirSync(MIGRATIONS)
+      .filter((f) => f.endsWith('.sql'))
+      .sort()) {
     await pglite.exec(readFileSync(join(MIGRATIONS, file), 'utf8'));
   }
   const driver: DbDriver = {
     query: (sql, params) => pglite.query(sql, params as any[]) as any,
-    script: async (sql) => { await pglite.exec(sql); },
-    transaction: (fn) => pglite.transaction((tx) => fn({ query: (sql, params) => tx.query(sql, params as any[]) as any, script: async (sql) => { await tx.exec(sql); } })),
-    close: async () => { /* closed by the test */ },
+    script: async (sql) => {
+      await pglite.exec(sql);
+    },
+    transaction: (fn) =>
+      pglite.transaction((tx) =>
+        fn({
+          query: (sql, params) => tx.query(sql, params as any[]) as any,
+          script: async (sql) => {
+            await tx.exec(sql);
+          },
+        }),
+      ),
+    close: async () => {
+      /* closed by the test */
+    },
   };
   return { pglite, driver };
 }
 
 export async function createApp(driver: DbDriver) {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
-    .overrideProvider(DB_DRIVER).useValue(driver)
+    .overrideProvider(DB_DRIVER)
+    .useValue(driver)
     .compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ rawBody: true });
   configureApp(app);
@@ -70,9 +86,14 @@ export async function signUp(pglite: PGlite, email: string, role?: 'customer' | 
 
 /** A Supabase-style access token for an existing auth user. */
 export async function tokenFor(id: string, email: string, userMetadata?: Record<string, unknown>) {
-  const jwt = new SignJWT({ email, role: 'authenticated', ...(userMetadata && { user_metadata: userMetadata }) }).setProtectedHeader({ alg: 'HS256' });
+  const jwt = new SignJWT({
+    email,
+    role: 'authenticated',
+    ...(userMetadata && { user_metadata: userMetadata }),
+  }).setProtectedHeader({ alg: 'HS256' });
   // Supabase tokens carry iss = <SUPABASE_URL>/auth/v1, which the server checks when SUPABASE_URL is set.
-  if (process.env.SUPABASE_URL) jwt.setIssuer(`${process.env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`);
+  if (process.env.SUPABASE_URL)
+    jwt.setIssuer(`${process.env.SUPABASE_URL.replace(/\/$/, '')}/auth/v1`);
   return jwt
     .setSubject(id)
     .setAudience('authenticated')
@@ -82,29 +103,77 @@ export async function tokenFor(id: string, email: string, userMetadata?: Record<
 }
 
 interface SeedProduct {
-  id: string; name: string; category: string; priceCents: number; stock?: number | null;
-  availability?: 'auto' | 'preorder' | 'hidden'; orderBy?: string | null; releaseMonth?: string | null;
-  series?: string; jan?: string; compareAt?: number | null; maxPer?: number | null; featured?: boolean; rank?: number | null; image?: string;
+  id: string;
+  name: string;
+  category: string;
+  priceCents: number;
+  stock?: number | null;
+  availability?: 'auto' | 'preorder' | 'hidden';
+  orderBy?: string | null;
+  releaseMonth?: string | null;
+  series?: string;
+  jan?: string;
+  compareAt?: number | null;
+  maxPer?: number | null;
+  featured?: boolean;
+  rank?: number | null;
+  image?: string;
 }
 
 export async function seedProduct(pglite: PGlite, p: SeedProduct) {
   const variation = `${p.id}_V`;
-  await pglite.query('insert into public.catalog_products (square_item_id, name, category) values ($1, $2, $3)', [p.id, p.name, p.category]);
-  await pglite.query('insert into public.catalog_variations (square_variation_id, square_item_id, name, price_cents) values ($1, $2, $3, $4)', [variation, p.id, 'Regular', p.priceCents]);
-  await pglite.query('update public.catalog_products set default_variation_id = $2 where square_item_id = $1', [p.id, variation]);
-  if (p.stock !== undefined) await pglite.query('insert into public.inventory_snapshots (square_variation_id, quantity) values ($1, $2)', [variation, p.stock]);
+  await pglite.query(
+    'insert into public.catalog_products (square_item_id, name, category) values ($1, $2, $3)',
+    [p.id, p.name, p.category],
+  );
+  await pglite.query(
+    'insert into public.catalog_variations (square_variation_id, square_item_id, name, price_cents) values ($1, $2, $3, $4)',
+    [variation, p.id, 'Regular', p.priceCents],
+  );
+  await pglite.query(
+    'update public.catalog_products set default_variation_id = $2 where square_item_id = $1',
+    [p.id, variation],
+  );
+  if (p.stock !== undefined)
+    await pglite.query(
+      'insert into public.inventory_snapshots (square_variation_id, quantity) values ($1, $2)',
+      [variation, p.stock],
+    );
   await pglite.query(
     `insert into public.product_metadata (square_item_id, availability, order_by_date, release_month, series, jan_code, compare_at_cents, max_per_customer, is_featured)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-    [p.id, p.availability ?? 'auto', p.orderBy ?? null, p.releaseMonth ?? null, p.series ?? null, p.jan ?? null, p.compareAt ?? null, p.maxPer ?? null, p.featured ?? false],
+    [
+      p.id,
+      p.availability ?? 'auto',
+      p.orderBy ?? null,
+      p.releaseMonth ?? null,
+      p.series ?? null,
+      p.jan ?? null,
+      p.compareAt ?? null,
+      p.maxPer ?? null,
+      p.featured ?? false,
+    ],
   );
-  if (p.rank != null) await pglite.query('insert into public.sales_stats (square_item_id, rank) values ($1, $2)', [p.id, p.rank]);
-  if (p.image) await pglite.query('insert into public.product_images (square_item_id, image_url) values ($1, $2)', [p.id, p.image]);
+  if (p.rank != null)
+    await pglite.query('insert into public.sales_stats (square_item_id, rank) values ($1, $2)', [
+      p.id,
+      p.rank,
+    ]);
+  if (p.image)
+    await pglite.query(
+      'insert into public.product_images (square_item_id, image_url) values ($1, $2)',
+      [p.id, p.image],
+    );
   return variation;
 }
 
 /** Routes outbound fetch() calls to handlers keyed by URL substring; anything unmatched fails the test. */
-export function mockFetch(handlers: Record<string, (init: RequestInit | undefined, url: string) => unknown | Promise<unknown>>) {
+export function mockFetch(
+  handlers: Record<
+    string,
+    (init: RequestInit | undefined, url: string) => unknown | Promise<unknown>
+  >,
+) {
   const calls: { url: string; body: any }[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: any, init?: RequestInit) => {
@@ -112,12 +181,24 @@ export function mockFetch(handlers: Record<string, (init: RequestInit | undefine
     const key = Object.keys(handlers).find((k) => url.includes(k));
     const raw = init?.body ? String(init.body) : undefined;
     let body: any = raw;
-    try { body = raw ? JSON.parse(raw) : undefined; } catch { /* form-encoded */ }
+    try {
+      body = raw ? JSON.parse(raw) : undefined;
+    } catch {
+      /* form-encoded */
+    }
     calls.push({ url, body });
     if (!key) throw new Error(`Unexpected outbound request in test: ${url}`);
     const result = await handlers[key](init, url);
     if (result instanceof Response) return result;
-    return new Response(JSON.stringify(result), { status: 200, headers: { 'content-type': 'application/json' } });
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
   }) as typeof fetch;
-  return { calls, restore: () => { globalThis.fetch = original; } };
+  return {
+    calls,
+    restore: () => {
+      globalThis.fetch = original;
+    },
+  };
 }

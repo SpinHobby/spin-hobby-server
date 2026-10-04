@@ -18,7 +18,9 @@ export function requestContext() {
       res.on('finish', () => {
         const path = req.originalUrl.split('?')[0]; // never log query strings: they can carry tokens
         if (path.endsWith('/health/live')) return;
-        logger.log(`${req.method} ${path} ${res.statusCode} ${Date.now() - started}ms ip=${req.ip} id=${id}`);
+        logger.log(
+          `${req.method} ${path} ${res.statusCode} ${Date.now() - started}ms ip=${req.ip} id=${id}`,
+        );
       });
     }
     next();

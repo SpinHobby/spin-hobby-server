@@ -1,4 +1,10 @@
-import { CanActivate, createParamDecorator, ExecutionContext, Injectable, SetMetadata } from '@nestjs/common';
+import {
+  CanActivate,
+  createParamDecorator,
+  ExecutionContext,
+  Injectable,
+  SetMetadata,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { forbidden, unauthorized } from '../common/errors.js';
@@ -13,18 +19,29 @@ export type AuthedRequest = Request & { user?: AppUser | null };
 
 @Injectable()
 export class AccessGuard implements CanActivate {
-  constructor(private readonly reflector: Reflector, private readonly auth: AuthService) {}
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly auth: AuthService,
+  ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const level = this.reflector.getAllAndOverride<AccessLevel>(ACCESS_KEY, [context.getHandler(), context.getClass()]) ?? 'public';
+    const level =
+      this.reflector.getAllAndOverride<AccessLevel>(ACCESS_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]) ?? 'public';
     const req = context.switchToHttp().getRequest<AuthedRequest>();
     req.user = await this.auth.userFromAuthorization(req.headers.authorization);
     if (level === 'public') return true;
     if (!req.user) throw unauthorized();
-    if (level === 'staff' && req.user.role !== 'staff' && req.user.role !== 'owner') throw forbidden();
+    if (level === 'staff' && req.user.role !== 'staff' && req.user.role !== 'owner')
+      throw forbidden();
     if (level === 'owner' && req.user.role !== 'owner') throw forbidden();
     return true;
   }
 }
 
-export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionContext) => ctx.switchToHttp().getRequest<AuthedRequest>().user ?? null);
+export const CurrentUser = createParamDecorator(
+  (_: unknown, ctx: ExecutionContext) =>
+    ctx.switchToHttp().getRequest<AuthedRequest>().user ?? null,
+);

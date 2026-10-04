@@ -20,7 +20,11 @@ export class StoreService {
   constructor(private readonly db: Db) {}
 
   async settings(tx?: Queryable): Promise<StoreSettings> {
-    const row = await this.db.one<StoreSettings & Row>('select * from public.store_settings where id = true', [], tx);
+    const row = await this.db.one<StoreSettings & Row>(
+      'select * from public.store_settings where id = true',
+      [],
+      tx,
+    );
     if (!row) throw new Error('store_settings row is missing - run the Supabase migrations.');
     return row;
   }

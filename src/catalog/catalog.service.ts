@@ -5,8 +5,14 @@ import { Db, type Row } from '../db/db.service.js';
 import { publicProduct, type PublicProduct } from './product.mapper.js';
 
 export interface ProductQuery {
-  limit?: string | null; cursor?: string | null; category?: string | null; status?: string | null;
-  sort?: string | null; min?: string | null; max?: string | null; q?: string | null;
+  limit?: string | null;
+  cursor?: string | null;
+  category?: string | null;
+  status?: string | null;
+  sort?: string | null;
+  min?: string | null;
+  max?: string | null;
+  q?: string | null;
   /** Shop category id: matches the category and everything beneath it. */
   categoryId?: string | null;
   /** Storefront menu section: new, preorders, sale, figures, plushies, cards, goods, media. */
@@ -46,16 +52,41 @@ const CATEGORY_PATHS = `with recursive cat_paths as (
 )`;
 
 function defaultSlides(freeShippingDollars: number) {
-  const amount = Number.isInteger(freeShippingDollars) ? String(freeShippingDollars) : freeShippingDollars.toFixed(2);
+  const amount = Number.isInteger(freeShippingDollars)
+    ? String(freeShippingDollars)
+    : freeShippingDollars.toFixed(2);
   return [
     ['New arrivals every week', 'Fresh figures, badges and plushies added regularly.'],
     [`Free shipping on orders $${amount}+`, 'Across Canada & the US, tracked.'],
     ['Join our Discord community', 'Restock alerts and exclusive drops first.'],
-  ].map(([headline, subheading], i) => ({ id: `default-${i}`, headline, subheading, image_url: null, link_url: null, sort_order: i, is_visible: true, is_default: true }));
+  ].map(([headline, subheading], i) => ({
+    id: `default-${i}`,
+    headline,
+    subheading,
+    image_url: null,
+    link_url: null,
+    sort_order: i,
+    is_visible: true,
+    is_default: true,
+  }));
 }
 
-const DEFAULT_EVENTS = ['Edmonton Collector Con', 'Calgary Expo', 'Otafest', 'Animethon', 'Edmonton Expo'].map((name, i) => ({
-  id: `default-${i}`, name, city: null, start_date: null, end_date: null, booth_info: null, is_visible: true, sort_order: i, is_default: true,
+const DEFAULT_EVENTS = [
+  'Edmonton Collector Con',
+  'Calgary Expo',
+  'Otafest',
+  'Animethon',
+  'Edmonton Expo',
+].map((name, i) => ({
+  id: `default-${i}`,
+  name,
+  city: null,
+  start_date: null,
+  end_date: null,
+  booth_info: null,
+  is_visible: true,
+  sort_order: i,
+  is_default: true,
 }));
 
 @Injectable()
@@ -67,47 +98,88 @@ export class CatalogService {
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
     const where: string[] = [];
     const params: unknown[] = [];
-    const add = (clause: (n: string) => string, value: unknown) => { params.push(value); where.push(clause(`$${params.length}`)); };
+    const add = (clause: (n: string) => string, value: unknown) => {
+      params.push(value);
+      where.push(clause(`$${params.length}`));
+    };
 
     const category = query.category?.trim().slice(0, 120);
     if (category) add((n) => `category = ${n}`, category);
     if (query.categoryId) {
       if (!UUID.test(query.categoryId)) throw new AppError('Invalid category.');
-      add((n) => `category_id in (select id from cat_paths where ${n}::uuid = any(lineage))`, query.categoryId);
+      add(
+        (n) => `category_id in (select id from cat_paths where ${n}::uuid = any(lineage))`,
+        query.categoryId,
+      );
     }
     const group = query.group ? GROUPS[query.group] : undefined;
     if (query.group && !group) throw new AppError('Unknown section.');
     if (group?.status) add((n) => `status = any(${n}::text[])`, group.status);
     if (group?.sale) where.push('compare_at_cents > price_cents');
-    if (group?.pattern) add((n) => `(coalesce((select path from cat_paths where cat_paths.id = sp.category_id), '') || ' ' || coalesce(sp.category, '')) ~* ${n}`, group.pattern);
-    const statuses = (query.status ?? '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 5);
+    if (group?.pattern)
+      add(
+        (n) =>
+          `(coalesce((select path from cat_paths where cat_paths.id = sp.category_id), '') || ' ' || coalesce(sp.category, '')) ~* ${n}`,
+        group.pattern,
+      );
+    const statuses = (query.status ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 5);
     if (statuses.length) add((n) => `status = any(${n}::text[])`, statuses);
-    const ids = (query.ids ?? '').split(',').map((s) => s.trim()).filter(Boolean).slice(0, 200);
+    const ids = (query.ids ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 200);
     if (query.ids !== undefined && query.ids !== null) add((n) => `id = any(${n}::text[])`, ids);
     const min = Number(query.min);
     const max = Number(query.max);
-    if (query.min != null && query.min !== '' && Number.isFinite(min) && min >= 0) add((n) => `price_cents >= ${n}`, Math.round(min * 100));
-    if (query.max != null && query.max !== '' && Number.isFinite(max) && max >= 0) add((n) => `price_cents < ${n}`, Math.round(max * 100));
+    if (query.min != null && query.min !== '' && Number.isFinite(min) && min >= 0)
+      add((n) => `price_cents >= ${n}`, Math.round(min * 100));
+    if (query.max != null && query.max !== '' && Number.isFinite(max) && max >= 0)
+      add((n) => `price_cents < ${n}`, Math.round(max * 100));
     const q = query.q?.trim();
-    if (q) add((n) => `(name ilike ${n} or series ilike ${n} or character ilike ${n} or jan_code ilike ${n} or category ilike ${n}
-      or exists (select 1 from cat_paths where cat_paths.id = sp.category_id and cat_paths.path ilike ${n}))`, likePattern(q));
+    if (q)
+      add(
+        (
+          n,
+        ) => `(name ilike ${n} or series ilike ${n} or character ilike ${n} or jan_code ilike ${n} or category ilike ${n}
+      or exists (select 1 from cat_paths where cat_paths.id = sp.category_id and cat_paths.path ilike ${n}))`,
+        likePattern(q),
+      );
 
     const filter = where.length ? `where ${where.join(' and ')}` : '';
     const order = SORTS[query.sort ?? 'new'] ?? SORTS.new;
     const [rows, count] = await Promise.all([
-      this.db.many(`${CATEGORY_PATHS} select sp.* from public.storefront_products sp ${filter} order by ${order} limit ${limit} offset ${offset}`, params),
-      this.db.one<{ total: number }>(`${CATEGORY_PATHS} select count(*)::int as total from public.storefront_products sp ${filter}`, params),
+      this.db.many(
+        `${CATEGORY_PATHS} select sp.* from public.storefront_products sp ${filter} order by ${order} limit ${limit} offset ${offset}`,
+        params,
+      ),
+      this.db.one<{ total: number }>(
+        `${CATEGORY_PATHS} select count(*)::int as total from public.storefront_products sp ${filter}`,
+        params,
+      ),
     ]);
     const total = count?.total ?? 0;
     const next = offset + rows.length;
-    return { success: true as const, items: rows.map(publicProduct) as PublicProduct[], total, ...(next < total ? { cursor: String(next) } : {}) };
+    return {
+      success: true as const,
+      items: rows.map(publicProduct) as PublicProduct[],
+      total,
+      ...(next < total ? { cursor: String(next) } : {}),
+    };
   }
 
   async facets() {
     const [rows, categories] = await Promise.all([
-      this.db.many<{ category: string | null; category_id: string | null; status: string; price_cents: number }>(
-        'select category, category_id, status, price_cents from public.storefront_products',
-      ),
+      this.db.many<{
+        category: string | null;
+        category_id: string | null;
+        status: string;
+        price_cents: number;
+      }>('select category, category_id, status, price_cents from public.storefront_products'),
       this.categories(),
     ]);
     const squareCategories = new Map<string, number>();
@@ -122,22 +194,31 @@ export class CatalogService {
     const parent = new Map(categories.map((c) => [c.id, c.parentId]));
     const categoryTotals: Record<string, number> = {};
     for (const row of rows) {
-      if (row.category) squareCategories.set(row.category, (squareCategories.get(row.category) ?? 0) + 1);
+      if (row.category)
+        squareCategories.set(row.category, (squareCategories.get(row.category) ?? 0) + 1);
       if (row.status === 'in' || row.status === 'low') status.in += 1;
       else if (row.status === 'pre') status.pre += 1;
       else if (row.status === 'out' || row.status === 'closed') status.out += 1;
       const price = Number(row.price_cents) / 100;
       const bucket = buckets.find((b) => price >= b.min && (b.max === null || price < b.max));
       if (bucket) bucket.count += 1;
-      for (let at = row.category_id, guard = 0; at && parent.has(at) && guard < 50; at = parent.get(at) ?? null, guard++) {
+      for (
+        let at = row.category_id, guard = 0;
+        at && parent.has(at) && guard < 50;
+        at = parent.get(at) ?? null, guard++
+      ) {
         categoryTotals[at] = (categoryTotals[at] ?? 0) + 1;
       }
     }
     return {
       success: true as const,
       total: rows.length,
-      categories: [...squareCategories].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name)),
-      shopCategories: categories.filter((c) => categoryTotals[c.id]).map((c) => ({ ...c, total: categoryTotals[c.id] })),
+      categories: [...squareCategories]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+      shopCategories: categories
+        .filter((c) => categoryTotals[c.id])
+        .map((c) => ({ ...c, total: categoryTotals[c.id] })),
       status,
       price: buckets,
     };
@@ -145,31 +226,55 @@ export class CatalogService {
 
   /** Visible shop categories as a flat list (parentId links build the tree). */
   async categories() {
-    const rows = await this.db.many<{ id: string; parent_id: string | null; name: string; sort_order: number }>(
+    const rows = await this.db.many<{
+      id: string;
+      parent_id: string | null;
+      name: string;
+      sort_order: number;
+    }>(
       'select id, parent_id, name, sort_order from public.store_categories where is_visible order by sort_order, name',
     );
     // A hidden category hides its whole branch from navigation.
     const visible = new Set(rows.map((r) => r.id));
-    const ok = (r: { parent_id: string | null }): boolean => r.parent_id === null || (visible.has(r.parent_id) && ok(rows.find((x) => x.id === r.parent_id)!));
-    return rows.filter(ok).map((r) => ({ id: r.id, parentId: r.parent_id, name: r.name, sortOrder: r.sort_order }));
+    const ok = (r: { parent_id: string | null }): boolean =>
+      r.parent_id === null ||
+      (visible.has(r.parent_id) && ok(rows.find((x) => x.id === r.parent_id)!));
+    return rows
+      .filter(ok)
+      .map((r) => ({ id: r.id, parentId: r.parent_id, name: r.name, sortOrder: r.sort_order }));
   }
 
   async homepage() {
-    const [slides, featured, preorders, ranking, newInStock, events, categories, settings, promo] = await Promise.all([
-      this.db.many('select * from public.hero_slides where is_visible order by sort_order, created_at'),
-      this.db.many('select * from public.storefront_products where is_featured order by sort_order, id limit 8'),
-      this.db.many("select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12"),
-      this.db.many('select * from public.storefront_products where rank is not null order by rank, id limit 5'),
-      this.db.many("select * from public.storefront_products where status in ('in','low') order by updated_at desc, id limit 5"),
-      this.db.many('select * from public.store_events where is_visible order by sort_order, created_at'),
-      this.categories(),
-      this.db.one<{ free_shipping_threshold_cents: number }>('select free_shipping_threshold_cents from public.store_settings where id = true'),
-      this.db.one<{ closing_soon: number; max_discount: number }>(
-        `select count(*) filter (where status = 'pre' and order_by_date between now() - interval '1 day' and now() + interval '30 days')::int as closing_soon,
+    const [slides, featured, preorders, ranking, newInStock, events, categories, settings, promo] =
+      await Promise.all([
+        this.db.many(
+          'select * from public.hero_slides where is_visible order by sort_order, created_at',
+        ),
+        this.db.many(
+          'select * from public.storefront_products where is_featured order by sort_order, id limit 8',
+        ),
+        this.db.many(
+          "select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12",
+        ),
+        this.db.many(
+          'select * from public.storefront_products where rank is not null order by rank, id limit 5',
+        ),
+        this.db.many(
+          "select * from public.storefront_products where status in ('in','low') order by updated_at desc, id limit 5",
+        ),
+        this.db.many(
+          'select * from public.store_events where is_visible order by sort_order, created_at',
+        ),
+        this.categories(),
+        this.db.one<{ free_shipping_threshold_cents: number }>(
+          'select free_shipping_threshold_cents from public.store_settings where id = true',
+        ),
+        this.db.one<{ closing_soon: number; max_discount: number }>(
+          `select count(*) filter (where status = 'pre' and order_by_date between now() - interval '1 day' and now() + interval '30 days')::int as closing_soon,
                 coalesce(max(round((1 - price_cents::numeric / compare_at_cents) * 100)) filter (where compare_at_cents > price_cents), 0)::int as max_discount
            from public.storefront_products`,
-      ),
-    ]);
+        ),
+      ]);
     const free = Number(settings?.free_shipping_threshold_cents ?? 7500) / 100;
     return {
       success: true as const,

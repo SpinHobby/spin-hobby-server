@@ -1,7 +1,7 @@
-import { Logger } from "@nestjs/common";
-import sharp from "sharp";
+import { Logger } from '@nestjs/common';
+import sharp from 'sharp';
 
-const logger = new Logger("ImageProcessing");
+const logger = new Logger('ImageProcessing');
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 const CANVAS_SIZE = 1200;
@@ -38,10 +38,7 @@ export interface ArtworkCrop {
 // rotation nudges it. Falls back to the original buffer on any failure,
 // matching processProductPhoto's philosophy of never failing the whole save
 // over a best-effort cleanup step.
-export async function cropToArtworkRegion(
-  buffer: Buffer,
-  crop: ArtworkCrop
-): Promise<Buffer> {
+export async function cropToArtworkRegion(buffer: Buffer, crop: ArtworkCrop): Promise<Buffer> {
   try {
     const oriented = sharp(buffer).rotate();
     const meta = await oriented.metadata();
@@ -88,7 +85,7 @@ export async function processProductPhoto(buffer: Buffer): Promise<Buffer> {
       .resize({
         width: CANVAS_SIZE,
         height: CANVAS_SIZE,
-        fit: "contain",
+        fit: 'contain',
         background: BACKGROUND,
       })
       .flatten({ background: BACKGROUND })

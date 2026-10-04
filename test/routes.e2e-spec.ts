@@ -9,7 +9,12 @@ import { createApp, createDatabase } from './harness.js';
  * update the snapshot in the same commit so the change is visible in review.
  */
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ALL', 'OPTIONS', 'HEAD'];
-const joinPath = (...parts: string[]) => '/' + parts.map((p) => p.replace(/^\/|\/$/g, '')).filter(Boolean).join('/');
+const joinPath = (...parts: string[]) =>
+  '/' +
+  parts
+    .map((p) => p.replace(/^\/|\/$/g, ''))
+    .filter(Boolean)
+    .join('/');
 
 function listRoutes(app: INestApplication): string[] {
   const routes: string[] = [];
@@ -24,10 +29,18 @@ function listRoutes(app: INestApplication): string[] {
         const method = Reflect.getMetadata('method', handler);
         if (method === undefined) continue;
         const path = joinPath(base, String(Reflect.getMetadata('path', handler) ?? ''));
-        const access = Reflect.getMetadata('spinhobby:access', handler) ?? Reflect.getMetadata('spinhobby:access', controller) ?? 'public';
-        const rate = Reflect.getMetadata('spinhobby:rate-limit', handler) as { limit: number; windowMs: number } | undefined;
-        const skip = Reflect.getMetadata('spinhobby:rate-limit-skip', handler) ?? Reflect.getMetadata('spinhobby:rate-limit-skip', controller);
-        routes.push(`${METHODS[method]} ${path} [${access}]${rate ? ` limit ${rate.limit}/${rate.windowMs / 1000}s` : ''}${skip ? ' no-limit' : ''}`);
+        const access =
+          Reflect.getMetadata('spinhobby:access', handler) ??
+          Reflect.getMetadata('spinhobby:access', controller) ??
+          'public';
+        const rate = Reflect.getMetadata('spinhobby:rate-limit', handler) as
+          { limit: number; windowMs: number } | undefined;
+        const skip =
+          Reflect.getMetadata('spinhobby:rate-limit-skip', handler) ??
+          Reflect.getMetadata('spinhobby:rate-limit-skip', controller);
+        routes.push(
+          `${METHODS[method]} ${path} [${access}]${rate ? ` limit ${rate.limit}/${rate.windowMs / 1000}s` : ''}${skip ? ' no-limit' : ''}`,
+        );
       }
     }
   }

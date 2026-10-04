@@ -10,12 +10,16 @@ let app: INestApplication;
 let http: ReturnType<typeof request>;
 
 const ORIGIN = 'http://localhost:5173';
-const login = () => http.post('/auth/login').send({ email: 'fan@example.com', password: 'wrong-password' });
+const login = () =>
+  http.post('/auth/login').send({ email: 'fan@example.com', password: 'wrong-password' });
 
 beforeAll(async () => {
   Object.assign(process.env, {
-    SUPABASE_JWT_SECRET: JWT_SECRET, ALLOWED_ORIGINS: ORIGIN, THROTTLE_DISABLED: 'false',
-    SQUARE_WEBHOOK_SIGNATURE_KEY: 'whsec', SQUARE_WEBHOOK_URL: 'https://api.spinhobby.com/webhooks/square',
+    SUPABASE_JWT_SECRET: JWT_SECRET,
+    ALLOWED_ORIGINS: ORIGIN,
+    THROTTLE_DISABLED: 'false',
+    SQUARE_WEBHOOK_SIGNATURE_KEY: 'whsec',
+    SQUARE_WEBHOOK_URL: 'https://api.spinhobby.com/webhooks/square',
   });
   delete process.env.RATE_LIMIT_PER_MINUTE;
   const db = await createDatabase();
@@ -40,7 +44,11 @@ describe('rate limits', () => {
     for (let i = 0; i < 10; i++) expect((await login()).status).not.toBe(429);
     const blocked = await login();
     expect(blocked.status).toBe(429);
-    expect(blocked.body).toMatchObject({ success: false, code: 'RATE_LIMITED', error: expect.stringContaining('Too many requests') });
+    expect(blocked.body).toMatchObject({
+      success: false,
+      code: 'RATE_LIMITED',
+      error: expect.stringContaining('Too many requests'),
+    });
     expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
     expect(Number(blocked.headers['retry-after'])).toBeLessThanOrEqual(60);
   });
@@ -60,7 +68,10 @@ describe('rate limits', () => {
     process.env.RATE_LIMIT_PER_MINUTE = '2';
     for (let i = 0; i < 8; i++) {
       await http.get('/health/live').expect(200);
-      expect((await http.post('/webhooks/square').set('Content-Type', 'application/json').send('{}')).status).not.toBe(429);
+      expect(
+        (await http.post('/webhooks/square').set('Content-Type', 'application/json').send('{}'))
+          .status,
+      ).not.toBe(429);
       expect((await http.get('/sample-images/anything.svg')).status).not.toBe(429);
     }
   });
@@ -82,7 +93,11 @@ describe('request ids', () => {
   });
 
   it('keeps a sane caller-supplied id and replaces a hostile one', async () => {
-    expect((await http.get('/health/live').set('x-request-id', 'trace-abc-12345')).headers['x-request-id']).toBe('trace-abc-12345');
+    expect(
+      (await http.get('/health/live').set('x-request-id', 'trace-abc-12345')).headers[
+        'x-request-id'
+      ],
+    ).toBe('trace-abc-12345');
     const replaced = await http.get('/health/live').set('x-request-id', 'bad id\twith <script>');
     expect(replaced.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
   });

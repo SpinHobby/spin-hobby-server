@@ -48,18 +48,28 @@ export class CatalogController {
 
   @Get('square/config')
   squareConfig() {
-    return { success: true, applicationId: env('SQUARE_APPLICATION_ID') ?? null, locationId: env('SQUARE_LOCATION_ID') ?? null };
+    return {
+      success: true,
+      applicationId: env('SQUARE_APPLICATION_ID') ?? null,
+      locationId: env('SQUARE_LOCATION_ID') ?? null,
+    };
   }
 
   @Get('square/display-categories')
   async displayCategories() {
     const facets = await this.catalog.facets();
-    return { success: true, categories: facets.categories.map((c) => ({ name: c.name, categoryIds: [c.name] })) };
+    return {
+      success: true,
+      categories: facets.categories.map((c) => ({ name: c.name, categoryIds: [c.name] })),
+    };
   }
 
   @Get('square/inventory')
   async inventory(@Query('ids') ids = '') {
-    return { success: true, quantities: await this.catalog.inventory(ids.split(',').filter(Boolean)) };
+    return {
+      success: true,
+      quantities: await this.catalog.inventory(ids.split(',').filter(Boolean)),
+    };
   }
 
   @Get('square/catalog')
@@ -72,6 +82,13 @@ export class CatalogController {
     const row = await this.catalog.product(id);
     if (!row) throw notFound('Catalog item');
     // The product page also gets the description and JAN code (left out of list responses to keep them small).
-    return { success: true, item: { ...publicProduct(row), description: row.description ?? null, janCode: row.jan_code ?? null } };
+    return {
+      success: true,
+      item: {
+        ...publicProduct(row),
+        description: row.description ?? null,
+        janCode: row.jan_code ?? null,
+      },
+    };
   }
 }

@@ -1,8 +1,8 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { randomUUID } from "node:crypto";
-import { Currency, EcomVisibility, SquareClient, SquareEnvironment } from "square";
-import { env, squareEnvIsProduction } from "../config/env.js";
-import { processProductPhoto } from "./image-processing.js";
+import { Injectable, Logger } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import { Currency, EcomVisibility, SquareClient, SquareEnvironment } from 'square';
+import { env, squareEnvIsProduction } from '../config/env.js';
+import { processProductPhoto } from './image-processing.js';
 
 // Ported from the legacy Express server (src/services/square.ts): only the methods the
 // cashier tool uses. Behaviour is unchanged.
@@ -10,18 +10,18 @@ import { processProductPhoto } from "./image-processing.js";
 // Category used to tag cashier-tool convention one-offs so they can be
 // excluded from the public storefront. Override via env if this account's
 // category ever changes.
-export const CASHIER_CATEGORY_ID = env("SQUARE_CASHIER_CATEGORY_ID") || "LNBIPZ6RYAMQTEZX3NF5VOGG";
+export const CASHIER_CATEGORY_ID = env('SQUARE_CASHIER_CATEGORY_ID') || 'LNBIPZ6RYAMQTEZX3NF5VOGG';
 
 @Injectable()
 export class SquareCatalogService {
   private readonly logger = new Logger(SquareCatalogService.name);
 
   private warn(message: string, error?: unknown) {
-    this.logger.warn(`${message} ${error instanceof Error ? error.message : (error ?? "")}`.trim());
+    this.logger.warn(`${message} ${error instanceof Error ? error.message : (error ?? '')}`.trim());
   }
 
   private readonly client = new SquareClient({
-    token: env("SQUARE_ACCESS_TOKEN"),
+    token: env('SQUARE_ACCESS_TOKEN'),
     environment: squareEnvIsProduction() ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
   });
 
@@ -30,7 +30,7 @@ export class SquareCatalogService {
   // items, unlike the public storefront search.
   async searchAllItems(keywords?: string, cursor?: string, limit?: number) {
     const response = await this.client.catalog.search({
-      objectTypes: ["ITEM"],
+      objectTypes: ['ITEM'],
       includeRelatedObjects: true,
       cursor,
       limit,
@@ -58,7 +58,7 @@ export class SquareCatalogService {
 
   async listCategories() {
     const response = await this.client.catalog.search({
-      objectTypes: ["CATEGORY"],
+      objectTypes: ['CATEGORY'],
     });
 
     return response.objects || [];
@@ -70,7 +70,7 @@ export class SquareCatalogService {
   async getOrCreateCategoryId(name: string): Promise<string> {
     const existing = await this.listCategories();
     const match = existing.find(
-      (c: any) => c.categoryData?.name?.toLowerCase() === name.toLowerCase()
+      (c: any) => c.categoryData?.name?.toLowerCase() === name.toLowerCase(),
     );
     if (match?.id) return match.id;
 
@@ -80,8 +80,8 @@ export class SquareCatalogService {
         {
           objects: [
             {
-              type: "CATEGORY" as const,
-              id: "#category",
+              type: 'CATEGORY' as const,
+              id: '#category',
               categoryData: { name },
             },
           ],
@@ -118,17 +118,16 @@ export class SquareCatalogService {
     // ecom_visibility yet (it's a real, documented Square API field - confirmed
     // present on read responses - but gets silently stripped on write through
     // the SDK). Call the REST endpoint directly for this one write instead.
-    const baseUrl =
-      squareEnvIsProduction()
-        ? "https://connect.squareup.com"
-        : "https://connect.squareupsandbox.com";
+    const baseUrl = squareEnvIsProduction()
+      ? 'https://connect.squareup.com'
+      : 'https://connect.squareupsandbox.com';
 
     const upsertResponse = await fetch(`${baseUrl}/v2/catalog/batch-upsert`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
-        "Square-Version": "2025-10-16",
+        'Square-Version': '2025-10-16',
       },
       body: JSON.stringify({
         idempotency_key: randomUUID(),
@@ -136,8 +135,8 @@ export class SquareCatalogService {
           {
             objects: [
               {
-                type: "ITEM",
-                id: "#item",
+                type: 'ITEM',
+                id: '#item',
                 present_at_all_locations: false,
                 present_at_location_ids: locationId ? [locationId] : undefined,
                 item_data: {
@@ -148,23 +147,19 @@ export class SquareCatalogService {
                   // storefront doesn't consult it anyway - it queries the catalog
                   // directly. The real "hide from our website" signal is category
                   // membership, filtered out in searchCatalog() below.
-                  ecom_visibility: item.hidden
-                    ? EcomVisibility.Hidden
-                    : EcomVisibility.Visible,
+                  ecom_visibility: item.hidden ? EcomVisibility.Hidden : EcomVisibility.Visible,
                   categories: categories.length > 0 ? categories : undefined,
-                  reporting_category: item.categoryId
-                    ? { id: item.categoryId }
-                    : undefined,
+                  reporting_category: item.categoryId ? { id: item.categoryId } : undefined,
                   variations: [
                     {
-                      type: "ITEM_VARIATION",
-                      id: "#item-variation",
+                      type: 'ITEM_VARIATION',
+                      id: '#item-variation',
                       present_at_all_locations: false,
                       present_at_location_ids: locationId ? [locationId] : undefined,
                       item_variation_data: {
-                        item_id: "#item",
-                        name: "Regular",
-                        pricing_type: "FIXED_PRICING",
+                        item_id: '#item',
+                        name: 'Regular',
+                        pricing_type: 'FIXED_PRICING',
                         price_money: {
                           amount: item.price,
                           currency: Currency.Cad,
@@ -182,9 +177,7 @@ export class SquareCatalogService {
 
     const upsertData: any = await upsertResponse.json();
     if (!upsertResponse.ok) {
-      throw new Error(
-        upsertData?.errors?.[0]?.detail || "Failed to create Square catalog item"
-      );
+      throw new Error(upsertData?.errors?.[0]?.detail || 'Failed to create Square catalog item');
     }
 
     const createdItem = upsertData.objects?.[0] || null;
@@ -198,17 +191,17 @@ export class SquareCatalogService {
             objectId: createdItem.id,
             isPrimary: true,
             image: {
-              type: "IMAGE" as const,
-              id: "#image",
+              type: 'IMAGE' as const,
+              id: '#image',
               imageData: { name: item.name },
             },
           },
           imageFile: new Blob([new Uint8Array(processedPhoto)], {
-            type: "image/jpeg",
+            type: 'image/jpeg',
           }),
         });
       } catch (error) {
-        this.warn("Error attaching photo to Square catalog item:", error);
+        this.warn('Error attaching photo to Square catalog item:', error);
       }
     }
 
@@ -232,11 +225,11 @@ export class SquareCatalogService {
     removePhoto?: boolean;
   }) {
     const { item: existing } = await this.getItem(update.itemId);
-    if (!existing || existing.type !== "ITEM") {
+    if (!existing || existing.type !== 'ITEM') {
       throw new Error(`Item ${update.itemId} not found`);
     }
     const variation = existing.itemData?.variations?.[0];
-    if (!variation || variation.type !== "ITEM_VARIATION") {
+    if (!variation || variation.type !== 'ITEM_VARIATION') {
       throw new Error(`Item ${update.itemId} has no variation to update`);
     }
 
@@ -251,20 +244,18 @@ export class SquareCatalogService {
     // re-sent to survive an edit that isn't touching the photo at all;
     // an empty array here explicitly clears them (removePhoto, or about to
     // attach a replacement below).
-    const imageIds =
-      update.removePhoto || update.photo ? [] : existing.itemData?.imageIds || [];
+    const imageIds = update.removePhoto || update.photo ? [] : existing.itemData?.imageIds || [];
 
-    const baseUrl =
-      squareEnvIsProduction()
-        ? "https://connect.squareup.com"
-        : "https://connect.squareupsandbox.com";
+    const baseUrl = squareEnvIsProduction()
+      ? 'https://connect.squareup.com'
+      : 'https://connect.squareupsandbox.com';
 
     const upsertResponse = await fetch(`${baseUrl}/v2/catalog/batch-upsert`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
-        "Square-Version": "2025-10-16",
+        'Square-Version': '2025-10-16',
       },
       body: JSON.stringify({
         idempotency_key: randomUUID(),
@@ -272,29 +263,25 @@ export class SquareCatalogService {
           {
             objects: [
               {
-                type: "ITEM",
+                type: 'ITEM',
                 id: existing.id,
                 version: existing.version != null ? Number(existing.version) : undefined,
                 item_data: {
                   name: update.name,
                   description: update.description,
-                  ecom_visibility: update.hidden
-                    ? EcomVisibility.Hidden
-                    : EcomVisibility.Visible,
+                  ecom_visibility: update.hidden ? EcomVisibility.Hidden : EcomVisibility.Visible,
                   categories: categories.length > 0 ? categories : undefined,
-                  reporting_category: update.categoryId
-                    ? { id: update.categoryId }
-                    : undefined,
+                  reporting_category: update.categoryId ? { id: update.categoryId } : undefined,
                   image_ids: imageIds,
                   variations: [
                     {
-                      type: "ITEM_VARIATION",
+                      type: 'ITEM_VARIATION',
                       id: variation.id,
                       version: variation.version != null ? Number(variation.version) : undefined,
                       item_variation_data: {
                         item_id: existing.id,
-                        name: "Regular",
-                        pricing_type: "FIXED_PRICING",
+                        name: 'Regular',
+                        pricing_type: 'FIXED_PRICING',
                         price_money: {
                           amount: update.price,
                           currency: Currency.Cad,
@@ -312,9 +299,7 @@ export class SquareCatalogService {
 
     const upsertData: any = await upsertResponse.json();
     if (!upsertResponse.ok) {
-      throw new Error(
-        upsertData?.errors?.[0]?.detail || "Failed to update Square catalog item"
-      );
+      throw new Error(upsertData?.errors?.[0]?.detail || 'Failed to update Square catalog item');
     }
 
     const updatedItem = upsertData.objects?.[0] || null;
@@ -328,17 +313,17 @@ export class SquareCatalogService {
             objectId: updatedItem.id,
             isPrimary: true,
             image: {
-              type: "IMAGE" as const,
-              id: "#image",
+              type: 'IMAGE' as const,
+              id: '#image',
               imageData: { name: update.name },
             },
           },
           imageFile: new Blob([new Uint8Array(processedPhoto)], {
-            type: "image/jpeg",
+            type: 'image/jpeg',
           }),
         });
       } catch (error) {
-        this.warn("Error attaching photo to Square catalog item:", error);
+        this.warn('Error attaching photo to Square catalog item:', error);
       }
     }
 
@@ -348,9 +333,7 @@ export class SquareCatalogService {
   // Current tracked counts for the given item VARIATION ids at this location.
   // A variation missing from the returned map is untracked in Square - treat
   // that as unlimited stock, not zero.
-  async getInventoryCounts(
-    variationIds: string[]
-  ): Promise<Record<string, number>> {
+  async getInventoryCounts(variationIds: string[]): Promise<Record<string, number>> {
     if (variationIds.length === 0) return {};
 
     const locationId = process.env.SQUARE_LOCATION_ID;
@@ -372,20 +355,17 @@ export class SquareCatalogService {
   // PHYSICAL_COUNT (an absolute snapshot), not an ADJUSTMENT, since there's
   // no prior state to transition from - the cashier tool is the one entering
   // the real-world count for the first time.
-  async setInitialInventoryCount(
-    variationId: string,
-    quantity: number
-  ): Promise<void> {
+  async setInitialInventoryCount(variationId: string, quantity: number): Promise<void> {
     const locationId = process.env.SQUARE_LOCATION_ID;
 
     await this.client.inventory.batchCreateChanges({
       idempotencyKey: randomUUID(),
       changes: [
         {
-          type: "PHYSICAL_COUNT" as const,
+          type: 'PHYSICAL_COUNT' as const,
           physicalCount: {
             catalogObjectId: variationId,
-            state: "IN_STOCK" as const,
+            state: 'IN_STOCK' as const,
             locationId,
             quantity: String(quantity),
             occurredAt: new Date().toISOString(),

@@ -12,18 +12,34 @@ export const CASHIER_MODEL = 'claude-opus-5';
 const IDENTIFY_SCHEMA = {
   type: 'object',
   properties: {
-    title: { type: 'string', description: "A short, customer-facing product title (character/series name + item type, e.g. 'Tanjiro Kamado Figure')." },
-    description: { type: 'string', description: 'A 1-2 sentence description of the item for a price tag or receipt.' },
-    category: { type: 'string', enum: [...PRODUCT_CATEGORIES], description: 'The single best-fitting product category for this item.' },
+    title: {
+      type: 'string',
+      description:
+        "A short, customer-facing product title (character/series name + item type, e.g. 'Tanjiro Kamado Figure').",
+    },
+    description: {
+      type: 'string',
+      description: 'A 1-2 sentence description of the item for a price tag or receipt.',
+    },
+    category: {
+      type: 'string',
+      enum: [...PRODUCT_CATEGORIES],
+      description: 'The single best-fitting product category for this item.',
+    },
     artworkCrop: {
       type: 'object',
-      description: "Only include this when the photo is of a SEALED box: the bounding box of the printed product photo/artwork panel on the box face, with a small margin so the full panel is included even if photographed at a slight angle. Coordinates are fractions (0-1) of the full photo's width/height, measured from the top-left corner. Omit entirely if the photo isn't a sealed box, or if no clear artwork panel is visible.",
+      description:
+        "Only include this when the photo is of a SEALED box: the bounding box of the printed product photo/artwork panel on the box face, with a small margin so the full panel is included even if photographed at a slight angle. Coordinates are fractions (0-1) of the full photo's width/height, measured from the top-left corner. Omit entirely if the photo isn't a sealed box, or if no clear artwork panel is visible.",
       properties: {
         x: { type: 'number', description: 'Left edge, as a fraction of image width (0-1).' },
         y: { type: 'number', description: 'Top edge, as a fraction of image height (0-1).' },
         width: { type: 'number', description: 'Width, as a fraction of image width (0-1).' },
         height: { type: 'number', description: 'Height, as a fraction of image height (0-1).' },
-        rotationDegrees: { type: 'number', description: "Degrees to rotate the cropped region clockwise to make the artwork's edges level/straight, between -45 and 45. 0 if it's already straight." },
+        rotationDegrees: {
+          type: 'number',
+          description:
+            "Degrees to rotate the cropped region clockwise to make the artwork's edges level/straight, between -45 and 45. 0 if it's already straight.",
+        },
       },
       required: ['x', 'y', 'width', 'height', 'rotationDegrees'],
       additionalProperties: false,
@@ -58,12 +74,17 @@ export class IdentifyService {
   constructor(private readonly usage: AiUsageService) {}
 
   async identify(photo: { buffer: Buffer; mimetype: string }, sealed: boolean) {
-    if (!SUPPORTED.includes(photo.mimetype as ImageType)) throw new AppError('Photo must be a JPEG, PNG, WebP or GIF image.');
+    if (!SUPPORTED.includes(photo.mimetype as ImageType))
+      throw new AppError('Photo must be a JPEG, PNG, WebP or GIF image.');
     const budget = await this.usage.status(CASHIER_AI_TOOL);
     if (budget.status === 'blocked') {
-      throw new AppError(`Photo identification is disabled for the rest of the month - AI budget of $${budget.stopThresholdUsd} reached. Enter the title/description manually, or ask an admin to raise the budget in the Ops dashboard.`, 429);
+      throw new AppError(
+        `Photo identification is disabled for the rest of the month - AI budget of $${budget.stopThresholdUsd} reached. Enter the title/description manually, or ask an admin to raise the budget in the Ops dashboard.`,
+        429,
+      );
     }
-    if (!env('ANTHROPIC_API_KEY') && !env('ANTHROPIC_AUTH_TOKEN')) throw new AppError('Photo identification is not configured.', 503);
+    if (!env('ANTHROPIC_API_KEY') && !env('ANTHROPIC_AUTH_TOKEN'))
+      throw new AppError('Photo identification is not configured.', 503);
     this.client ??= new Anthropic();
 
     let response: Anthropic.Beta.BetaMessage;
@@ -76,22 +97,40 @@ export class IdentifyService {
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         // Low effort: a quick visual labelling task, and every call counts against the monthly AI budget.
-        output_config: { effort: 'low', format: { type: 'json_schema', schema: IDENTIFY_SCHEMA as unknown as Record<string, unknown> } },
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: photo.mimetype as ImageType, data: photo.buffer.toString('base64') } },
-            {
-              type: 'text',
-              text: `This is a photo of anime/hobby merchandise being catalogued by a cashier, either at a convention booth or for the online store. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt), write a short title and description for it, and classify it into exactly one of these categories: ${PRODUCT_CATEGORIES.join(', ')}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".\n\n${sealed
-                ? "This item is SEALED in its box. Also locate the printed product photo/artwork panel on the box's face and return it as `artworkCrop`, so it can be cropped out and used as the product photo - this is the manufacturer's own professional photo of the figure, already on the packaging. Include a small margin around the panel and estimate any rotation needed to straighten it."
-                : 'This item is not sealed (the actual product is what\'s photographed) - omit `artworkCrop` entirely.'}`,
-            },
-          ],
-        }],
+        output_config: {
+          effort: 'low',
+          format: {
+            type: 'json_schema',
+            schema: IDENTIFY_SCHEMA as unknown as Record<string, unknown>,
+          },
+        },
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: photo.mimetype as ImageType,
+                  data: photo.buffer.toString('base64'),
+                },
+              },
+              {
+                type: 'text',
+                text: `This is a photo of anime/hobby merchandise being catalogued by a cashier, either at a convention booth or for the online store. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt), write a short title and description for it, and classify it into exactly one of these categories: ${PRODUCT_CATEGORIES.join(', ')}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".\n\n${
+                  sealed
+                    ? "This item is SEALED in its box. Also locate the printed product photo/artwork panel on the box's face and return it as `artworkCrop`, so it can be cropped out and used as the product photo - this is the manufacturer's own professional photo of the figure, already on the packaging. Include a small margin around the panel and estimate any rotation needed to straighten it."
+                    : "This item is not sealed (the actual product is what's photographed) - omit `artworkCrop` entirely."
+                }`,
+              },
+            ],
+          },
+        ],
       });
     } catch (error) {
-      if (error instanceof Anthropic.RateLimitError) throw new AppError('Photo identification is busy. Try again in a moment.', 429);
+      if (error instanceof Anthropic.RateLimitError)
+        throw new AppError('Photo identification is busy. Try again in a moment.', 429);
       if (error instanceof Anthropic.APIError) {
         this.logger.error(`Claude API error ${error.status}: ${error.message}`);
         throw new AppError('Photo identification failed. Enter the details manually.', 502);
@@ -101,14 +140,33 @@ export class IdentifyService {
 
     const input = response.usage.input_tokens ?? 0;
     const output = response.usage.output_tokens ?? 0;
-    this.usage.record(CASHIER_AI_TOOL, this.usage.estimateCost(CASHIER_MODEL, input, output), input, output)
+    this.usage
+      .record(CASHIER_AI_TOOL, this.usage.estimateCost(CASHIER_MODEL, input, output), input, output)
       .catch((e) => this.logger.warn(`Recording AI usage failed: ${e}`));
 
-    if (response.stop_reason === 'refusal') throw new AppError("This photo couldn't be identified automatically. Enter the details manually.", 422);
-    if (response.stop_reason === 'max_tokens') throw new AppError('Photo identification ran out of room. Try again or enter the details manually.', 502);
+    if (response.stop_reason === 'refusal')
+      throw new AppError(
+        "This photo couldn't be identified automatically. Enter the details manually.",
+        422,
+      );
+    if (response.stop_reason === 'max_tokens')
+      throw new AppError(
+        'Photo identification ran out of room. Try again or enter the details manually.',
+        502,
+      );
     const text = response.content.find((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text');
     if (!text) throw new AppError('Photo identification returned no result.', 502);
-    const result = JSON.parse(text.text) as { title: string; description: string; category: string; artworkCrop?: unknown };
-    return { title: result.title, description: result.description, category: result.category, artworkCrop: sanitizeArtworkCrop(result.artworkCrop) };
+    const result = JSON.parse(text.text) as {
+      title: string;
+      description: string;
+      category: string;
+      artworkCrop?: unknown;
+    };
+    return {
+      title: result.title,
+      description: result.description,
+      category: result.category,
+      artworkCrop: sanitizeArtworkCrop(result.artworkCrop),
+    };
   }
 }

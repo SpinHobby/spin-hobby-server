@@ -1,7 +1,10 @@
 import { Logger } from '@nestjs/common';
 import { env } from '../config/env.js';
 
-interface SentryLike { init(options: Record<string, unknown>): void; captureException(error: unknown, hint?: Record<string, unknown>): void }
+interface SentryLike {
+  init(options: Record<string, unknown>): void;
+  captureException(error: unknown, hint?: Record<string, unknown>): void;
+}
 let sentry: SentryLike | null = null;
 
 /**
@@ -15,11 +18,17 @@ export async function initSentry() {
   try {
     const name = '@sentry/node';
     const mod = (await import(name)) as SentryLike;
-    mod.init({ dsn, environment: env('APP_ENV') ?? env('NODE_ENV') ?? 'production', tracesSampleRate: 0 });
+    mod.init({
+      dsn,
+      environment: env('APP_ENV') ?? env('NODE_ENV') ?? 'production',
+      tracesSampleRate: 0,
+    });
     sentry = mod;
     logger.log('Error reporting enabled.');
   } catch {
-    logger.warn('SENTRY_DSN is set but @sentry/node could not be loaded; run `npm i @sentry/node`. Errors are logged only.');
+    logger.warn(
+      'SENTRY_DSN is set but @sentry/node could not be loaded; run `npm i @sentry/node`. Errors are logged only.',
+    );
   }
 }
 

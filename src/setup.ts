@@ -15,7 +15,9 @@ export function configureApp(app: INestApplication) {
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   // Outside production, any localhost port may call the API (Vite picks ports dynamically).
   const localDev = env('NODE_ENV') !== 'production';
-  const allowed = (origin: string) => originAllowed(origin) || (localDev && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
+  const allowed = (origin: string) =>
+    originAllowed(origin) ||
+    (localDev && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
   // Same rule as the edge function: browsers on unknown origins are refused outright.
   app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin;
@@ -26,7 +28,8 @@ export function configureApp(app: INestApplication) {
     next();
   });
   app.enableCors({
-    origin: (origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) => cb(null, !origin || allowed(origin)),
+    origin: (origin: string | undefined, cb: (err: Error | null, ok?: boolean) => void) =>
+      cb(null, !origin || allowed(origin)),
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'x-client-info', 'apikey', 'content-type', 'idempotency-key'],
     exposedHeaders: ['x-request-id', 'retry-after'],
@@ -36,7 +39,10 @@ export function configureApp(app: INestApplication) {
   if (prefix) app.setGlobalPrefix(prefix.replace(/^\/|\/$/g, ''));
   if (localDev) {
     // Dev-only photo uploads (StorageService falls back to disk without Supabase Storage).
-    (app as NestExpressApplication).useStaticAssets(localUploadDir(), { prefix: '/uploads', maxAge: '1h' });
+    (app as NestExpressApplication).useStaticAssets(localUploadDir(), {
+      prefix: '/uploads',
+      maxAge: '1h',
+    });
   }
   app.enableShutdownHooks();
   return app;
