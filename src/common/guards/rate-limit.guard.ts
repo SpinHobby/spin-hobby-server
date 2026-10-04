@@ -1,8 +1,8 @@
 import { CanActivate, ExecutionContext, Injectable, SetMetadata } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request, Response } from 'express';
-import { env } from '../../config/env.js';
 import { AppError } from '../errors.js';
+import { rateLimitDisabled, rateLimitPerMinute } from '../../config/app.config.js';
 
 /** Sliding-window counter: remembers when each key last hit, and refuses once `limit` hits fall inside `windowMs`. */
 export class RateLimiter {
@@ -65,13 +65,13 @@ export class RateLimitGuard implements CanActivate {
   }
 
   canActivate(context: ExecutionContext): boolean {
-    if (env('THROTTLE_DISABLED') === 'true') return true;
+    if (rateLimitDisabled()) return true;
     const targets = [context.getHandler(), context.getClass()];
     if (this.reflector.getAllAndOverride<boolean>(SKIP_KEY, targets)) return true;
     const http = context.switchToHttp();
     const ip = http.getRequest<Request>().ip ?? 'unknown';
 
-    const globalLimit = Number(env('RATE_LIMIT_PER_MINUTE') ?? 300);
+    const globalLimit = rateLimitPerMinute();
     const checks: { bucket: string; rule: RateLimitRule }[] = [
       {
         bucket: 'global',

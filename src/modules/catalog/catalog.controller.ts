@@ -1,9 +1,9 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { notFound } from '../../common/errors.js';
-import { env } from '../../config/env.js';
 import { CatalogService } from './catalog.service.js';
 import { ProductQuery } from './dto/product-query.dto.js';
 import { publicProduct } from './product.mapper.js';
+import { squareApplicationId, squareLocationId } from '../../config/square.config.js';
 
 @Controller()
 export class CatalogController {
@@ -51,8 +51,8 @@ export class CatalogController {
   squareConfig() {
     return {
       success: true,
-      applicationId: env('SQUARE_APPLICATION_ID') ?? null,
-      locationId: env('SQUARE_LOCATION_ID') ?? null,
+      applicationId: squareApplicationId() ?? null,
+      locationId: squareLocationId() ?? null,
     };
   }
 

@@ -1,9 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { env } from '../../../config/env.js';
 import { Db } from '../../../database/db.service.js';
 import { SquareSyncService } from '../../square-sync/square-sync.service.js';
 import { StoreService } from '../../store/store.service.js';
 import { AdminLog } from '../admin-log.service.js';
+import {
+  squareAccessToken,
+  squareIsSandbox,
+  squareLocationId,
+  squareWebhookSignatureKey,
+  squareWebhookUrl,
+} from '../../../config/square.config.js';
 
 /** Is Square connected, and run a catalog sync now. */
 @Injectable()
@@ -25,10 +31,10 @@ export class AdminSquareService {
       this.store.settings(),
     ]);
     return {
-      appAndLocationConnected: Boolean(env('SQUARE_ACCESS_TOKEN') && env('SQUARE_LOCATION_ID')),
+      appAndLocationConnected: Boolean(squareAccessToken() && squareLocationId()),
       catalogAndInventorySyncing: Boolean(catalog?.synced_at),
-      webhookKeySet: Boolean(env('SQUARE_WEBHOOK_SIGNATURE_KEY') && env('SQUARE_WEBHOOK_URL')),
-      sandboxPaymentsConfigured: (env('SQUARE_ENV') ?? env('SQUARE_ENVIRONMENT')) === 'sandbox',
+      webhookKeySet: Boolean(squareWebhookSignatureKey() && squareWebhookUrl()),
+      sandboxPaymentsConfigured: squareIsSandbox(),
       threeDSecureEnabled: false,
       applePayDomainVerified: false,
       activeProvider: settings.payment_provider,

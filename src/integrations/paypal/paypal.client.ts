@@ -1,16 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
-import { env, paypalIsLive } from '../../config/env.js';
+import {
+  paypalBaseUrl,
+  paypalClientId,
+  paypalClientSecret,
+  paypalWebhookId,
+} from '../../config/paypal.config.js';
 
-const base = () =>
-  paypalIsLive() ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com';
+const base = () => paypalBaseUrl();
 const dollars = (cents: number) => (cents / 100).toFixed(2);
 
 @Injectable()
 export class PayPalClient {
   private async token() {
-    const id = env('PAYPAL_CLIENT_ID');
-    const secret = env('PAYPAL_CLIENT_SECRET');
+    const id = paypalClientId();
+    const secret = paypalClientSecret();
     if (!id || !secret) throw new AppError('PayPal checkout is not configured.', 503);
     const res = await fetch(`${base()}/v1/oauth2/token`, {
       method: 'POST',
@@ -78,8 +82,8 @@ export class PayPalClient {
     headers: Record<string, string | undefined>,
     event: unknown,
   ): Promise<boolean> {
-    const webhookId = env('PAYPAL_WEBHOOK_ID');
-    if (!webhookId || !env('PAYPAL_CLIENT_ID') || !env('PAYPAL_CLIENT_SECRET')) return false;
+    const webhookId = paypalWebhookId();
+    if (!webhookId || !paypalClientId() || !paypalClientSecret()) return false;
     const res = await this.post(
       '/v1/notifications/verify-webhook-signature',
       {

@@ -1,9 +1,15 @@
 import { Injectable } from '@nestjs/common';
-import { env } from '../../config/env.js';
 import { Db } from '../../database/db.service.js';
 import { MigrationService } from '../../database/migrations/migration.service.js';
 import { stagingAdmin } from '../auth/staging-admin.js';
 import { explainDbError } from './db-error.js';
+import { environmentName, isEnvSet, releaseVersion } from '../../config/app.config.js';
+import {
+  supabasePublishableKey,
+  supabaseServiceKey,
+  supabaseUrl,
+} from '../../config/supabase.config.js';
+import { devLoginFlag } from '../../config/auth.config.js';
 
 type Check = { ok: boolean; [key: string]: unknown };
 
@@ -55,7 +61,7 @@ export class HealthService {
 
   /** `npm run dev:local`: no Supabase at all; sign-in and uploads are simulated locally. */
   private get localDev() {
-    return env('NODE_ENV') !== 'production' && env('AUTH_DEV_LOGIN') === 'true';
+    return devLoginFlag();
   }
 
   async report() {
@@ -77,15 +83,17 @@ export class HealthService {
         status: ok ? 'ok' : 'degraded',
         checks,
         integrations: this.integrations(),
-        environment: env('APP_ENV') ?? 'production',
-        version: env('RENDER_GIT_COMMIT')?.slice(0, 7) ?? null,
+        environment: environmentName(),
+        version: releaseVersion(),
         time: new Date().toISOString(),
       },
     };
   }
 
   private config(): Check {
-    const missing = REQUIRED.filter((k) => !env(k) && !(this.localDev && k !== 'DATABASE_URL'));
+    const missing = REQUIRED.filter(
+      (k) => !isEnvSet(k) && !(this.localDev && k !== 'DATABASE_URL'),
+    );
     return { ok: missing.length === 0, missing };
   }
 
@@ -131,8 +139,8 @@ export class HealthService {
 
   /** Can we reach Supabase Auth with our key, and which sign-in methods does it offer? */
   private async auth(): Promise<Check> {
-    const url = env('SUPABASE_URL')?.replace(/\/$/, '');
-    const key = env('SUPABASE_PUBLISHABLE_KEY') ?? env('SUPABASE_ANON_KEY');
+    const url = supabaseUrl();
+    const key = supabasePublishableKey();
     if (this.localDev) return { ok: true, mode: 'local-dev-login' };
     if (!url || !key) {
       return {
@@ -165,8 +173,8 @@ export class HealthService {
 
   /** Can the admin upload photos? (The product-images bucket exists and our key may use it.) */
   private async storage(): Promise<Check> {
-    const url = env('SUPABASE_URL')?.replace(/\/$/, '');
-    const service = env('SUPABASE_SERVICE_ROLE_KEY') ?? env('SUPABASE_SECRET_KEY');
+    const url = supabaseUrl();
+    const service = supabaseServiceKey();
     if (this.localDev && (!url || !service)) return { ok: true, mode: 'local-disk' };
     if (!url || !service) {
       return {
@@ -204,7 +212,7 @@ export class HealthService {
     return Object.fromEntries(
       Object.entries(OPTIONAL).map(([name, keys]) => [
         name,
-        keys.every((k) => env(k)) ? 'configured' : 'not_configured',
+        keys.every(isEnvSet) ? 'configured' : 'not_configured',
       ]),
     );
   }

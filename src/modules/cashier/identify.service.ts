@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { AppError } from '../../common/errors.js';
-import { env } from '../../config/env.js';
 import { AiUsageService } from './ai-usage.service.js';
 import type { ArtworkCrop } from './image-processing.js';
 import { PRODUCT_CATEGORIES } from './product-categories.js';
+import { anthropicConfigured } from '../../config/ai.config.js';
 
 export const CASHIER_AI_TOOL = 'anthropic_cashier';
 export const CASHIER_MODEL = 'claude-opus-5';
@@ -83,8 +83,7 @@ export class IdentifyService {
         429,
       );
     }
-    if (!env('ANTHROPIC_API_KEY') && !env('ANTHROPIC_AUTH_TOKEN'))
-      throw new AppError('Photo identification is not configured.', 503);
+    if (!anthropicConfigured()) throw new AppError('Photo identification is not configured.', 503);
     this.client ??= new Anthropic();
 
     let response: Anthropic.Beta.BetaMessage;

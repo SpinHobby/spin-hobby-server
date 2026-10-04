@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { SignJWT } from 'jose';
 import { AppError } from '../../common/errors.js';
-import { env, envList } from '../../config/env.js';
 import { Db } from '../../database/db.service.js';
 import { SessionService, type Session } from './session.service.js';
+import { devLoginFlag } from '../../config/auth.config.js';
+import { devLoginPassword, devLoginUsers } from '../../config/auth.config.js';
+import { supabaseJwtSecret, supabaseUrl } from '../../config/supabase.config.js';
 
 /**
  * Local development only: sign in as a seeded account without Supabase (see scripts/dev-local.mjs).
@@ -18,16 +20,12 @@ export class DevLogin {
   ) {}
 
   enabled() {
-    return (
-      env('NODE_ENV') !== 'production' &&
-      env('AUTH_DEV_LOGIN') === 'true' &&
-      Boolean(env('SUPABASE_JWT_SECRET'))
-    );
+    return devLoginFlag() && Boolean(supabaseJwtSecret());
   }
 
   /** The shared password for every dev account. */
   password() {
-    return env('AUTH_DEV_PASSWORD') ?? 'spinhobby';
+    return devLoginPassword();
   }
 
   async login(email: string, password: string): Promise<Session> {
@@ -35,7 +33,7 @@ export class DevLogin {
       'select id from public.profiles where email = $1',
       [email],
     );
-    const allowed = envList('AUTH_DEV_USERS')
+    const allowed = devLoginUsers()
       .map((e) => e.split(':')[0])
       .includes(email);
     if (!profile || password !== this.password() || !allowed) {
@@ -48,8 +46,9 @@ export class DevLogin {
       .setAudience('authenticated')
       .setIssuedAt()
       .setExpirationTime(expiresAt);
-    if (env('SUPABASE_URL')) jwt.setIssuer(`${env('SUPABASE_URL')!.replace(/\/$/, '')}/auth/v1`);
-    const token = await jwt.sign(new TextEncoder().encode(env('SUPABASE_JWT_SECRET')!));
+    const issuer = supabaseUrl();
+    if (issuer) jwt.setIssuer(`${issuer}/auth/v1`);
+    const token = await jwt.sign(new TextEncoder().encode(supabaseJwtSecret()!));
     return this.sessions.fromTokens({
       access_token: token,
       refresh_token: `dev:${email}`,

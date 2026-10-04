@@ -2,12 +2,12 @@ import { Injectable } from '@nestjs/common';
 import type { AppUser } from '../auth/auth.service.js';
 import type { QuoteInput } from '../orders/quote.service.js';
 import { AppError } from '../../common/errors.js';
-import { env } from '../../config/env.js';
 import { Db, type Row } from '../../database/db.service.js';
 import { OrdersService, type OrderDetails } from '../orders/orders.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
 import { isManualId } from '../catalog/manual-id.js';
 import { SquareClient } from '../../integrations/square/square.client.js';
+import { squareLocationId } from '../../config/square.config.js';
 
 export interface PaymentStarted {
   orderId: number;
@@ -103,7 +103,7 @@ export class PaymentsService {
     sourceId: string,
     verificationToken?: string,
   ): Promise<PaymentResult> {
-    const locationId = env('SQUARE_LOCATION_ID');
+    const locationId = squareLocationId();
     if (!locationId) throw new AppError('Square Payments is not configured.', 503);
 
     const order = await this.db.one<Row>(

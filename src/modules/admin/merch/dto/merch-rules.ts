@@ -1,6 +1,6 @@
 import { AppError } from '../../../../common/errors.js';
 import { optionalString, stringValue } from '../../../../common/validation/rules.js';
-import { env } from '../../../../config/env.js';
+import { isProduction } from '../../../../config/app.config.js';
 
 /** A price in cents: a whole number above 0 and at most $100,000. */
 export function priceCents(value: unknown) {
@@ -24,8 +24,7 @@ export function imageUrls(value: unknown): string[] {
   if (!Array.isArray(value) || value.length > 8) throw new AppError('Add up to 8 photos.');
   return value.map((url) => {
     const text = stringValue(url, 'image URL', 1000);
-    const localDev =
-      env('NODE_ENV') !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(text);
+    const localDev = !isProduction() && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//.test(text);
     if (!/^https:\/\//.test(text) && !localDev)
       throw new AppError('Photo URLs must start with https://');
     return text;

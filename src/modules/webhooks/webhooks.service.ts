@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { stringValue } from '../../common/validation/rules.js';
-import { env } from '../../config/env.js';
 import { Db, type Row } from '../../database/db.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
 import { squareSignatureValid } from './square-signature.js';
+import { squareWebhookSignatureKey, squareWebhookUrl } from '../../config/square.config.js';
 
 /**
  * Receives notifications from Square and PayPal. Every delivery is checked against the provider's signature,
@@ -41,8 +41,8 @@ export class WebhooksService {
     const valid = squareSignatureValid(
       raw,
       signature,
-      env('SQUARE_WEBHOOK_SIGNATURE_KEY'),
-      env('SQUARE_WEBHOOK_URL'),
+      squareWebhookSignatureKey(),
+      squareWebhookUrl(),
     );
     if (!valid) throw new AppError('Invalid Square webhook signature.', 401);
     const event = JSON.parse(raw) as Row;

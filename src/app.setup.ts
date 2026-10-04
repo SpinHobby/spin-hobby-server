@@ -4,8 +4,8 @@ import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
 import { requestContext } from './common/middleware/request-context.js';
 import { AppValidationPipe } from './common/validation/validation.pipe.js';
-import { env, originAllowed } from './config/env.js';
-import { localUploadDir } from './integrations/storage/storage.service.js';
+import { apiPrefix, isProduction, originAllowed } from './config/app.config.js';
+import { localUploadDir } from './config/storage.config.js';
 
 /** Shared by main.ts and the e2e tests so both run the exact same HTTP stack. */
 export function configureApp(app: INestApplication) {
@@ -15,7 +15,7 @@ export function configureApp(app: INestApplication) {
   // The storefront loads sample images from this origin, so the default same-origin resource policy would block them.
   app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
   // Outside production, any localhost port may call the API (Vite picks ports dynamically).
-  const localDev = env('NODE_ENV') !== 'production';
+  const localDev = !isProduction();
   const allowed = (origin: string) =>
     originAllowed(origin) ||
     (localDev && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
@@ -36,7 +36,7 @@ export function configureApp(app: INestApplication) {
     exposedHeaders: ['x-request-id', 'retry-after'],
     maxAge: 86400,
   });
-  const prefix = env('API_PREFIX');
+  const prefix = apiPrefix();
   if (prefix) app.setGlobalPrefix(prefix.replace(/^\/|\/$/g, ''));
   if (localDev) {
     // Dev-only photo uploads (StorageService falls back to disk without Supabase Storage).

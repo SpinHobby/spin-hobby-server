@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import pg from 'pg';
-import { env } from '../config/env.js';
+import { databaseConnectTimeoutMs, databasePoolSize } from '../config/database.config.js';
+import { databaseSsl } from '../config/database.config.js';
 
 export type Row = Record<string, any>;
 
@@ -46,9 +47,9 @@ export function cleanConnectionString(raw: string) {
 export function createPgDriver(connectionString: string): DbDriver {
   const pool = new pg.Pool({
     connectionString: cleanConnectionString(connectionString),
-    max: Number(env('DATABASE_POOL_SIZE') ?? 10),
-    connectionTimeoutMillis: Number(env('DATABASE_CONNECT_TIMEOUT_MS') ?? 10_000),
-    ssl: env('DATABASE_SSL') === 'false' ? undefined : { rejectUnauthorized: false },
+    max: databasePoolSize(),
+    connectionTimeoutMillis: databaseConnectTimeoutMs(),
+    ssl: databaseSsl() ? { rejectUnauthorized: false } : undefined,
   });
   // Idle client errors (e.g. the pooler restarting) must not crash the process.
   pool.on('error', (error) => new Logger('Db').error(`idle client error: ${error.message}`));

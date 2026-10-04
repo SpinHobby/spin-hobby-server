@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CASHIER_CATEGORY_ID } from '../../integrations/square/square-catalog.service.js';
+import { CASHIER_CATEGORY_ID } from '../../config/square.config.js';
 import { toDetail, toSearchResult, type SquareItem } from './cashier-items.mapper.js';
 
 const item: SquareItem = {

@@ -1,8 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Currency, EcomVisibility, SquareClient, SquareEnvironment } from 'square';
-import { env, squareEnvIsProduction } from '../../config/env.js';
 import { processProductPhoto } from '../../modules/cashier/image-processing.js';
+import {
+  CASHIER_CATEGORY_ID,
+  squareAccessToken,
+  squareBaseUrl,
+  squareIsProduction,
+  squareLocationId,
+} from '../../config/square.config.js';
 
 // Ported from the legacy Express server (src/services/square.ts): only the methods the
 // cashier tool uses. Behaviour is unchanged.
@@ -10,7 +16,6 @@ import { processProductPhoto } from '../../modules/cashier/image-processing.js';
 // Category used to tag cashier-tool convention one-offs so they can be
 // excluded from the public storefront. Override via env if this account's
 // category ever changes.
-export const CASHIER_CATEGORY_ID = env('SQUARE_CASHIER_CATEGORY_ID') || 'LNBIPZ6RYAMQTEZX3NF5VOGG';
 
 @Injectable()
 export class SquareCatalogService {
@@ -21,8 +26,8 @@ export class SquareCatalogService {
   }
 
   private readonly client = new SquareClient({
-    token: env('SQUARE_ACCESS_TOKEN'),
-    environment: squareEnvIsProduction() ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
+    token: squareAccessToken(),
+    environment: squareIsProduction() ? SquareEnvironment.Production : SquareEnvironment.Sandbox,
   });
 
   // Unfiltered version of searchCatalog for internal/admin use (e.g. the
@@ -108,7 +113,7 @@ export class SquareCatalogService {
     hidden: boolean;
     categoryId?: string;
   }) {
-    const locationId = process.env.SQUARE_LOCATION_ID;
+    const locationId = squareLocationId();
     const categories = [
       ...(item.categoryId ? [{ id: item.categoryId }] : []),
       ...(item.hidden && CASHIER_CATEGORY_ID ? [{ id: CASHIER_CATEGORY_ID }] : []),
@@ -118,15 +123,13 @@ export class SquareCatalogService {
     // ecom_visibility yet (it's a real, documented Square API field - confirmed
     // present on read responses - but gets silently stripped on write through
     // the SDK). Call the REST endpoint directly for this one write instead.
-    const baseUrl = squareEnvIsProduction()
-      ? 'https://connect.squareup.com'
-      : 'https://connect.squareupsandbox.com';
+    const baseUrl = squareBaseUrl();
 
     const upsertResponse = await fetch(`${baseUrl}/v2/catalog/batch-upsert`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${squareAccessToken()}`,
         'Square-Version': '2025-10-16',
       },
       body: JSON.stringify({
@@ -246,15 +249,13 @@ export class SquareCatalogService {
     // attach a replacement below).
     const imageIds = update.removePhoto || update.photo ? [] : existing.itemData?.imageIds || [];
 
-    const baseUrl = squareEnvIsProduction()
-      ? 'https://connect.squareup.com'
-      : 'https://connect.squareupsandbox.com';
+    const baseUrl = squareBaseUrl();
 
     const upsertResponse = await fetch(`${baseUrl}/v2/catalog/batch-upsert`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.SQUARE_ACCESS_TOKEN}`,
+        Authorization: `Bearer ${squareAccessToken()}`,
         'Square-Version': '2025-10-16',
       },
       body: JSON.stringify({
@@ -336,7 +337,7 @@ export class SquareCatalogService {
   async getInventoryCounts(variationIds: string[]): Promise<Record<string, number>> {
     if (variationIds.length === 0) return {};
 
-    const locationId = process.env.SQUARE_LOCATION_ID;
+    const locationId = squareLocationId();
     const page = await this.client.inventory.batchGetCounts({
       catalogObjectIds: variationIds,
       locationIds: locationId ? [locationId] : undefined,
@@ -356,7 +357,7 @@ export class SquareCatalogService {
   // no prior state to transition from - the cashier tool is the one entering
   // the real-world count for the first time.
   async setInitialInventoryCount(variationId: string, quantity: number): Promise<void> {
-    const locationId = process.env.SQUARE_LOCATION_ID;
+    const locationId = squareLocationId();
 
     await this.client.inventory.batchCreateChanges({
       idempotencyKey: randomUUID(),

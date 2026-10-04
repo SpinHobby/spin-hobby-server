@@ -30,6 +30,34 @@ export default tseslint.config(
     },
   },
   {
+    // Settings are read in one place. Everything else imports a named accessor from src/config
+    // (e.g. `squareLocationId()` from config/square.config.ts), so the full list of settings stays discoverable.
+    files: ['src/**/*.ts'],
+    ignores: ['src/config/**', 'src/**/*.spec.ts'], // specs change env on purpose
+    rules: {
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'process',
+          property: 'env',
+          message: 'Add an accessor in src/config/ and import that instead.',
+        },
+      ],
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/config/env.js'],
+              message:
+                'config/env.ts is private to src/config. Import the named accessor you need.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Scripts and the test harness may print and are not part of the app.
     files: ['scripts/**', 'test/**', '*.config.*'],
     rules: { 'no-console': 'off', '@typescript-eslint/no-explicit-any': 'off' }, // response bodies in tests are naturally untyped

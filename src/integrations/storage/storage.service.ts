@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { AppError } from '../../common/errors.js';
-import { env } from '../../config/env.js';
+import { isProduction, port, publicApiUrl } from '../../config/app.config.js';
+import { supabaseServiceKey, supabaseUrl } from '../../config/supabase.config.js';
+import { localUploadDir } from '../../config/storage.config.js';
 
 export const IMAGE_BUCKET = 'product-images';
 export const IMAGE_TYPES: Record<string, string> = {
@@ -13,7 +14,6 @@ export const IMAGE_TYPES: Record<string, string> = {
   'image/png': 'png',
 };
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
-export const localUploadDir = () => env('LOCAL_UPLOAD_DIR') ?? join(tmpdir(), 'spinhobby-uploads');
 
 /** Writes admin-uploaded photos to the public Supabase Storage bucket (service role only). */
 @Injectable()
@@ -23,16 +23,16 @@ export class StorageService {
     if (!ext) throw new AppError('Upload a WebP, JPEG or PNG image.');
     if (!bytes.length || bytes.length > MAX_IMAGE_BYTES)
       throw new AppError('Images must be under 5 MB.');
-    const base = env('SUPABASE_URL')?.replace(/\/$/, '');
-    const key = env('SUPABASE_SERVICE_ROLE_KEY') ?? env('SUPABASE_SECRET_KEY');
+    const base = supabaseUrl();
+    const key = supabaseServiceKey();
     const path = `${folder}/${new Date().toISOString().slice(0, 7)}/${randomUUID()}.${ext}`;
     if (!base || !key) {
       // Local development without Supabase: keep uploads on disk, served at /uploads (see setup.ts).
-      if (env('NODE_ENV') !== 'production') {
+      if (!isProduction()) {
         const file = join(localUploadDir(), path);
         await mkdir(dirname(file), { recursive: true });
         await writeFile(file, bytes);
-        const origin = env('PUBLIC_API_URL') ?? `http://localhost:${env('PORT') ?? 8080}`;
+        const origin = publicApiUrl() ?? `http://localhost:${port()}`;
         return { url: `${origin.replace(/\/$/, '')}/uploads/${path}`, path, bytes: bytes.length };
       }
       throw new AppError(

@@ -1,21 +1,14 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PRODUCTION_SUPABASE_REF } from '../auth/staging-admin.js';
-import { env } from '../../config/env.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 import { MigrationService } from '../../database/migrations/migration.service.js';
 import { countProducts, seedSample, type SampleDb } from './seed.js';
+import { isProduction, isStaging } from '../../config/app.config.js';
+import { supabaseUrl } from '../../config/supabase.config.js';
+import { sampleDataDisabled, sampleImageBase } from '../../config/app.config.js';
 
 /** Sample pictures are served everywhere except production (where the sample catalog is never loaded). */
-export const sampleImagesEnabled = () =>
-  env('APP_ENV') === 'staging' || env('NODE_ENV') !== 'production';
-
-/** Where this API is reachable, for the picture URLs written into the catalog. Render sets RENDER_EXTERNAL_URL. */
-export const sampleImageBase = () =>
-  (
-    env('SAMPLE_IMAGE_BASE') ??
-    env('RENDER_EXTERNAL_URL') ??
-    `http://localhost:${env('PORT') ?? '8080'}`
-  ).replace(/\/$/, '');
+export const sampleImagesEnabled = () => isStaging() || !isProduction();
 
 /**
  * Staging only: loads the sample catalog into an empty database on start, right after migrations,
@@ -33,8 +26,8 @@ export class SampleDataService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
-    if (env('APP_ENV') !== 'staging' || env('SAMPLE_DATA') === 'false') return;
-    if (env('SUPABASE_URL')?.includes(PRODUCTION_SUPABASE_REF)) {
+    if (!isStaging() || sampleDataDisabled()) return;
+    if (supabaseUrl()?.includes(PRODUCTION_SUPABASE_REF)) {
       this.logger.warn('Sample data skipped: SUPABASE_URL is the production project.');
       return;
     }

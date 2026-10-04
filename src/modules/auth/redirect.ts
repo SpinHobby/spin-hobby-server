@@ -1,5 +1,5 @@
 import { AppError } from '../../common/errors.js';
-import { originAllowed } from '../../config/env.js';
+import { originAllowed } from '../../config/app.config.js';
 
 /** Only ever redirect to one of our own sites or localhost (used for OAuth and password-reset links alike). */
 export function validateRedirect(target: string): string {

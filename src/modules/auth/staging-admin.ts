@@ -1,5 +1,10 @@
 import { timingSafeEqual } from 'node:crypto';
-import { env } from '../../config/env.js';
+import { supabaseUrl } from '../../config/supabase.config.js';
+import {
+  stagingAdminLoginEnabled,
+  stagingAdminPassword,
+  stagingAdminUsername,
+} from '../../config/auth.config.js';
 
 /** The production Supabase project; the staging admin login must never exist there. */
 export const PRODUCTION_SUPABASE_REF = 'zmlltsytckexrmybvnof';
@@ -22,11 +27,11 @@ export interface StagingAdmin {
  * Off unless APP_ENV=staging, and always off against the production Supabase project.
  */
 export function stagingAdmin(): StagingAdmin | null {
-  if (env('APP_ENV') !== 'staging') return null;
-  const username = env('STAGING_ADMIN_USERNAME')?.trim();
-  const password = env('STAGING_ADMIN_PASSWORD');
+  if (!stagingAdminLoginEnabled()) return null;
+  const username = stagingAdminUsername();
+  const password = stagingAdminPassword();
   if (!username || !password) return null;
-  if (env('SUPABASE_URL')?.includes(PRODUCTION_SUPABASE_REF)) return null;
+  if (supabaseUrl()?.includes(PRODUCTION_SUPABASE_REF)) return null;
   const local = username.toLowerCase().replace(/[^a-z0-9._-]/g, '') || 'admin';
   return { username, password, email: `${local}@${STAGING_ADMIN_DOMAIN}` };
 }

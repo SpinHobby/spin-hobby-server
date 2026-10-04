@@ -1,8 +1,8 @@
 import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import { forbidden } from '../../common/errors.js';
-import { env } from '../../config/env.js';
 import type { AuthedRequest } from '../auth/access.js';
+import { squareSyncTriggerSecret } from '../../config/square.config.js';
 
 const sameSecret = (a: string, b: string) =>
   a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -16,7 +16,7 @@ const sameSecret = (a: string, b: string) =>
 export class OwnerOrSyncSecretGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const req = context.switchToHttp().getRequest<AuthedRequest>();
-    const expected = env('SQUARE_SYNC_TRIGGER_SECRET');
+    const expected = squareSyncTriggerSecret();
     const given = req.headers['x-square-sync-secret'];
     const bySecret = Boolean(expected && typeof given === 'string' && sameSecret(given, expected));
     if (!bySecret && req.user?.role !== 'owner') throw forbidden('start a Square sync');

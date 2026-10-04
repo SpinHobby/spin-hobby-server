@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { originAllowed } from './env.js';
+import { originAllowed } from './app.config.js';
 
 describe('originAllowed', () => {
   afterEach(() => {

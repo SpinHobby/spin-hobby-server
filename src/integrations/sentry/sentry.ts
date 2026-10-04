@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { env } from '../../config/env.js';
+import { sentryDsn, sentryEnvironment } from '../../config/app.config.js';
 
 interface SentryLike {
   init(options: Record<string, unknown>): void;
@@ -12,7 +12,7 @@ let sentry: SentryLike | null = null;
  * app neither needs nor installs it otherwise (add it with `npm i @sentry/node` when a Sentry project exists).
  */
 export async function initSentry() {
-  const dsn = env('SENTRY_DSN');
+  const dsn = sentryDsn();
   if (!dsn) return;
   const logger = new Logger('Sentry');
   try {
@@ -20,7 +20,7 @@ export async function initSentry() {
     const mod = (await import(name)) as SentryLike;
     mod.init({
       dsn,
-      environment: env('APP_ENV') ?? env('NODE_ENV') ?? 'production',
+      environment: sentryEnvironment(),
       tracesSampleRate: 0,
     });
     sentry = mod;

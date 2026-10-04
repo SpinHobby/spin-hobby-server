@@ -2,10 +2,10 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import type { AppUser } from '../auth/auth.service.js';
 import { QuoteService, type Quote, type QuoteInput } from './quote.service.js';
 import { AppError } from '../../common/errors.js';
-import { env, orderHoldMinutes } from '../../config/env.js';
 import { Db, type Row } from '../../database/db.service.js';
 import { EmailService } from '../../integrations/email/email.service.js';
 import { StoreService } from '../store/store.service.js';
+import { orderExpiryIntervalMinutes, orderHoldMinutes } from '../../config/orders.config.js';
 
 export interface OrderDetails {
   email: string;
@@ -36,7 +36,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    const minutes = Number(env('ORDER_EXPIRY_INTERVAL_MINUTES') ?? 10);
+    const minutes = orderExpiryIntervalMinutes();
     if (!(minutes > 0)) return;
     this.timer = setInterval(() => {
       this.expireStale()

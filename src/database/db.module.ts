@@ -1,7 +1,7 @@
 import { Global, Logger, Module } from '@nestjs/common';
-import { env } from '../config/env.js';
 import { createMissingDriver, createPgDriver, Db, DB_DRIVER } from './db.service.js';
 import { MigrationService } from './migrations/migration.service.js';
+import { databaseUrl } from '../config/database.config.js';
 
 /**
  * The Postgres connection (`Db`) and the migration runner. Global, so every module can inject `Db`
@@ -13,7 +13,7 @@ import { MigrationService } from './migrations/migration.service.js';
     {
       provide: DB_DRIVER,
       useFactory: () => {
-        const url = env('DATABASE_URL');
+        const url = databaseUrl();
         if (!url) {
           new Logger('Db').error(
             'DATABASE_URL is not set: database routes will fail until it is. See GET /health.',

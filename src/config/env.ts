@@ -1,9 +1,17 @@
-/** Small typed accessors over process.env so every setting is read in one place. */
+/**
+ * The only file that touches `process.env`. Everything else reads settings through the topic files in
+ * this folder (square.config.ts, supabase.config.ts, ...), so a newcomer can see every setting the
+ * server understands, and what its default is, without searching the codebase.
+ *
+ * Settings are read each time they are asked for, not once at start-up: tests change them between
+ * runs, and a missing optional setting must never stop the server booting.
+ */
 export function env(name: string): string | undefined {
   const value = process.env[name];
   return value === undefined || value === '' ? undefined : value;
 }
 
+/** A comma-separated setting as a list: `a, b,c` -> ['a', 'b', 'c']. */
 export function envList(name: string): string[] {
   return (env(name) ?? '')
     .split(',')
@@ -11,69 +19,12 @@ export function envList(name: string): string[] {
     .filter(Boolean);
 }
 
-export function requireEnv(name: string, feature: string): string {
-  const value = env(name);
-  if (!value) throw new Error(`${feature} is not configured.`);
-  return value;
+export const isEnvSet = (name: string) => env(name) !== undefined;
+
+/** A URL setting without a trailing slash. */
+export function envUrl(name: string): string | undefined {
+  return env(name)?.replace(/\/$/, '');
 }
 
-/** How long an unpaid checkout keeps its items out of other shoppers' reach. */
-export const orderHoldMinutes = () => {
-  const minutes = Number(env('ORDER_HOLD_MINUTES') ?? 30);
-  return Number.isFinite(minutes) && minutes >= 1 ? Math.floor(minutes) : 30;
-};
-
-/**
- * Proxies between the internet and this server whose X-Forwarded-For entries we believe. On Render the header reads
- * `client, Cloudflare edge, Render's internal proxy`, so the client is three hops from the server; elsewhere assume one
- * proxy. Too low and every shopper looks like a proxy address (limits stop being per shopper); too high and callers
- * can spoof their address. Override with TRUST_PROXY_HOPS.
- */
-export const trustProxyHops = () => {
-  const fallback = env('RENDER') ? 3 : 1;
-  const hops = Number(env('TRUST_PROXY_HOPS') ?? fallback);
-  return Number.isInteger(hops) && hops >= 0 ? hops : fallback;
-};
-
-/** The interactive API docs (Swagger UI at /docs) are for developers: on locally and on staging, never in production. */
-export const apiDocsEnabled = () =>
-  env('NODE_ENV') !== 'production' || env('APP_ENV') === 'staging';
-
-export const squareEnvIsProduction = () =>
-  (env('SQUARE_ENV') ?? env('SQUARE_ENVIRONMENT')) === 'production';
-export const paypalIsLive = () => env('PAYPAL_ENV') === 'live';
-
-/** The staging storefront and Netlify deploy previews, allowed whenever APP_ENV=staging. */
-const STAGING_ORIGINS = [
-  'https://spin-hobby-staging.netlify.app',
-  'https://staging--spinhobby.netlify.app',
-  'https://*--spinhobby.netlify.app',
-];
-
-/** Storefront origins always allowed (plus the staging ones on staging), plus ALLOWED_ORIGINS (comma separated). */
-export function allowedOrigins(): string[] {
-  const staging = env('APP_ENV') === 'staging' ? STAGING_ORIGINS : [];
-  return [
-    ...new Set([
-      'https://spinhobby.com',
-      'https://www.spinhobby.com',
-      ...staging,
-      ...envList('ALLOWED_ORIGINS'),
-    ]),
-  ];
-}
-
-/**
- * Whether a browser origin may call the API. ALLOWED_ORIGINS entries may use `*` for one
- * subdomain label, e.g. `https://*--spinhobby.netlify.app` for Netlify deploy previews.
- */
-export function originAllowed(origin: string): boolean {
-  return allowedOrigins().some((entry) => {
-    if (!entry.includes('*')) return entry === origin;
-    const pattern = entry
-      .split('*')
-      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-      .join('[a-z0-9-]+');
-    return new RegExp(`^${pattern}$`).test(origin);
-  });
-}
+/** A number setting; falls back when unset. (Callers that need a range check do it themselves.) */
+export const envNumber = (name: string, fallback: number) => Number(env(name) ?? fallback);

@@ -1,8 +1,9 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { env } from '../../config/env.js';
 import { Db } from '../db.service.js';
+import { databaseUrl, migrateOnStart } from '../../config/database.config.js';
+import { migrationsDir } from '../../config/database.config.js';
 
 export interface MigrationStatus {
   state: 'ok' | 'skipped' | 'failed' | 'not-run';
@@ -38,7 +39,7 @@ export class MigrationService implements OnModuleInit {
   constructor(private readonly db: Db) {}
 
   dir() {
-    return env('MIGRATIONS_DIR') ?? join(process.cwd(), 'supabase', 'migrations');
+    return migrationsDir();
   }
 
   files() {
@@ -52,11 +53,11 @@ export class MigrationService implements OnModuleInit {
 
   async onModuleInit() {
     try {
-      if (env('MIGRATE_ON_START') === 'false') {
+      if (!migrateOnStart()) {
         this.status = { ...this.status, state: 'skipped', message: 'MIGRATE_ON_START=false' };
         return;
       }
-      if (!env('DATABASE_URL')) {
+      if (!databaseUrl()) {
         this.status = { ...this.status, state: 'skipped', message: 'DATABASE_URL is not set.' };
         return;
       }

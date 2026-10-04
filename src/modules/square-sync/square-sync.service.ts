@@ -1,8 +1,13 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
-import { env } from '../../config/env.js';
 import { Db, type Queryable, type Row } from '../../database/db.service.js';
 import { SquareClient } from '../../integrations/square/square.client.js';
+import {
+  squareAccessToken,
+  squareLocationId,
+  squareSyncIntervalMinutes,
+  squareSyncRetireMaxRatio,
+} from '../../config/square.config.js';
 
 export interface SyncResult {
   products: number;
@@ -19,7 +24,7 @@ const chunks = <T>(values: T[], size = 100) =>
 
 /** Most of the active Square catalog one sync may retire before we assume Square returned a partial list. */
 const retireMaxRatio = () => {
-  const ratio = Number(env('SQUARE_SYNC_RETIRE_MAX_RATIO') ?? 0.5);
+  const ratio = squareSyncRetireMaxRatio();
   return Number.isFinite(ratio) && ratio >= 0 ? ratio : 0.5;
 };
 
@@ -40,7 +45,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    const minutes = Number(env('SQUARE_SYNC_INTERVAL_MINUTES') ?? 0);
+    const minutes = squareSyncIntervalMinutes();
     if (minutes > 0) {
       this.timer = setInterval(
         () =>
@@ -60,7 +65,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
 
   /** Concurrent callers share the in-flight run instead of starting a second one. */
   run(): Promise<SyncResult> {
-    if (!env('SQUARE_ACCESS_TOKEN'))
+    if (!squareAccessToken())
       return Promise.reject(new AppError('Square catalog sync is not configured.', 503));
     this.running ??= this.runOnce().finally(() => {
       this.running = null;
@@ -226,7 +231,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async syncInventory(tracked: string[], untracked: string[]) {
-    const locationId = env('SQUARE_LOCATION_ID');
+    const locationId = squareLocationId();
     if (!locationId || !(tracked.length + untracked.length)) return 0;
     let synced = 0;
     for (const ids of chunks(untracked)) {

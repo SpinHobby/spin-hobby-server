@@ -1,8 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
-import { env, envList } from '../../config/env.js';
 import { Db } from '../../database/db.service.js';
 import { SupabaseAuthClient } from '../../integrations/supabase/supabase-auth.client.js';
+import { ownerEmails, staffEmails } from '../../config/auth.config.js';
+import { supabaseJwtSecret, supabaseUrl } from '../../config/supabase.config.js';
+import { devLoginFlag } from '../../config/auth.config.js';
 
 export type AppRole = 'customer' | 'staff' | 'owner';
 export interface AppUser {
@@ -28,16 +30,16 @@ export class AuthService {
   ) {}
 
   private async verify(token: string): Promise<JWTPayload | null> {
-    const secret = env('SUPABASE_JWT_SECRET');
-    const supabaseUrl = env('SUPABASE_URL')?.replace(/\/$/, '');
+    const secret = supabaseJwtSecret();
+    const projectUrl = supabaseUrl();
     const options = {
       audience: 'authenticated',
-      ...(supabaseUrl ? { issuer: `${supabaseUrl}/auth/v1` } : {}),
+      ...(projectUrl ? { issuer: `${projectUrl}/auth/v1` } : {}),
     };
     try {
       if (secret)
         return (await jwtVerify(token, new TextEncoder().encode(secret), options)).payload;
-      if (!supabaseUrl) {
+      if (!projectUrl) {
         this.logger.error('Set SUPABASE_URL (JWKS) or SUPABASE_JWT_SECRET to verify sign-ins.');
         return null;
       }
@@ -70,7 +72,7 @@ export class AuthService {
    * browser just drops its token.
    */
   async signOut(authorization: string) {
-    if (env('NODE_ENV') !== 'production' && env('AUTH_DEV_LOGIN') === 'true') return;
+    if (devLoginFlag()) return;
     await this.supabase.signOutEverywhere(authorization);
   }
 }
@@ -88,14 +90,14 @@ export function firstNameFrom(payload: JWTPayload): string | null {
 export function bootstrapRole(email: string, current: AppRole): AppRole {
   const address = email.toLowerCase();
   if (
-    envList('OWNER_EMAILS')
+    ownerEmails()
       .map((e) => e.toLowerCase())
       .includes(address)
   )
     return 'owner';
   if (
     current === 'customer' &&
-    envList('STAFF_EMAILS')
+    staffEmails()
       .map((e) => e.toLowerCase())
       .includes(address)
   )

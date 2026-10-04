@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
-import { orderHoldMinutes } from '../../config/env.js';
+import { orderHoldMinutes } from '../../config/orders.config.js';
 import { Db, type Queryable, type Row } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';
 

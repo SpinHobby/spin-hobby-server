@@ -1,4 +1,4 @@
-import { CASHIER_CATEGORY_ID } from '../../integrations/square/square-catalog.service.js';
+import { CASHIER_CATEGORY_ID } from '../../config/square.config.js';
 
 // The parts of Square's catalog objects the cashier screens use (the SDK's own types are far larger).
 interface SquareVariation {

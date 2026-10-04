@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { escapeHtml as escape } from '../../common/html.js';
-import { env } from '../../config/env.js';
 import type { Row } from '../../database/db.service.js';
+import { storefrontUrl } from '../../config/app.config.js';
+import { fromEmail, resendApiKey } from '../../config/email.config.js';
 
 const money = (cents: unknown) => `$${(Number(cents) / 100).toFixed(2)}`;
 /** Transactional email through Resend: order confirmations, shipping notices and restock alerts. */
@@ -11,12 +12,12 @@ export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
   get configured() {
-    return Boolean(env('RESEND_API_KEY') && env('FROM_EMAIL'));
+    return Boolean(resendApiKey() && fromEmail());
   }
 
   async send(to: string, subject: string, html: string): Promise<boolean> {
-    const apiKey = env('RESEND_API_KEY');
-    const from = env('FROM_EMAIL');
+    const apiKey = resendApiKey();
+    const from = fromEmail();
     if (!apiKey || !from)
       throw new AppError('Email is not configured (RESEND_API_KEY, FROM_EMAIL).', 503);
     const res = await fetch('https://api.resend.com/emails', {
@@ -30,7 +31,7 @@ export class EmailService {
   }
 
   restockHtml(productName: string) {
-    const site = env('STOREFRONT_URL') ?? 'https://spinhobby.com';
+    const site = storefrontUrl();
     return `<p><strong>${escape(productName)}</strong> is back in stock at Spin Hobby.</p><p><a href="${escape(site)}">Shop now</a></p>`;
   }
 
@@ -44,7 +45,7 @@ export class EmailService {
 
   /** Receipt sent once an order is paid. `order`/`items` are rows from orders / order_items. */
   confirmationHtml(order: Row, items: Row[], handling: { days_min: number; days_max: number }) {
-    const site = env('STOREFRONT_URL') ?? 'https://spinhobby.com';
+    const site = storefrontUrl();
     const a = (order.shipping_address ?? {}) as Record<string, unknown>;
     const address = [
       [a.firstName, a.lastName].filter(Boolean).join(' '),

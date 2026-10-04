@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
-import { env } from '../../config/env.js';
+import { supabasePublishableKey, supabaseServiceKey, supabaseSignOutKey, supabaseUrl } from '../../config/supabase.config.js';
 
 type Json = Record<string, any>;
 
@@ -21,14 +21,14 @@ export class SupabaseAuthClient {
 
   /** Project URL and publishable key, or null when sign-in isn't configured. */
   config() {
-    const url = env('SUPABASE_URL')?.replace(/\/$/, '');
-    const key = env('SUPABASE_PUBLISHABLE_KEY') ?? env('SUPABASE_ANON_KEY');
+    const url = supabaseUrl();
+    const key = supabasePublishableKey();
     return url && key ? { url, key } : null;
   }
 
   /** Admin key, for creating users and changing their passwords. */
   serviceKey() {
-    return env('SUPABASE_SERVICE_ROLE_KEY') ?? env('SUPABASE_SECRET_KEY');
+    return supabaseServiceKey();
   }
 
   private requireConfig() {
@@ -147,9 +147,9 @@ export class SupabaseAuthClient {
 
   /** Revokes every session for this person. A token that is already invalid counts as signed out. */
   async signOutEverywhere(authorization: string) {
-    const url = env('SUPABASE_URL')?.replace(/\/$/, '');
+    const url = supabaseUrl();
     const apiKey =
-      env('SUPABASE_PUBLISHABLE_KEY') ?? env('SUPABASE_ANON_KEY') ?? env('SUPABASE_SERVICE_ROLE_KEY');
+      supabaseSignOutKey();
     if (!url || !apiKey)
       throw new Error('SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required for sign-out.');
     const res = await fetch(`${url}/auth/v1/logout?scope=global`, {
