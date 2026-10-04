@@ -16,7 +16,7 @@ export interface AppUser {
 
 /**
  * Verifies Supabase Auth access tokens (the same tokens the storefront already sends)
- * and loads the matching profile. Supports the legacy shared JWT secret (HS256) or the
+ * and loads the matching profile. Supports the older shared JWT secret (HS256) or the
  * project's published signing keys (JWKS).
  */
 @Injectable()

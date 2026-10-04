@@ -1,7 +1,7 @@
 {
   "name": "spin-hobby-server",
   "version": "2.0.0",
-  "description": "Spin Hobby API (NestJS) - same contract as the Supabase store-api edge function",
+  "description": "Spin Hobby API (NestJS): storefront, checkout, payments, Square sync and admin",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",

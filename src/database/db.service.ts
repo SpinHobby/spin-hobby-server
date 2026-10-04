@@ -25,12 +25,12 @@ export interface DbDriver extends Queryable {
 }
 
 // Return bigint ids / counts as JS numbers (order ids stay far below 2^53) and
-// numeric columns (tax rates, fx) as numbers, matching the edge function's JSON.
+// numeric columns (tax rates, fx) as numbers, so JSON responses carry real numbers, not strings.
 pg.types.setTypeParser(pg.types.builtins.INT8, (v) => Number(v));
 pg.types.setTypeParser(pg.types.builtins.NUMERIC, (v) => Number(v));
 // Plain dates (release_month, event dates) stay "YYYY-MM-DD" - never shifted by the server's timezone.
 pg.types.setTypeParser(pg.types.builtins.DATE, (v) => v);
-// Timestamps leave as ISO-8601 strings, like PostgREST returned them to the storefront.
+// Timestamps leave as ISO-8601 strings, which is what the storefront expects.
 pg.types.setTypeParser(pg.types.builtins.TIMESTAMPTZ, (v) => new Date(v).toISOString());
 pg.types.setTypeParser(pg.types.builtins.TIMESTAMP, (v) => new Date(`${v}Z`).toISOString());
 

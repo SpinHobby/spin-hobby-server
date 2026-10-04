@@ -19,7 +19,7 @@ export function configureApp(app: INestApplication) {
   const allowed = (origin: string) =>
     originAllowed(origin) ||
     (localDev && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin));
-  // Same rule as the edge function: browsers on unknown origins are refused outright.
+  // Browsers on unknown origins are refused outright (requests without an Origin header, like webhooks, pass).
   app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin;
     if (origin && !allowed(origin)) {

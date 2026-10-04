@@ -11,13 +11,10 @@ import {
 } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
 
-// Ported from the legacy Express server (src/services/square.ts): only the methods the
-// cashier tool uses. Behaviour is unchanged.
-
-// Category used to tag cashier-tool convention one-offs so they can be
-// excluded from the public storefront. Override via env if this account's
-// category ever changes.
-
+/**
+ * Square catalog calls for the cashier tool: searching items, creating and editing them, and stock counts.
+ * (Checkout, refunds and the catalog sync use `SquareClient` instead.)
+ */
 @Injectable()
 export class SquareCatalogService {
   private readonly logger = new Logger(SquareCatalogService.name);

@@ -14,7 +14,7 @@ export interface BudgetStatus {
   status: 'ok' | 'warn' | 'blocked';
 }
 
-/** Monthly spend tracking with warn/stop thresholds, ported from the legacy ops dashboard. */
+/** Monthly spend tracking with warn/stop thresholds. */
 @Injectable()
 export class AiUsageService {
   constructor(private readonly db: Db) {}

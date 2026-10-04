@@ -1,6 +1,6 @@
 import type { StorefrontProductRow } from '../../database/rows.js';
 
-/** Public product shape - identical to the edge function's publicProduct(). */
+/** The product shape the storefront receives, built from a `storefront_products` row. */
 export function publicProduct(p: StorefrontProductRow) {
   return {
     id: p.id,
