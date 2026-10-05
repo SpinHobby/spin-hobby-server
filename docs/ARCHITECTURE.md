@@ -215,6 +215,7 @@ The server never trusts prices from the browser: step 2 always recalculates from
 - A background job cancels unpaid orders after the hold ends. A payment arriving for an expired
   order is refused (`ORDER_EXPIRED`) *before* any card is charged.
 - A sale that Square hasn't reported back yet still counts until the next sync or webhook passes it.
+- The cashier tool keeps in-person-only items (convention one-offs) off the website by putting them in a special Square category (`CASHIER_CATEGORY_ID`). The sync still copies them, but marks them not visible, so the shop never shows them and the admin lists them as "hidden".
 - The sync hides products deleted in Square (never hand-entered ones), unless that would hide more
   than `SQUARE_SYNC_RETIRE_MAX_RATIO` of them: that looks like a mistake, so it's skipped.
 

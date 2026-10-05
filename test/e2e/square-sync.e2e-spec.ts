@@ -2,6 +2,7 @@ import type { PGlite } from '@electric-sql/pglite';
 import type { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CASHIER_CATEGORY_ID } from '../../src/config/square.config.js';
 import {
   createApp,
   createDatabase,
@@ -23,6 +24,8 @@ type CatalogItem = {
   variations: Variation[];
   images?: string[];
   deleted?: boolean;
+  /** Square category ids; defaults to the one ordinary category. */
+  categories?: string[];
 };
 
 const item = (i: CatalogItem) => ({
@@ -32,7 +35,7 @@ const item = (i: CatalogItem) => ({
   is_deleted: i.deleted ?? false,
   item_data: {
     name: i.name,
-    categories: [{ id: 'CAT1' }],
+    categories: (i.categories ?? ['CAT1']).map((id) => ({ id })),
     image_ids: i.images ?? [],
     variations: i.variations.map((v) => ({
       id: v.id,
@@ -245,5 +248,45 @@ describe('square catalog sync', () => {
       delete process.env.SQUARE_SYNC_RETIRE_MAX_RATIO;
     }
     expect((await product('ITEM_A')).is_active).toBe(true);
+  });
+});
+
+describe('items the cashier hides from the website', () => {
+  const oneOff: CatalogItem = {
+    id: 'ITEM_H',
+    name: 'Convention one-off',
+    categories: [CASHIER_CATEGORY_ID],
+    variations: [{ id: 'H1' }],
+  };
+  const storefrontIds = async () =>
+    (await http.get('/products?ids=ITEM_C,ITEM_H')).body.items.map((p: any) => p.id);
+
+  it('keeps them out of the storefront, and shows them in the admin as hidden', async () => {
+    process.env.SQUARE_SYNC_RETIRE_MAX_RATIO = '0'; // this test is about visibility; nothing may retire
+    try {
+      await run([[oneOff, C]]);
+    } finally {
+      delete process.env.SQUARE_SYNC_RETIRE_MAX_RATIO;
+    }
+    expect(await product('ITEM_H')).toMatchObject({ is_active: true, is_visible: false });
+    expect(await product('ITEM_C')).toMatchObject({ is_active: true, is_visible: true });
+    expect(await storefrontIds()).toEqual(['ITEM_C']);
+
+    const admin = await http
+      .get('/admin/catalog?q=Convention%20one-off')
+      .set('Authorization', owner.auth)
+      .expect(200);
+    expect(admin.body.items.map((p: any) => [p.id, p.state])).toEqual([['ITEM_H', 'hidden']]);
+  });
+
+  it('publishes the item once the cashier marker is removed in Square', async () => {
+    process.env.SQUARE_SYNC_RETIRE_MAX_RATIO = '0';
+    try {
+      await run([[{ ...oneOff, categories: ['CAT1'] }, C]]);
+    } finally {
+      delete process.env.SQUARE_SYNC_RETIRE_MAX_RATIO;
+    }
+    expect(await product('ITEM_H')).toMatchObject({ is_visible: true });
+    expect((await storefrontIds()).sort()).toEqual(['ITEM_C', 'ITEM_H']);
   });
 });

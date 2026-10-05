@@ -4,6 +4,7 @@ import { Db, type Queryable } from '../../database/db.service.js';
 import type { CatalogProductRow } from '../../database/rows.js';
 import { SquareHttpClient } from '../../integrations/square/square-http.client.js';
 import {
+  CASHIER_CATEGORY_ID,
   squareAccessToken,
   squareLocationId,
   squareSyncIntervalMinutes,
@@ -166,6 +167,8 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
         category_ids: categoryIds,
         default_variation_id: live[0]?.id ?? null,
         active: !item.is_deleted,
+        // The cashier tool tags items it keeps off the website (convention one-offs) with a special category.
+        visible: !item.is_deleted && !categoryIds.includes(CASHIER_CATEGORY_ID),
         updated_at: item.updated_at ?? null,
       });
       for (const v of d.variations ?? []) {
@@ -188,8 +191,8 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
 
     await this.db.exec(
       `insert into public.catalog_products (square_item_id, name, description, category, category_ids, default_variation_id, is_active, is_visible, square_updated_at, synced_at)
-       select r.id, r.name, r.description, r.category, array(select jsonb_array_elements_text(r.category_ids)), r.default_variation_id, r.active, r.active, r.updated_at, now()
-         from jsonb_to_recordset($1::jsonb) as r(id text, name text, description text, category text, category_ids jsonb, default_variation_id text, active boolean, updated_at timestamptz)
+       select r.id, r.name, r.description, r.category, array(select jsonb_array_elements_text(r.category_ids)), r.default_variation_id, r.active, r.visible, r.updated_at, now()
+         from jsonb_to_recordset($1::jsonb) as r(id text, name text, description text, category text, category_ids jsonb, default_variation_id text, active boolean, visible boolean, updated_at timestamptz)
        on conflict (square_item_id) do update set name = excluded.name, description = excluded.description, category = excluded.category,
          category_ids = excluded.category_ids, default_variation_id = excluded.default_variation_id, is_active = excluded.is_active,
          is_visible = excluded.is_visible, square_updated_at = excluded.square_updated_at, synced_at = now()`,
