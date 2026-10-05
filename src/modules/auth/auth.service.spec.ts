@@ -1,5 +1,5 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { bootstrapRole, firstNameFrom } from './auth.service.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { AuthService, bootstrapRole, firstNameFrom } from './auth.service.js';
 
 const SAVED = { ...process.env };
 beforeEach(() => {
@@ -58,5 +58,51 @@ describe('firstNameFrom (the name shown in greetings)', () => {
 
   it('caps very long names at 80 characters', () => {
     expect(firstNameFrom(token({ first_name: 'a'.repeat(200) }))).toHaveLength(80);
+  });
+});
+
+describe("AuthService: verifying sign-in tokens with Supabase's published keys (no shared secret)", () => {
+  const PROJECT = 'https://proj.supabase.co';
+  const profile = { id: 'user-1', email: 'fan@shop.com', role: 'customer' as const };
+
+  async function setup() {
+    const { exportJWK, generateKeyPair, SignJWT } = await import('jose');
+    const { privateKey, publicKey } = await generateKeyPair('ES256');
+    const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
+    const fetched: string[] = [];
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      fetched.push(String(url));
+      return new Response(JSON.stringify({ keys: [jwk] }), {
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+    process.env.SUPABASE_URL = `${PROJECT}/`; // a trailing slash is normal in dashboards
+    delete process.env.SUPABASE_JWT_SECRET;
+    const db = { one: async () => profile } as never;
+    const service = new AuthService(db, {} as never);
+    const token = (claims: Record<string, unknown> = {}, issuer = `${PROJECT}/auth/v1`) =>
+      new SignJWT(claims)
+        .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
+        .setSubject('user-1')
+        .setAudience('authenticated')
+        .setIssuer(issuer)
+        .setExpirationTime('1h')
+        .sign(privateKey);
+    return { service, token, fetched };
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('accepts a token signed by the project, fetching the keys from the project URL', async () => {
+    const { service, token, fetched } = await setup();
+    const user = await service.userFromAuthorization(`Bearer ${await token()}`);
+    expect(user).toMatchObject({ id: 'user-1', email: 'fan@shop.com', role: 'customer' });
+    expect(fetched).toEqual([`${PROJECT}/auth/v1/.well-known/jwks.json`]);
+  });
+
+  it('rejects a token from another project', async () => {
+    const { service, token } = await setup();
+    const forged = await token({}, 'https://other.supabase.co/auth/v1');
+    expect(await service.userFromAuthorization(`Bearer ${forged}`)).toBeNull();
   });
 });

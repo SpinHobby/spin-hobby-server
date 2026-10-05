@@ -43,7 +43,7 @@ export class AuthService {
         this.logger.error('Set SUPABASE_URL (JWKS) or SUPABASE_JWT_SECRET to verify sign-ins.');
         return null;
       }
-      this.jwks ??= createRemoteJWKSet(new URL(`${supabaseUrl}/auth/v1/.well-known/jwks.json`));
+      this.jwks ??= createRemoteJWKSet(new URL(`${projectUrl}/auth/v1/.well-known/jwks.json`));
       return (await jwtVerify(token, this.jwks, options)).payload;
     } catch {
       return null; // expired, forged or for another project

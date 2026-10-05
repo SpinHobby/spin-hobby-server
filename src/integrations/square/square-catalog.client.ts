@@ -24,7 +24,9 @@ export class SquareCatalogClient {
   private readonly logger = new Logger(SquareCatalogClient.name);
 
   private warn(message: string, error?: unknown) {
-    this.logger.warn(`${message} ${error instanceof Error ? error.message : (error ?? '')}`.trim());
+    this.logger.warn(
+      `${message} ${error instanceof Error ? error.message : String(error ?? '')}`.trim(),
+    );
   }
 
   private readonly client = new SquareSdk({

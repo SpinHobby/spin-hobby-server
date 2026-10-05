@@ -149,7 +149,9 @@ export class CashierService {
     try {
       return await this.square.getOrCreateCategoryId(category);
     } catch (error) {
-      this.logger.warn(`Resolving category "${category}" failed, saving without one: ${error}`);
+      this.logger.warn(
+        `Resolving category "${category}" failed, saving without one: ${String(error)}`,
+      );
       return undefined;
     }
   }

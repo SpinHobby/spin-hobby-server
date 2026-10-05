@@ -250,7 +250,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
         );
     } catch (e) {
       this.logger.warn(
-        `Confirmation email for order #${orderId} failed: ${e instanceof Error ? e.message : e}`,
+        `Confirmation email for order #${orderId} failed: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   }

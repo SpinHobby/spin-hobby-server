@@ -19,6 +19,8 @@ export default tseslint.config(
       '@typescript-eslint/no-floating-promises': 'error', // a forgotten `await` hides failures
       '@typescript-eslint/no-misused-promises': 'error', // async function where a sync one is expected
       '@typescript-eslint/await-thenable': 'error',
+      // `${fn}` instead of `${fn()}` builds a nonsense string (it once made every sign-in token fail to verify).
+      '@typescript-eslint/restrict-template-expressions': 'error',
       // Use Nest's Logger so output carries a context name and respects log levels.
       'no-console': 'error',
       '@typescript-eslint/no-unused-vars': [
