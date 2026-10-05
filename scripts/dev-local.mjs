@@ -61,7 +61,10 @@ console.log(
 );
 console.log('  Sign in: owner@spinhobby.test / spinhobby  (or staff@spinhobby.test)\n');
 
-const api = spawn('npx', ['nest', 'start', '--watch'], {
+// Run the Nest CLI with this same Node binary rather than `npx`: on Windows `npx` is a .cmd shim that
+// spawn() can't launch without a shell, and a shell wrapper would leave the API running after Ctrl+C.
+const nestCli = join(root, 'node_modules', '@nestjs', 'cli', 'bin', 'nest.js');
+const api = spawn(process.execPath, [nestCli, 'start', '--watch'], {
   cwd: root,
   stdio: 'inherit',
   env: {
