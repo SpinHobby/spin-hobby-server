@@ -23,7 +23,7 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "dev:local": "node scripts/dev-local.mjs",
     "seed:staging": "node scripts/seed-staging.mjs",
-    "prepare": "node scripts/install-hooks.mjs"
+    "prepare": "node -e \"try{require('node:child_process').execFileSync('git',['config','core.hooksPath','.githooks'],{stdio:'ignore'})}catch{}\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.129.0",

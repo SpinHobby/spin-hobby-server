@@ -34,3 +34,12 @@ jobs:
       - run: npm test
       - run: npm run test:e2e
       - run: npm run build
+
+  # Builds the same image Render builds. Catches a change that works on a laptop but breaks the deploy
+  # (a script that needs a file the Dockerfile doesn't copy, a lockfile problem, ...).
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t spin-hobby-server .

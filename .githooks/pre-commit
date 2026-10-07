@@ -1,4 +1,4 @@
 #!/bin/sh
 # Runs before every commit: lints and format-checks the files you are committing.
-# Installed automatically by `npm install` (see scripts/install-hooks.mjs). Details: CONTRIBUTING.md.
+# Installed automatically by `npm install` (the "prepare" script in package.json). Details: CONTRIBUTING.md.
 exec node scripts/pre-commit.mjs
