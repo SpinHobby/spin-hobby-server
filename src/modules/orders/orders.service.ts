@@ -1,7 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import type { AppUser } from '../auth/auth.service.js';
 import { QuoteService, type Quote, type QuoteInput } from './quote.service.js';
-import { AppError } from '../../common/errors.js';
+import { AppError, errorText } from '../../common/errors.js';
 import { Db } from '../../database/db.service.js';
 import type { InventorySnapshotRow, OrderItemRow, OrderRow } from '../../database/rows.js';
 import { EmailService } from '../../integrations/email/email.service.js';
@@ -136,9 +136,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
         [ids],
       ),
     ]);
-    const quantity = new Map(
-      stock.map((s) => [s.square_variation_id as string, s.quantity as number | null]),
-    );
+    const quantity = new Map(stock.map((s) => [s.square_variation_id, s.quantity]));
     for (const item of items) {
       const left = quantity.get(item.square_variation_id);
       if (left === null || left === undefined) continue; // not stock-tracked
@@ -249,9 +247,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
           [orderId],
         );
     } catch (e) {
-      this.logger.warn(
-        `Confirmation email for order #${orderId} failed: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      this.logger.warn(`Confirmation email for order #${orderId} failed: ${errorText(e)}`);
     }
   }
 

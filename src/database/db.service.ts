@@ -98,9 +98,9 @@ export function createMissingDriver(): DbDriver {
       Object.assign(new Error('DATABASE_URL is not set.'), { code: 'CONFIG_MISSING' }),
     );
   return {
-    query: fail as DbDriver['query'],
-    transaction: fail as DbDriver['transaction'],
-    close: async () => undefined,
+    query: fail,
+    transaction: fail,
+    close: () => Promise.resolve(),
   };
 }
 

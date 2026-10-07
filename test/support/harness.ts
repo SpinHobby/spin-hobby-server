@@ -169,17 +169,14 @@ export async function seedProduct(pglite: PGlite, p: SeedProduct) {
 
 /** Routes outbound fetch() calls to handlers keyed by URL substring; anything unmatched fails the test. */
 export function mockFetch(
-  handlers: Record<
-    string,
-    (init: RequestInit | undefined, url: string) => unknown | Promise<unknown>
-  >,
+  handlers: Record<string, (init: RequestInit | undefined, url: string) => unknown>,
 ) {
   const calls: { url: string; body: any }[] = [];
   const original = globalThis.fetch;
   globalThis.fetch = (async (input: any, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
     const key = Object.keys(handlers).find((k) => url.includes(k));
-    const raw = init?.body ? String(init.body) : undefined;
+    const raw = typeof init?.body === 'string' ? init.body : undefined;
     let body: any = raw;
     try {
       body = raw ? JSON.parse(raw) : undefined;

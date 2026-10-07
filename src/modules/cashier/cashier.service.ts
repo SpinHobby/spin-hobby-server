@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AppError, notFound } from '../../common/errors.js';
+import { AppError, errorText, notFound } from '../../common/errors.js';
 import { SquareCatalogClient } from '../../integrations/square/square-catalog.client.js';
 import {
   categoryNames,
@@ -150,7 +150,7 @@ export class CashierService {
       return await this.square.getOrCreateCategoryId(category);
     } catch (error) {
       this.logger.warn(
-        `Resolving category "${category}" failed, saving without one: ${String(error)}`,
+        `Resolving category "${category}" failed, saving without one: ${errorText(error)}`,
       );
       return undefined;
     }

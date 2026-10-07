@@ -48,7 +48,7 @@ export class DevLogin {
       .setExpirationTime(expiresAt);
     const issuer = supabaseUrl();
     if (issuer) jwt.setIssuer(`${issuer}/auth/v1`);
-    const token = await jwt.sign(new TextEncoder().encode(supabaseJwtSecret()!));
+    const token = await jwt.sign(new TextEncoder().encode(supabaseJwtSecret()));
     return this.sessions.fromTokens({
       access_token: token,
       refresh_token: `dev:${email}`,

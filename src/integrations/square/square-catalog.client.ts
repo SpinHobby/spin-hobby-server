@@ -11,6 +11,7 @@ import {
   squareLocationId,
 } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
+import { errorText } from '../../common/errors.js';
 
 /**
  * Square catalog calls for the cashier tool: searching items, creating and editing them, and stock counts.
@@ -24,9 +25,7 @@ export class SquareCatalogClient {
   private readonly logger = new Logger(SquareCatalogClient.name);
 
   private warn(message: string, error?: unknown) {
-    this.logger.warn(
-      `${message} ${error instanceof Error ? error.message : String(error ?? '')}`.trim(),
-    );
+    this.logger.warn(`${message} ${error === undefined ? '' : errorText(error)}`.trim());
   }
 
   private readonly client = new SquareSdk({

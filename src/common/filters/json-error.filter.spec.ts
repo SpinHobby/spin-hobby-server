@@ -12,7 +12,7 @@ function run(exception: unknown, requestId?: string) {
   new JsonErrorFilter().catch(exception, {
     switchToHttp: () => ({ getResponse: () => res }),
   } as unknown as ArgumentsHost);
-  return { status: res.status.mock.calls[0][0] as number, body: json.mock.calls[0][0] };
+  return { status: res.status.mock.calls[0][0], body: json.mock.calls[0][0] };
 }
 
 describe('JsonErrorFilter', () => {
