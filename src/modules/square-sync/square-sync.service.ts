@@ -4,13 +4,13 @@ import { Db, type Queryable } from '../../database/db.service.js';
 import type { CatalogProductRow } from '../../database/rows.js';
 import { SquareHttpClient } from '../../integrations/square/square-http.client.js';
 import {
-  CASHIER_CATEGORY_ID,
   squareAccessToken,
   squareLocationId,
   squareSyncIntervalMinutes,
   squareSyncRetireMaxRatio,
 } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
+import { mapCatalogPage } from './square-sync.mapper.js';
 
 export interface SyncResult {
   products: number;
@@ -141,53 +141,12 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
     related: ExternalJson[],
     categories: Map<string, string>,
   ) {
-    const images = new Map(
-      related
-        .filter((o) => o.type === 'IMAGE')
-        .map((o) => [o.id, o.image_data?.url as string | undefined]),
+    const { catalogItems, productRows, variationRows, imageRows } = mapCatalogPage(
+      items,
+      related,
+      categories,
     );
-    const catalogItems = items.filter((i) => i.type === 'ITEM' && i.item_data);
     if (!catalogItems.length) return { products: 0, variations: 0 };
-
-    const productRows: ExternalJson[] = [];
-    const variationRows: ExternalJson[] = [];
-    const imageRows = new Map<string, ExternalJson>(); // keyed by Square image id; a shared image goes to the last item, as before
-    for (const item of catalogItems) {
-      const d = item.item_data;
-      // Newer Square items carry `categories`; older ones only `category_id`.
-      const categoryIds: string[] =
-        d.categories?.map((c: ExternalJson) => c.id) ?? (d.category_id ? [d.category_id] : []);
-      const primary = d.reporting_category?.id ?? categoryIds[0] ?? null;
-      const live = (d.variations ?? []).filter((v: ExternalJson) => !v.is_deleted);
-      productRows.push({
-        id: item.id,
-        name: d.name,
-        description: d.description_plaintext ?? d.description ?? null,
-        category: primary ? (categories.get(primary) ?? primary) : null,
-        category_ids: categoryIds,
-        default_variation_id: live[0]?.id ?? null,
-        active: !item.is_deleted,
-        // The cashier tool tags items it keeps off the website (convention one-offs) with a special category.
-        visible: !item.is_deleted && !categoryIds.includes(CASHIER_CATEGORY_ID),
-        updated_at: item.updated_at ?? null,
-      });
-      for (const v of d.variations ?? []) {
-        const vd = v.item_variation_data ?? {};
-        variationRows.push({
-          id: v.id,
-          item_id: item.id,
-          name: vd.name ?? null,
-          sku: vd.sku ?? null,
-          price: Number(vd.price_money?.amount ?? 0),
-          sellable: !v.is_deleted,
-          updated_at: v.updated_at ?? item.updated_at ?? null,
-        });
-      }
-      (d.image_ids ?? []).forEach((imageId: string, sort: number) => {
-        const url = images.get(imageId);
-        if (url) imageRows.set(imageId, { item_id: item.id, image_id: imageId, url, sort });
-      });
-    }
 
     await this.db.exec(
       `insert into public.catalog_products (square_item_id, name, description, category, category_ids, default_variation_id, is_active, is_visible, square_updated_at, synced_at)
