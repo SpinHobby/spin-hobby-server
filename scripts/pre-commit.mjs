@@ -14,7 +14,9 @@ const staged = execFileSync('git', ['diff', '--cached', '--name-only', '--diff-f
 const lintable = staged.filter(
   (f) => /\.(ts|mjs)$/.test(f) && /^(src|test|scripts)\/|^[^/]+\.mjs$/.test(f),
 );
-const formattable = staged.filter((f) => /\.(ts|mjs|json)$/.test(f) && !f.startsWith('supabase/'));
+const formattable = staged.filter(
+  (f) => /\.(ts|mjs|json|md)$/.test(f) && !f.startsWith('supabase/'),
+);
 
 function run(label, script, args) {
   if (!args.length) return true;

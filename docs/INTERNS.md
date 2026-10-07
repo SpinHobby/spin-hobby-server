@@ -44,6 +44,10 @@ own: every product, price and order comes from this server.
    in the project, not in you.
 7. **Read [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)** (about 15 minutes). It's the map of the code.
 
+8. **Set up your editor (optional but recommended).** In VS Code, open the `spin-hobby-server` folder and click
+   "Install" when it suggests the ESLint and Prettier extensions. After that your files format themselves on save.
+   A small check also runs when you `git commit` and tells you if something needs fixing.
+
 Tips for `dev:local`:
 
 - When you save a file, the API restarts by itself within a few seconds.

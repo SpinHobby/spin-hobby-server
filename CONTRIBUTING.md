@@ -41,6 +41,15 @@ npm run typecheck && npm run lint && npm run format:check && npm test && npm run
 Run `npm run format` twice if it changed files the first time. If a check fails, fix it
 before asking for review. Don't skip or disable checks.
 
+### The pre-commit check
+
+`npm install` also switches on a small check that runs every time you `git commit`. It lints and format-checks
+just the files you are committing, and stops the commit with a message if something is off. Fix it with
+`npm run lint:fix && npm run format`, `git add` the files, and commit again. (CI still runs the full set.)
+
+If you use VS Code, open the folder and accept the suggested extensions (ESLint, Prettier). Files then format
+and fix themselves when you save, using the settings in `.vscode/`.
+
 ## Commit messages
 
 Write one short line in the present tense that says what the commit does, starting with a capital:
