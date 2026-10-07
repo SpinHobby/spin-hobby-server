@@ -10,6 +10,7 @@ import { sentFields } from '../dto/defined-fields.js';
 import { CatalogSearchService } from './catalog-search.service.js';
 import type { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
 import type { UpdateProductDto } from './dto/update-product.dto.js';
+import type { CatalogProductRow, ProductMetadataRow } from '../../../database/rows.js';
 
 /** Managing products in the admin: finding them, editing their storefront details, and restock emails. */
 @Injectable()
@@ -45,7 +46,9 @@ export class AdminProductsService {
     if (filter === 'featured') {
       const featured = new Set(
         (
-          await this.db.many('select square_item_id from public.product_metadata where is_featured')
+          await this.db.many<Pick<ProductMetadataRow, 'square_item_id'>>(
+            'select square_item_id from public.product_metadata where is_featured',
+          )
         ).map((r) => r.square_item_id),
       );
       items = items.filter((i) => featured.has(i.id));
@@ -59,15 +62,20 @@ export class AdminProductsService {
     const ids = items.map((i) => i.id);
     const variations = items.map((i) => i.variationId).filter(Boolean);
     const [meta, catalog, alerts] = await Promise.all([
-      this.db.many(
+      this.db.many<
+        Pick<
+          ProductMetadataRow,
+          'square_item_id' | 'availability' | 'jan_code' | 'is_featured' | 'sort_order'
+        >
+      >(
         'select square_item_id, availability, jan_code, is_featured, sort_order from public.product_metadata where square_item_id = any($1::text[])',
         [ids],
       ),
-      this.db.many(
+      this.db.many<Pick<CatalogProductRow, 'square_item_id' | 'source' | 'description'>>(
         'select square_item_id, source, description from public.catalog_products where square_item_id = any($1::text[])',
         [ids],
       ),
-      this.db.many(
+      this.db.many<{ square_variation_id: string; n: number }>(
         'select square_variation_id, count(*)::int as n from public.stock_alerts where notified_at is null and square_variation_id = any($1::text[]) group by 1',
         [variations],
       ),
@@ -85,7 +93,7 @@ export class AdminProductsService {
         sortOrder: m?.sort_order ?? 0,
         source: catalogById.get(i.id)?.source ?? 'square',
         description: catalogById.get(i.id)?.description ?? null,
-        alertsWaiting: alertsByVariation.get(i.variationId) ?? 0,
+        alertsWaiting: (i.variationId ? alertsByVariation.get(i.variationId) : undefined) ?? 0,
       };
     });
   }
@@ -106,7 +114,7 @@ export class AdminProductsService {
       ? keys.map((k) => `${k} = excluded.${k}`).join(', ')
       : 'square_item_id = excluded.square_item_id';
     return this.db.transaction(async (tx) => {
-      const row = await this.db.one(
+      const row = await this.db.one<ProductMetadataRow>(
         `insert into public.product_metadata (${columns.join(', ')}) values (${columns.map((_, i) => `$${i + 1}`).join(', ')})
          on conflict (square_item_id) do update set ${updates} returning *`,
         values,
@@ -121,7 +129,7 @@ export class AdminProductsService {
   async bulkCategory(adminId: string, ids: string[], categoryId: string | null) {
     await this.assertCategoryExists(categoryId);
     return this.db.transaction(async (tx) => {
-      const rows = await this.db.many(
+      const rows = await this.db.many<Pick<ProductMetadataRow, 'square_item_id'>>(
         `insert into public.product_metadata (square_item_id, category_id)
          select c.square_item_id, $2::uuid from public.catalog_products c where c.square_item_id = any($1::text[])
          on conflict (square_item_id) do update set category_id = excluded.category_id returning square_item_id`,

@@ -6,6 +6,7 @@ import { AdminLog } from '../admin-log.service.js';
 import { sentFields } from '../dto/defined-fields.js';
 import type { TaxRateDto } from './dto/tax-rate.dto.js';
 import type { UpdateSettingsDto } from './dto/update-settings.dto.js';
+import type { StoreSettingsRow, TaxRateRow } from '../../../database/rows.js';
 
 /** Shop-wide settings and provincial tax rates. */
 @Injectable()
@@ -30,7 +31,7 @@ export class AdminSettingsService {
     const max = Number(changes.handling_days_max ?? current.handling_days_max);
     if (max < min) throw new AppError('Handling max must be at least the min.');
     return this.db.transaction(async (tx) => {
-      const row = await this.db.one(
+      const row = await this.db.one<StoreSettingsRow>(
         `update public.store_settings set ${keys.map((k, i) => `${k} = $${i + 1}`).join(', ')} where id = true returning *`,
         keys.map((k) => changes[k]),
         tx,
@@ -41,12 +42,12 @@ export class AdminSettingsService {
   }
 
   taxRates() {
-    return this.db.many('select * from public.tax_rates order by country, province');
+    return this.db.many<TaxRateRow>('select * from public.tax_rates order by country, province');
   }
 
   /** Adds or replaces the rate for one province or state. */
   async setTaxRate(adminId: string, dto: TaxRateDto) {
-    const taxRate = await this.db.one(
+    const taxRate = await this.db.one<TaxRateRow>(
       `insert into public.tax_rates (country, province, rate, enabled) values ($1, $2, $3, $4)
        on conflict (country, province) do update set rate = excluded.rate, enabled = excluded.enabled returning *`,
       [dto.country, dto.province, dto.rate, dto.enabled],

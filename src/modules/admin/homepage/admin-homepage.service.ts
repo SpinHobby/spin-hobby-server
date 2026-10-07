@@ -25,7 +25,9 @@ export class AdminHomepageService {
   ) {}
 
   list() {
-    return this.db.many('select * from public.hero_slides order by sort_order, created_at');
+    return this.db.many<HeroSlideRow>(
+      'select * from public.hero_slides order by sort_order, created_at',
+    );
   }
 
   async create(adminId: string, dto: CreateSlideDto) {
@@ -45,11 +47,11 @@ export class AdminHomepageService {
     );
     const columns = Object.keys(changes);
     const slide = columns.length
-      ? await this.db.one(
+      ? await this.db.one<HeroSlideRow>(
           `update public.hero_slides set ${columns.map((c, i) => `${c} = $${i + 2}`).join(', ')} where id = $1 returning *`,
           [id, ...columns.map((c) => changes[c])],
         )
-      : await this.db.one('select * from public.hero_slides where id = $1', [id]);
+      : await this.db.one<HeroSlideRow>('select * from public.hero_slides where id = $1', [id]);
     if (!slide) throw notFound('Slide');
     await this.log.write(adminId, 'homepage.slide_updated', id, changes);
     return slide;

@@ -14,7 +14,9 @@ export class AdminEventsService {
   ) {}
 
   list() {
-    return this.db.many('select * from public.store_events order by sort_order, created_at');
+    return this.db.many<StoreEventRow>(
+      'select * from public.store_events order by sort_order, created_at',
+    );
   }
 
   private values(dto: EventDto) {
@@ -43,7 +45,7 @@ export class AdminEventsService {
 
   /** Replaces every field of the event (a field left out becomes blank). */
   async replace(adminId: string, id: string, dto: EventDto) {
-    const event = await this.db.one(
+    const event = await this.db.one<StoreEventRow>(
       `update public.store_events set name = $2, city = $3, start_date = $4, end_date = $5, booth_info = $6, is_visible = $7, sort_order = $8
         where id = $1 returning *`,
       [id, ...this.values(dto)],

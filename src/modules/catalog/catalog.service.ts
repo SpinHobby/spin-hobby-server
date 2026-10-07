@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { likePattern } from '../../common/validation/rules.js';
 import { Db } from '../../database/db.service.js';
-import type { StorefrontProductRow } from '../../database/rows.js';
+import type { HeroSlideRow, StoreEventRow, StorefrontProductRow } from '../../database/rows.js';
 import type { ProductQuery } from './dto/product-query.dto.js';
 import { publicProduct } from './product.mapper.js';
 
@@ -232,7 +232,7 @@ export class CatalogService {
   async homepage() {
     const [slides, featured, preorders, ranking, newInStock, events, categories, settings, promo] =
       await Promise.all([
-        this.db.many(
+        this.db.many<HeroSlideRow>(
           'select * from public.hero_slides where is_visible order by sort_order, created_at',
         ),
         this.db.many<StorefrontProductRow>(
@@ -247,7 +247,7 @@ export class CatalogService {
         this.db.many<StorefrontProductRow>(
           "select * from public.storefront_products where status in ('in','low') order by updated_at desc, id limit 5",
         ),
-        this.db.many(
+        this.db.many<StoreEventRow>(
           'select * from public.store_events where is_visible order by sort_order, created_at',
         ),
         this.categories(),

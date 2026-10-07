@@ -29,7 +29,7 @@ export class WebhooksService {
     payload: unknown,
     processed: boolean,
   ) {
-    const inserted = await this.db.one(
+    const inserted = await this.db.one<{ id: string }>(
       `insert into public.webhook_events (id, provider, event_type, payload, processed_at)
        values ($1, $2, $3, $4, ${processed ? 'now()' : 'null'}) on conflict (id) do nothing returning id`,
       [id, provider, type, JSON.stringify(payload)],

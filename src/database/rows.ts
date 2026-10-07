@@ -223,6 +223,15 @@ export interface StoreEventRow {
   updated_at: string;
 }
 
+export interface TaxRateRow {
+  country: 'CA' | 'US';
+  province: string;
+  /** A fraction, e.g. 0.05 for 5%. */
+  rate: number;
+  enabled: boolean;
+  updated_at: string;
+}
+
 export interface StoreSettingsRow {
   payment_provider: PaymentProvider;
   shipping_standard_cents: number;

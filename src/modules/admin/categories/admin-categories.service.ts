@@ -5,6 +5,16 @@ import { AdminLog } from '../admin-log.service.js';
 import { sentFields } from '../dto/defined-fields.js';
 import type { CreateCategoryDto, UpdateCategoryDto } from './dto/category.dto.js';
 
+/** A category as the admin list shows it. */
+export interface CategoryListRow {
+  id: string;
+  parentId: string | null;
+  name: string;
+  sortOrder: number;
+  isVisible: boolean;
+  productCount: number;
+}
+
 interface CategoryRow {
   id: string;
   parent_id: string | null;
@@ -28,7 +38,7 @@ export class AdminCategoriesService {
 
   /** Every category (hidden too) with how many products sit directly in it. */
   list() {
-    return this.db.many(
+    return this.db.many<CategoryListRow>(
       `select c.id, c.parent_id as "parentId", c.name, c.sort_order as "sortOrder", c.is_visible as "isVisible",
               (select count(*)::int from public.storefront_products p where p.category_id = c.id) as "productCount"
          from public.store_categories c order by c.sort_order, c.name`,
