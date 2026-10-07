@@ -88,13 +88,13 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
     do {
       const data = await this.square.request('/v2/catalog/search-catalog-items', {
         product_types: ['REGULAR'],
-        include_related_objects: true,
         limit: 100,
         ...(cursor ? { cursor } : {}),
       });
       const items: ExternalJson[] = data.items ?? [];
+      const images = await this.imageObjects(items);
       const result = await this.db.transaction((tx) =>
-        this.upsertPage(tx, items, data.related_objects ?? [], categories),
+        this.upsertPage(tx, items, images, categories),
       );
       products += result.products;
       variations += result.variations;
@@ -116,6 +116,22 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
       `Square sync: ${products} products, ${variations} variations, ${inventory} stock counts, ${retired} retired in ${Date.now() - started} ms`,
     );
     return { products, variations, inventory, retired, completedAt: new Date().toISOString() };
+  }
+
+  /**
+   * The picture records (with their URLs) for one page of items. Square's item search does not return related
+   * objects, only the image ids on each item, so the pictures are looked up here, up to 1,000 ids per request.
+   */
+  private async imageObjects(items: ExternalJson[]): Promise<ExternalJson[]> {
+    const ids = [
+      ...new Set(items.flatMap((item) => (item.item_data?.image_ids ?? []) as string[])),
+    ];
+    const found: ExternalJson[] = [];
+    for (const batch of chunks(ids, 1000)) {
+      const data = await this.square.request('/v2/catalog/batch-retrieve', { object_ids: batch });
+      found.push(...((data.objects ?? []) as ExternalJson[]));
+    }
+    return found;
   }
 
   private async categoryNames() {

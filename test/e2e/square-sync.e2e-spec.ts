@@ -50,21 +50,29 @@ const item = (i: CatalogItem) => ({
   },
 });
 
+const IMAGE_URLS: Record<string, string> = {
+  IMG1: 'https://sq/img1.jpg',
+  IMG2: 'https://sq/img2.jpg',
+};
+
 /** Square returns `pages` in order (the request's cursor picks the page) and a count of 4 for every tracked variation asked about. */
 function squareCatalog(pages: CatalogItem[][]) {
   return mockFetch({
+    // The real item search returns only items (with image ids). It has no related_objects.
     '/v2/catalog/search-catalog-items': (init) => {
       const cursor = JSON.parse(String(init?.body)).cursor as string | undefined;
       const page = cursor ? Number(cursor) : 0;
       return {
         items: pages[page].map(item),
-        related_objects: [
-          { id: 'IMG1', type: 'IMAGE', image_data: { url: 'https://sq/img1.jpg' } },
-          { id: 'IMG2', type: 'IMAGE', image_data: { url: 'https://sq/img2.jpg' } },
-        ],
         ...(page + 1 < pages.length ? { cursor: String(page + 1) } : {}),
       };
     },
+    // Picture records are looked up by id.
+    '/v2/catalog/batch-retrieve': (init) => ({
+      objects: (JSON.parse(String(init?.body)).object_ids as string[])
+        .filter((id) => IMAGE_URLS[id])
+        .map((id) => ({ id, type: 'IMAGE', image_data: { url: IMAGE_URLS[id] } })),
+    }),
     '/v2/catalog/search': () => ({
       objects: [{ id: 'CAT1', type: 'CATEGORY', category_data: { name: 'Plushies' } }],
     }),

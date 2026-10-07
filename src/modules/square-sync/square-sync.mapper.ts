@@ -33,7 +33,7 @@ export interface ImageRow {
  * Turns one page of Square catalog JSON into the rows we store. Pure: no database, no network.
  *
  * @param items the `items` of a search-catalog-items page (anything that is not an ITEM is skipped)
- * @param related the page's related objects, where Square puts the image URLs
+ * @param related the picture records for the page (looked up by id: the item search does not return them)
  * @param categories Square category id -> name
  */
 export function mapCatalogPage(

@@ -33,9 +33,10 @@ describe('square catalog sync', () => {
             },
           },
         ],
-        related_objects: [
-          { id: 'IMG1', type: 'IMAGE', image_data: { url: 'https://sq/img1.jpg' } },
-        ],
+      }),
+      // The real item search has no related_objects: picture records are looked up by id.
+      '/v2/catalog/batch-retrieve': () => ({
+        objects: [{ id: 'IMG1', type: 'IMAGE', image_data: { url: 'https://sq/img1.jpg' } }],
       }),
       '/v2/catalog/search': () => ({
         objects: [{ id: 'CAT1', type: 'CATEGORY', category_data: { name: 'Plushies' } }],
