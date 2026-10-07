@@ -32,6 +32,7 @@ describe('admin', () => {
       ordersToday: 2,
     });
     expect(res.body.lowStockList.map((p: any) => p.id).sort()).toEqual(['CHB1']);
+    expect(res.body.lowStockList[0]).toMatchObject({ id: 'CHB1', alerts_waiting: 0 }); // each item carries its waiting restock alerts
     expect(res.body.closingPreorders.map((p: any) => p.id)).toEqual(['FIG1']);
     expect(res.body.salesTodayCents).toBeGreaterThan(0);
   });
