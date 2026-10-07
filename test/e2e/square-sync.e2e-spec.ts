@@ -259,6 +259,23 @@ describe('square catalog sync', () => {
   });
 });
 
+describe('Square readiness checklist', () => {
+  it('reports real values: connection, sync, webhook, live mode and 3-D Secure', async () => {
+    const res = await http
+      .get('/admin/square/readiness')
+      .set('Authorization', owner.auth)
+      .expect(200);
+    expect(res.body.readiness).toMatchObject({
+      appAndLocationConnected: true,
+      catalogAndInventorySyncing: true, // the earlier tests synced
+      webhookKeySet: false, // not set in this test environment
+      liveMode: false, // these tests run against the sandbox
+      threeDSecureEnabled: true,
+    });
+    expect(res.body.readiness).not.toHaveProperty('applePayDomainVerified');
+  });
+});
+
 describe('items the cashier hides from the website', () => {
   const oneOff: CatalogItem = {
     id: 'ITEM_H',

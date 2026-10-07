@@ -5,7 +5,7 @@ import { StoreService } from '../../store/store.service.js';
 import { AdminLog } from '../admin-log.service.js';
 import {
   squareAccessToken,
-  squareIsSandbox,
+  squareIsProduction,
   squareLocationId,
   squareWebhookSignatureKey,
   squareWebhookUrl,
@@ -34,9 +34,10 @@ export class AdminSquareService {
       appAndLocationConnected: Boolean(squareAccessToken() && squareLocationId()),
       catalogAndInventorySyncing: Boolean(catalog?.synced_at),
       webhookKeySet: Boolean(squareWebhookSignatureKey() && squareWebhookUrl()),
-      sandboxPaymentsConfigured: squareIsSandbox(),
-      threeDSecureEnabled: false,
-      applePayDomainVerified: false,
+      /** Real cards are charged: Square is in live (production) mode, not the sandbox. */
+      liveMode: squareIsProduction(),
+      /** The card form asks the shopper's bank for 3-D Secure (Square's verifyBuyer) and the server passes the result to Square. */
+      threeDSecureEnabled: true,
       activeProvider: settings.payment_provider,
       lastSyncAt: catalog?.synced_at ?? null,
     };
