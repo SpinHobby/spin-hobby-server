@@ -40,8 +40,21 @@ starts the API:
 The database is kept in memory, so every start begins from the same clean sample data.
 To see the website too, start the frontend repo with `VITE_API_URL=http://localhost:8080 npm run dev`.
 
-Optional: put a Square **sandbox** token in `.env` (`SQUARE_ACCESS_TOKEN`, `SQUARE_LOCATION_ID`) and
-`dev:local` also pulls those Square items in. Every setting is explained in
+Optional: Square sandbox. Put these four lines in `.env` (all from the Square Developer Dashboard, **Sandbox** tab):
+
+```
+SQUARE_ENVIRONMENT=sandbox
+SQUARE_ACCESS_TOKEN=...
+SQUARE_APPLICATION_ID=sandbox-sq0idb-...
+SQUARE_LOCATION_ID=...
+```
+
+`dev:local` then also pulls the sandbox catalog in next to the samples and switches checkout to Square sandbox
+payments (pay with a Square test card such as `4111 1111 1111 1111`; no real money moves). It does this only when
+`SQUARE_ENVIRONMENT=sandbox`, so a production token can never take a local payment. Turn parts off with
+`DEV_SYNC_SQUARE=false` or `DEV_SQUARE_PAYMENTS=false`. (Square can't call your laptop, so the webhook isn't used
+locally; the catalog syncs on start, every 15 minutes if `SQUARE_SYNC_INTERVAL_MINUTES` is set, or with the admin's
+"Sync with Square" button.) Every setting is explained in
 [`.env.example`](.env.example).
 
 ## Everyday commands

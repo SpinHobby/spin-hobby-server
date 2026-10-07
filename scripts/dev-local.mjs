@@ -8,8 +8,9 @@
 //             staff@spinhobby.test / spinhobby   (staff)
 //
 // If SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID are set (shell or .env), the catalog is also synced from Square once
-// the API is up, so the Square items show next to the samples. The database lives in memory, so this repeats on every
-// start. Set DEV_SYNC_SQUARE=false to skip it.
+// the API is up, so the Square items show next to the samples. With SQUARE_ENVIRONMENT=sandbox and SQUARE_APPLICATION_ID
+// the local checkout also uses Square sandbox payments. The database lives in memory, so this repeats on every start.
+// Set DEV_SYNC_SQUARE=false or DEV_SQUARE_PAYMENTS=false to skip either part.
 import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
@@ -94,9 +95,10 @@ api.on('exit', (code) => {
   if (code) process.exit(code);
 });
 
-// ---- optional: pull the Square catalog in once the API answers
-async function syncSquare() {
-  if (process.env.DEV_SYNC_SQUARE === 'false') return;
+// ---- optional: connect Square (sandbox) once the API answers
+// With Square credentials in .env the local shop pulls the Square catalog in and takes card payments through Square's
+// sandbox (test cards only; no real money moves). Switch either part off with DEV_SYNC_SQUARE=false / DEV_SQUARE_PAYMENTS=false.
+async function connectSquare() {
   if (existsSync(join(root, '.env'))) {
     try {
       process.loadEnvFile(join(root, '.env'));
@@ -105,6 +107,7 @@ async function syncSquare() {
     }
   }
   if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID) return;
+  const sandbox = (process.env.SQUARE_ENV || process.env.SQUARE_ENVIRONMENT) === 'sandbox';
   const base = `http://localhost:${process.env.PORT ?? '8080'}`;
   for (let i = 0; i < 120; i += 1) {
     if (
@@ -122,10 +125,32 @@ async function syncSquare() {
       body: JSON.stringify({ email: 'owner@spinhobby.test', password: 'spinhobby' }),
     });
     const { accessToken } = await login.json();
-    const res = await fetch(`${base}/admin/square/sync`, {
-      method: 'POST',
-      headers: { authorization: `Bearer ${accessToken}` },
-    });
+    const headers = { authorization: `Bearer ${accessToken}`, 'content-type': 'application/json' };
+
+    // Card payments through Square: only ever for the sandbox, so a production token can never take a local payment.
+    if (
+      process.env.DEV_SQUARE_PAYMENTS !== 'false' &&
+      sandbox &&
+      process.env.SQUARE_APPLICATION_ID
+    ) {
+      const res = await fetch(`${base}/admin/settings`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ payment_provider: 'square' }),
+      });
+      console.log(
+        res.ok
+          ? '\n  Checkout: Square sandbox payments (use Square test cards, e.g. 4111 1111 1111 1111)\n'
+          : `\n  Square payments not switched on: ${(await res.json()).error ?? res.status}\n`,
+      );
+    } else if (!sandbox) {
+      console.log(
+        '\n  Square payments left off: set SQUARE_ENVIRONMENT=sandbox in .env to use Square sandbox checkout locally.\n',
+      );
+    }
+
+    if (process.env.DEV_SYNC_SQUARE === 'false') return;
+    const res = await fetch(`${base}/admin/square/sync`, { method: 'POST', headers });
     const body = await res.json();
     if (res.ok)
       console.log(
@@ -133,7 +158,7 @@ async function syncSquare() {
       );
     else console.log(`\n  Square sync skipped: ${body.error ?? res.status}\n`);
   } catch (e) {
-    console.log(`\n  Square sync skipped: ${e.message}\n`);
+    console.log(`\n  Square connection skipped: ${e.message}\n`);
   }
 }
-syncSquare();
+connectSquare();
