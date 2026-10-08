@@ -83,6 +83,22 @@ describe('mapCatalogPage', () => {
     expect(productRows[0]).toMatchObject({ active: true, visible: false });
   });
 
+  it('keeps an item off the website when Square itself hides it', () => {
+    expect(map([item({}, { ecom_visibility: 'HIDDEN' })]).productRows[0]).toMatchObject({
+      active: true,
+      visible: false,
+    });
+    const saved = process.env.SQUARE_LOCATION_ID;
+    process.env.SQUARE_LOCATION_ID = 'LOC1';
+    try {
+      expect(map([item({ absent_at_location_ids: ['LOC1'] })]).productRows[0].visible).toBe(false);
+      expect(map([item({ absent_at_location_ids: ['OTHER'] })]).productRows[0].visible).toBe(true);
+    } finally {
+      if (saved === undefined) delete process.env.SQUARE_LOCATION_ID;
+      else process.env.SQUARE_LOCATION_ID = saved;
+    }
+  });
+
   it('marks a deleted item neither active nor visible', () => {
     expect(map([item({ is_deleted: true })]).productRows[0]).toMatchObject({
       active: false,

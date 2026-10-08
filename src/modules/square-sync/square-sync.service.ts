@@ -11,6 +11,7 @@ import {
 } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
 import { PhotoCleanupService } from '../catalog/photo-cleanup.service.js';
+import { isHiddenFromWebsite } from '../../integrations/square/visibility.js';
 import { mapCatalogPage } from './square-sync.mapper.js';
 
 export interface SyncResult {
@@ -84,6 +85,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
     const categories = await this.categoryNames();
     let cursor: string | undefined;
     let products = 0;
+    let hidden = 0;
     let variations = 0;
     const seenItems = new Set<string>();
     const tracked: string[] = [];
@@ -101,7 +103,11 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
       );
       products += result.products;
       variations += result.variations;
-      for (const item of items) if (item.type === 'ITEM' && item.item_data) seenItems.add(item.id);
+      for (const item of items) {
+        if (item.type !== 'ITEM' || !item.item_data) continue;
+        seenItems.add(item.id);
+        if (isHiddenFromWebsite(item)) hidden += 1;
+      }
       this.collectVariations(items, tracked, untracked);
       cursor = data.cursor;
     } while (cursor);
@@ -110,7 +116,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
     const retired = await this.retireMissing(seenItems);
     await this.tidyPhotos();
     this.logger.log(
-      `Square sync: ${products} products, ${variations} variations, ${inventory} stock counts, ${retired} retired in ${Date.now() - started} ms`,
+      `Square sync: ${products} products, ${variations} variations, ${inventory} stock counts, ${retired} retired, ${hidden} hidden from the website in ${Date.now() - started} ms`,
     );
     return { products, variations, inventory, retired, completedAt: new Date().toISOString() };
   }

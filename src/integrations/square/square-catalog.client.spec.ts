@@ -202,6 +202,23 @@ describe('SquareCatalogClient.setItemHidden', () => {
     expect(bodyOf(1).batches[0].objects[0].item_data.categories).toEqual([{ id: 'CAT1' }]);
   });
 
+  it('refuses to show an item that Square itself hides, rather than pretend it worked', async () => {
+    const hiddenOnline = {
+      ...stored(['CAT1']),
+      item_data: { ...stored(['CAT1']).item_data, ecom_visibility: 'HIDDEN' },
+    };
+    fetchMock.mockResolvedValueOnce(json({ objects: [hiddenOnline] }));
+    await expect(client.setItemHidden('ITEM1', false)).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringContaining('hidden in Square itself'),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1); // nothing was written
+    // Hiding it is still fine: it only adds our marker.
+    fetchMock.mockResolvedValueOnce(json({ objects: [hiddenOnline] }));
+    fetchMock.mockResolvedValueOnce(json({ objects: [stored(['CAT1', CASHIER_CATEGORY_ID])] }));
+    await client.setItemHidden('ITEM1', true);
+  });
+
   it('makes no write when the item is already in the wanted state', async () => {
     fetchMock.mockResolvedValueOnce(json({ objects: [stored(['CAT1', CASHIER_CATEGORY_ID])] }));
     await client.setItemHidden('ITEM1', true);

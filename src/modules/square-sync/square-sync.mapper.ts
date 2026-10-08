@@ -1,5 +1,5 @@
 import type { ExternalJson } from '../../common/external-json.js';
-import { CASHIER_CATEGORY_ID } from '../../config/square.config.js';
+import { isHiddenFromWebsite } from '../../integrations/square/visibility.js';
 
 /** A catalog item ready to be saved (one object of `jsonb_to_recordset` in the sync's INSERT). */
 export interface ProductRow {
@@ -66,8 +66,9 @@ export function mapCatalogPage(
       category_ids: categoryIds,
       default_variation_id: live[0]?.id ?? null,
       active: !item.is_deleted,
-      // The cashier tool tags items it keeps off the website (convention one-offs) with a special category.
-      visible: !item.is_deleted && !categoryIds.includes(CASHIER_CATEGORY_ID),
+      // Hidden when it carries our "not for the website" category (the admin toggle and the cashier tool set it)
+      // or when Square itself says so (online visibility "Hidden", or not sold at this location).
+      visible: !item.is_deleted && !isHiddenFromWebsite(item),
       updated_at: item.updated_at ?? null,
     });
     for (const v of d.variations ?? []) {

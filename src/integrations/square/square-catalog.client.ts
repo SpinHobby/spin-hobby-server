@@ -11,6 +11,7 @@ import {
   squareLocationId,
 } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
+import { isHiddenInSquareItself } from './visibility.js';
 import { AppError, errorText } from '../../common/errors.js';
 
 /**
@@ -213,6 +214,13 @@ export class SquareCatalogClient {
     const existing = await this.retrieveObject(itemId);
     if (!existing || existing.type !== 'ITEM' || !existing.item_data)
       throw new AppError('This item was not found in Square.', 404);
+    // Square's own settings (online visibility, location availability) cannot be changed through the API
+    // for this account, so say so rather than appear to show an item that would stay hidden.
+    if (!hidden && isHiddenInSquareItself(existing))
+      throw new AppError(
+        'This product is hidden in Square itself (its online visibility or location availability). Show it in the Square Dashboard, then try again.',
+        409,
+      );
     const categories = ((existing.item_data.categories ?? []) as { id: string }[]).filter(Boolean);
     const marked = categories.some((c) => c.id === CASHIER_CATEGORY_ID);
     if (marked === hidden) return categories.map((c) => c.id); // already in the wanted state: no write
