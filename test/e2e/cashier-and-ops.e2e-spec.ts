@@ -86,6 +86,14 @@ describe('cashier + ops', () => {
         description: 'Scale figure of Rem.',
         category: 'Bishoujo Figures',
         artworkCrop: { x: 0, y: 0.2, width: 1, height: 0.5, rotationDegrees: 45 },
+        // What this suggestion cost, shown to the admin: 1000 in + 200 out tokens at Opus 5 prices.
+        usage: {
+          inputTokens: 1000,
+          outputTokens: 200,
+          costUsd: (1000 * 5 + 200 * 25) / 1_000_000,
+          monthSpendUsd: (1000 * 5 + 200 * 25) / 1_000_000,
+          monthStopUsd: 30,
+        },
       });
       const sent = claude.calls[0].body;
       expect(sent).toMatchObject({
