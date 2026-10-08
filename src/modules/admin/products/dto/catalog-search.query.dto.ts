@@ -21,6 +21,10 @@ export class CatalogSearchQuery {
   @IsOptional()
   categoryId?: string | null;
 
+  /** A series id, or `none` for products with no series. */
+  @IsOptional()
+  seriesId?: string | null;
+
   /** `1` to show only featured products. */
   @IsOptional()
   featured?: string | null;

@@ -142,6 +142,8 @@ export interface ProductMetadataRow {
   release_month: string | null;
   order_by_date: string | null;
   series: string | null;
+  /** The entry in the `series` list this product belongs to; null when it has none. */
+  series_id: string | null;
   character: string | null;
   manufacturer: string | null;
   jan_code: string | null;

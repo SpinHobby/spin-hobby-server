@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { AppError } from '../../common/errors.js';
+import { seriesKey } from '../../common/series-key.js';
+import { Db } from '../../database/db.service.js';
 import { AiUsageService } from './ai-usage.service.js';
 import type { ArtworkCrop } from './image-processing.js';
 import { PRODUCT_CATEGORIES } from './product-categories.js';
@@ -27,6 +29,11 @@ const IDENTIFY_SCHEMA = {
       type: 'string',
       enum: [...PRODUCT_CATEGORIES],
       description: 'The single best-fitting product category for this item.',
+    },
+    series: {
+      type: 'string',
+      description:
+        "The anime, manga, game or franchise the item is from. If one of the KNOWN SERIES in the prompt is the same series, return that name exactly as written. Otherwise return the series' official English title. Omit entirely when the item has no series (generic goods, supplies, unbranded items) or you are not sure.",
     },
     barcode: {
       type: 'string',
@@ -56,6 +63,17 @@ const IDENTIFY_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/** The series the AI named, matched to the list (so "Re Zero" becomes "Re:Zero"); flagged when it would be new. */
+export function matchSeries(
+  raw: unknown,
+  known: string[],
+): { series?: string; seriesIsNew?: boolean } {
+  const name = typeof raw === 'string' ? raw.trim().slice(0, 120) : '';
+  if (!name) return {};
+  const match = known.find((k) => seriesKey(k) === seriesKey(name));
+  return match ? { series: match, seriesIsNew: false } : { series: name, seriesIsNew: true };
+}
+
 const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 /** Clamps a model- or form-supplied crop into a safe, always-in-bounds box (or drops it). */
@@ -79,7 +97,10 @@ export class IdentifyService {
   private readonly logger = new Logger(IdentifyService.name);
   private client?: Anthropic;
 
-  constructor(private readonly usage: AiUsageService) {}
+  constructor(
+    private readonly usage: AiUsageService,
+    private readonly db: Db,
+  ) {}
 
   async identify(photo: { buffer: Buffer; mimetype: string }, sealed: boolean) {
     if (!SUPPORTED.includes(photo.mimetype as ImageType))
@@ -92,6 +113,11 @@ export class IdentifyService {
       );
     }
     if (!anthropicConfigured()) throw new AppError('Photo identification is not configured.', 503);
+    const known = (
+      await this.db.many<{ name: string }>(
+        'select name from public.series order by lower(name) limit 600',
+      )
+    ).map((r) => r.name);
     this.client ??= new Anthropic();
 
     let response: Anthropic.Beta.BetaMessage;
@@ -125,7 +151,7 @@ export class IdentifyService {
               },
               {
                 type: 'text',
-                text: `This is a photo of anime/hobby merchandise being catalogued by a cashier, either at a convention booth or for the online store. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt), write a short title and description for it, and classify it into exactly one of these categories: ${PRODUCT_CATEGORIES.join(', ')}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".\n\n${
+                text: `${known.length ? `KNOWN SERIES (use one of these exactly if it matches): ${known.join(' | ')}\n\n` : ''}This is a photo of anime/hobby merchandise being catalogued by a cashier, either at a convention booth or for the online store. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt), write a short title and description for it, and classify it into exactly one of these categories: ${PRODUCT_CATEGORIES.join(', ')}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".\n\n${
                   sealed
                     ? "This item is SEALED in its box. Also locate the printed product photo/artwork panel on the box's face and return it as `artworkCrop`, so it can be cropped out and used as the product photo - this is the manufacturer's own professional photo of the figure, already on the packaging. Include a small margin around the panel and estimate any rotation needed to straighten it."
                     : "This item is not sealed (the actual product is what's photographed) - omit `artworkCrop` entirely."
@@ -169,6 +195,7 @@ export class IdentifyService {
       category: string;
       artworkCrop?: unknown;
       barcode?: unknown;
+      series?: unknown;
     };
     return {
       title: result.title,
@@ -177,6 +204,7 @@ export class IdentifyService {
       artworkCrop: sanitizeArtworkCrop(result.artworkCrop),
       // Only a code with a correct check digit is passed on, so a misread never reaches a listing.
       barcode: cleanBarcode(result.barcode) ?? undefined,
+      ...matchSeries(result.series, known),
     };
   }
 }

@@ -22,6 +22,8 @@ import { AdminOrdersService } from './orders/admin-orders.service.js';
 import { AdminProductsController } from './products/admin-products.controller.js';
 import { AdminProductsService } from './products/admin-products.service.js';
 import { CatalogSearchService } from './products/catalog-search.service.js';
+import { AdminSeriesController } from './series/admin-series.controller.js';
+import { SeriesService } from './series/series.service.js';
 import { ProductTransferService } from './products/product-transfer.service.js';
 import { QuickAddService } from './products/quick-add.service.js';
 import { AdminSettingsController } from './settings/admin-settings.controller.js';
@@ -50,9 +52,11 @@ import { AdminSquareService } from './square/admin-square.service.js';
     AdminHomepageController,
     AdminEventsController,
     AdminSquareController,
+    AdminSeriesController,
   ],
   providers: [
     AdminLog,
+    SeriesService,
     CatalogSearchService,
     AdminDashboardService,
     AdminProductsService,

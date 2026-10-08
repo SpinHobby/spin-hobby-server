@@ -6,6 +6,7 @@ import { CatalogService } from '../../catalog/catalog.service.js';
 import type { PublicProduct } from '../../catalog/product.mapper.js';
 import type { ProductQuery } from '../../catalog/dto/product-query.dto.js';
 import { AdminLog } from '../admin-log.service.js';
+import { SeriesService } from '../series/series.service.js';
 import { sentFields } from '../dto/defined-fields.js';
 import { CatalogSearchService } from './catalog-search.service.js';
 import type { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
@@ -21,6 +22,7 @@ export class AdminProductsService {
     private readonly search: CatalogSearchService,
     private readonly email: EmailService,
     private readonly log: AdminLog,
+    private readonly series: SeriesService,
   ) {}
 
   /** Every catalog item (retired, hidden and unsellable too) for the admin list, with filter-chip totals. */
@@ -108,6 +110,12 @@ export class AdminProductsService {
     const changes = sentFields(dto);
     await this.assertCategoryExists(changes.category_id as string | null | undefined);
     return this.db.transaction(async (tx) => {
+      // A series typed or picked is matched to the list (or added to it); blank means the product has none.
+      if ('series' in changes) {
+        const series = await this.series.resolve(changes.series as string | null, tx);
+        changes.series = series?.name ?? null;
+        changes.series_id = series?.id ?? null;
+      }
       // A product that is newly featured goes to the end of the front-page order, not into a tie at position 0.
       if (changes.is_featured === true && !('sort_order' in changes)) {
         const already = await this.db.one<{ is_featured: boolean }>(

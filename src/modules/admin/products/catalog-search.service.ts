@@ -66,6 +66,11 @@ export class CatalogSearchService {
         );
       else throw new AppError('Invalid category.');
     }
+    if (query.seriesId) {
+      if (query.seriesId === 'none') where.push('series_id is null');
+      else if (UUID.test(query.seriesId)) add((n) => `series_id = ${n}::uuid`, query.seriesId);
+      else throw new AppError('Invalid series.');
+    }
     if (flag(query.featured)) where.push('is_featured');
     if (flag(query.alerts)) where.push('alerts_waiting > 0');
     if (flag(query.noPhoto)) where.push('not has_photo');
@@ -169,6 +174,7 @@ export class CatalogSearchService {
       name: r.name,
       description: r.description,
       series: r.series,
+      seriesId: r.series_id,
       character: r.character,
       manufacturer: r.manufacturer,
       category: r.category,

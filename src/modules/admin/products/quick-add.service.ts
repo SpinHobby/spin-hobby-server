@@ -7,6 +7,7 @@ import { StorageService } from '../../../integrations/storage/storage.service.js
 import { cropToArtworkRegion } from '../../cashier/image-processing.js';
 import { SquareSyncService } from '../../square-sync/square-sync.service.js';
 import { AdminLog } from '../admin-log.service.js';
+import { SeriesService } from '../series/series.service.js';
 import { downloadPhoto } from './download-photo.js';
 import type { QuickAddDto } from './dto/quick-add.dto.js';
 
@@ -37,6 +38,7 @@ export class QuickAddService {
     private readonly sync: SquareSyncService,
     private readonly storage: StorageService,
     private readonly log: AdminLog,
+    private readonly series: SeriesService,
   ) {}
 
   /** The product that already carries this barcode (in Square's data or in our own JAN field), if any. */
@@ -186,6 +188,7 @@ export class QuickAddService {
   /** Series, shop category, pre-order dates and the other details only the storefront keeps. */
   private async saveStorefrontDetails(itemId: string, dto: QuickAddDto) {
     await this.db.transaction(async (tx) => {
+      const series = await this.series.resolve(dto.series, tx);
       const last = dto.isFeatured
         ? await this.db.one<{ next: number }>(
             'select coalesce(max(sort_order), 0) + 1 as next from public.product_metadata where is_featured',
@@ -195,17 +198,18 @@ export class QuickAddService {
         : null;
       await this.db.exec(
         `insert into public.product_metadata
-           (square_item_id, series, jan_code, category_id, availability, order_by_date, release_month,
+           (square_item_id, series, series_id, jan_code, category_id, availability, order_by_date, release_month,
             compare_at_cents, max_per_customer, is_featured, sort_order)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-         on conflict (square_item_id) do update set series = excluded.series, jan_code = excluded.jan_code,
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         on conflict (square_item_id) do update set series = excluded.series, series_id = excluded.series_id, jan_code = excluded.jan_code,
            category_id = excluded.category_id, availability = excluded.availability,
            order_by_date = excluded.order_by_date, release_month = excluded.release_month,
            compare_at_cents = excluded.compare_at_cents, max_per_customer = excluded.max_per_customer,
            is_featured = excluded.is_featured, sort_order = excluded.sort_order`,
         [
           itemId,
-          dto.series,
+          series?.name ?? null,
+          series?.id ?? null,
           dto.barcode ?? dto.janCode,
           dto.categoryId,
           dto.availability,

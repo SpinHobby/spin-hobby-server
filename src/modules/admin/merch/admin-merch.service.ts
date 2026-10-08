@@ -7,6 +7,7 @@ import { StorageService } from '../../../integrations/storage/storage.service.js
 import { publicProduct } from '../../catalog/product.mapper.js';
 import { isManualId } from '../../catalog/manual-id.js';
 import { AdminLog } from '../admin-log.service.js';
+import { SeriesService } from '../series/series.service.js';
 import { sentFields } from '../dto/defined-fields.js';
 import type { CreateManualProductDto } from './dto/create-manual-product.dto.js';
 import type { UpdateManualProductDto } from './dto/update-manual-product.dto.js';
@@ -25,6 +26,7 @@ export class AdminMerchService {
     private readonly db: Db,
     private readonly log: AdminLog,
     private readonly storage: StorageService,
+    private readonly series: SeriesService,
   ) {}
 
   /** Stores a photo the admin resized in the browser. Returns its public URL. */
@@ -62,6 +64,7 @@ export class AdminMerchService {
     const variationId = `${itemId}-v`;
 
     await this.db.transaction(async (tx) => {
+      const series = await this.series.resolve(dto.series, tx);
       await this.db.exec(
         `insert into public.catalog_products (square_item_id, name, description, category, category_ids, is_active, is_visible, source)
          values ($1, $2, $3, $4, '{}', true, true, 'manual')`,
@@ -84,14 +87,15 @@ export class AdminMerchService {
         tx,
       );
       await this.db.exec(
-        `insert into public.product_metadata (square_item_id, availability, release_month, order_by_date, series, jan_code, compare_at_cents, max_per_customer, is_featured, category_id)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `insert into public.product_metadata (square_item_id, availability, release_month, order_by_date, series, series_id, jan_code, compare_at_cents, max_per_customer, is_featured, category_id)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
         [
           itemId,
           dto.availability,
           dto.releaseMonth ? `${dto.releaseMonth.slice(0, 7)}-01` : null,
           dto.orderByDate,
-          dto.series,
+          series?.name ?? null,
+          series?.id ?? null,
           dto.janCode,
           dto.compareAtCents,
           dto.maxPerCustomer,

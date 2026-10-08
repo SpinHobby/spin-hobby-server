@@ -59,7 +59,7 @@ items as (
     p.square_item_id as id, p.default_variation_id as variation_id, p.name, p.description, p.source,
     p.is_active, p.is_visible, p.replaced_by, coalesce(p.square_created_at, p.created_at) as created_at, p.updated_at, p.synced_at, p.square_updated_at,
     v.price_cents, v.sku, coalesce(v.is_sellable, false) as sellable,
-    coalesce(m.availability, 'auto') as availability, m.series, m.character, m.manufacturer, coalesce(m.jan_code, v.upc) as jan_code,
+    coalesce(m.availability, 'auto') as availability, m.series, m.series_id, m.character, m.manufacturer, coalesce(m.jan_code, v.upc) as jan_code,
     m.compare_at_cents, m.order_by_date, m.release_month, m.max_per_customer,
     coalesce(m.is_featured, false) as is_featured, coalesce(m.sort_order, 0) as sort_order, m.category_id,
     coalesce(sc.name, p.category) as category,
@@ -107,6 +107,7 @@ export type ItemRow = Pick<
   Pick<
     ProductMetadataRow,
     | 'series'
+    | 'series_id'
     | 'character'
     | 'manufacturer'
     | 'jan_code'
