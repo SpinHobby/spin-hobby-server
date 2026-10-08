@@ -147,8 +147,9 @@ export class IdentifyService {
 
     const input = response.usage.input_tokens ?? 0;
     const output = response.usage.output_tokens ?? 0;
+    const costUsd = this.usage.estimateCost(CASHIER_MODEL, input, output);
     this.usage
-      .record(CASHIER_AI_TOOL, this.usage.estimateCost(CASHIER_MODEL, input, output), input, output)
+      .record(CASHIER_AI_TOOL, costUsd, input, output)
       .catch((e) => this.logger.warn(`Recording AI usage failed: ${e}`));
 
     if (response.stop_reason === 'refusal')
@@ -177,6 +178,14 @@ export class IdentifyService {
       artworkCrop: sanitizeArtworkCrop(result.artworkCrop),
       // Only a code with a correct check digit is passed on, so a misread never reaches a listing.
       barcode: cleanBarcode(result.barcode) ?? undefined,
+      // What this one suggestion cost, and the month so far against the stop limit, so the admin can see it.
+      usage: {
+        inputTokens: input,
+        outputTokens: output,
+        costUsd,
+        monthSpendUsd: budget.spendUsd + costUsd,
+        monthStopUsd: budget.stopThresholdUsd,
+      },
     };
   }
 }
