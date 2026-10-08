@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { AppError } from '../../common/errors.js';
+import { storagePathFromUrl } from '../../modules/catalog/photo-location.js';
 import { isProduction, port, publicApiUrl } from '../../config/app.config.js';
 import { supabaseServiceKey, supabaseUrl } from '../../config/supabase.config.js';
 import { localUploadDir } from '../../config/storage.config.js';
@@ -57,5 +58,33 @@ export class StorageService {
       path,
       bytes: bytes.length,
     };
+  }
+
+  /**
+   * Deletes photos from our storage to free the space. Only files that are really ours are touched (addresses
+   * that point elsewhere, such as Square's picture host, are ignored). Returns how many files were requested.
+   */
+  async deleteImages(urls: string[]): Promise<number> {
+    const paths = [...new Set(urls.map(storagePathFromUrl).filter((p): p is string => p !== null))];
+    if (!paths.length) return 0;
+    const base = supabaseUrl();
+    const key = supabaseServiceKey();
+    if (!base || !key) {
+      if (!isProduction()) {
+        for (const path of paths) await rm(join(localUploadDir(), path), { force: true });
+        return paths.length;
+      }
+      throw new AppError(
+        'Image storage is not configured (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).',
+        503,
+      );
+    }
+    const res = await fetch(`${base}/storage/v1/object/${IMAGE_BUCKET}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefixes: paths }),
+    });
+    if (!res.ok) throw new AppError(`Deleting photos failed (${res.status}).`, 502);
+    return paths.length;
   }
 }

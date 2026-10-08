@@ -145,3 +145,102 @@ describe('SquareCatalogClient.updateLocationItem', () => {
     );
   });
 });
+
+describe('SquareCatalogClient.setItemHidden', () => {
+  const client = new SquareCatalogClient();
+  /** An item as Square stores it: several variations, a photo, a tax, and two categories. */
+  const stored = (categories: string[]) => ({
+    type: 'ITEM',
+    id: 'ITEM1',
+    version: 12,
+    updated_at: '2026-10-01T00:00:00Z',
+    created_at: '2026-01-01T00:00:00Z',
+    present_at_all_locations: true,
+    item_data: {
+      name: 'Rem figure',
+      image_ids: ['IMG1'],
+      tax_ids: ['TAX1'],
+      categories: categories.map((id) => ({ id })),
+      variations: [
+        { type: 'ITEM_VARIATION', id: 'V1', version: 3, item_variation_data: { name: 'Regular' } },
+        { type: 'ITEM_VARIATION', id: 'V2', version: 4, item_variation_data: { name: 'Large' } },
+      ],
+    },
+  });
+  const urlOf = (call: number) => fetchMock.mock.calls[call][0] as string;
+  const bodyOf = (call: number) => JSON.parse(fetchMock.mock.calls[call][1].body);
+
+  it('adds the hidden marker and changes nothing else about the item', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ objects: [stored(['CAT1'])] }))
+      .mockResolvedValueOnce(json({ objects: [stored(['CAT1', CASHIER_CATEGORY_ID])] }));
+    const ids = await client.setItemHidden('ITEM1', true);
+    expect(ids).toEqual(['CAT1', CASHIER_CATEGORY_ID]);
+
+    expect(urlOf(0)).toContain('/v2/catalog/batch-retrieve');
+    expect(bodyOf(0)).toEqual({ object_ids: ['ITEM1'] });
+    expect(urlOf(1)).toContain('/v2/catalog/batch-upsert');
+    const saved = bodyOf(1).batches[0].objects[0];
+    expect(saved.item_data.categories).toEqual([{ id: 'CAT1' }, { id: CASHIER_CATEGORY_ID }]);
+    // Everything else is sent back exactly as Square had it, so nothing is reset.
+    expect(saved).toMatchObject({ id: 'ITEM1', version: 12, present_at_all_locations: true });
+    expect(saved.item_data).toMatchObject({
+      name: 'Rem figure',
+      image_ids: ['IMG1'],
+      tax_ids: ['TAX1'],
+    });
+    expect(saved.item_data.variations.map((v: { id: string }) => v.id)).toEqual(['V1', 'V2']);
+    expect(saved).not.toHaveProperty('updated_at'); // read-only in Square
+    expect(saved).not.toHaveProperty('created_at');
+  });
+
+  it('removes only the marker when showing an item again', async () => {
+    fetchMock
+      .mockResolvedValueOnce(json({ objects: [stored(['CAT1', CASHIER_CATEGORY_ID])] }))
+      .mockResolvedValueOnce(json({ objects: [stored(['CAT1'])] }));
+    expect(await client.setItemHidden('ITEM1', false)).toEqual(['CAT1']);
+    expect(bodyOf(1).batches[0].objects[0].item_data.categories).toEqual([{ id: 'CAT1' }]);
+  });
+
+  it('makes no write when the item is already in the wanted state', async () => {
+    fetchMock.mockResolvedValueOnce(json({ objects: [stored(['CAT1', CASHIER_CATEGORY_ID])] }));
+    await client.setItemHidden('ITEM1', true);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // only the read
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValueOnce(json({ objects: [stored(['CAT1'])] }));
+    await client.setItemHidden('ITEM1', false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when the item is not in Square, and surfaces why Square refused a write', async () => {
+    fetchMock.mockResolvedValueOnce(json({ objects: [] }));
+    await expect(client.setItemHidden('NOPE', true)).rejects.toMatchObject({
+      message: 'This item was not found in Square.',
+      status: 404,
+    });
+    fetchMock.mockResolvedValueOnce(json({ objects: [stored(['CAT1'])] }));
+    fetchMock.mockResolvedValueOnce(json({ errors: [{ detail: 'Version mismatch.' }] }, 409));
+    await expect(client.setItemHidden('ITEM1', true)).rejects.toThrow('Version mismatch.');
+  });
+});
+
+describe('SquareCatalogClient.attachPhotos', () => {
+  it('counts the photos that really arrived, so a caller can tell if any failed', async () => {
+    const client = new SquareCatalogClient();
+    const attach = vi
+      .spyOn(
+        client as unknown as { attachPhoto: (...a: unknown[]) => Promise<boolean> },
+        'attachPhoto',
+      )
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+    const saved = await client.attachPhotos('ITEM1', 'Rem', [
+      Buffer.from('a'),
+      Buffer.from('b'),
+      Buffer.from('c'),
+    ]);
+    expect(saved).toBe(2);
+    expect(attach.mock.calls.map((c) => c[3])).toEqual([true, false, false]); // only the first is the main picture
+  });
+});

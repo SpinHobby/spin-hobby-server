@@ -11,7 +11,7 @@ import {
   squareLocationId,
 } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
-import { errorText } from '../../common/errors.js';
+import { AppError, errorText } from '../../common/errors.js';
 
 /**
  * Square catalog calls for the cashier tool: searching items, creating and editing them, and stock counts.
@@ -120,14 +120,32 @@ export class SquareCatalogClient {
    * documented Square field that is present on read responses but silently stripped on write through the
    * SDK), so this one write is made directly. `failureMessage` is used when Square gives no reason.
    */
+  /** Headers for the direct REST calls (the same pinned API version for every catalog write). */
+  private restHeaders() {
+    return {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${squareAccessToken()}`,
+      'Square-Version': SQUARE_CATALOG_API_VERSION,
+    };
+  }
+
+  /** One catalog object exactly as Square stores it (every field, in Square's own JSON shape), or null. */
+  private async retrieveObject(id: string): Promise<ExternalJson | null> {
+    const response = await fetch(`${squareBaseUrl()}/v2/catalog/batch-retrieve`, {
+      method: 'POST',
+      headers: this.restHeaders(),
+      body: JSON.stringify({ object_ids: [id] }),
+    });
+    const data: ExternalJson = await response.json();
+    if (!response.ok)
+      throw new Error(data?.errors?.[0]?.detail || 'Failed to read the item from Square');
+    return data.objects?.[0] || null;
+  }
+
   private async batchUpsert(object: Record<string, unknown>, failureMessage: string) {
     const response = await fetch(`${squareBaseUrl()}/v2/catalog/batch-upsert`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${squareAccessToken()}`,
-        'Square-Version': SQUARE_CATALOG_API_VERSION,
-      },
+      headers: this.restHeaders(),
       body: JSON.stringify({ idempotency_key: randomUUID(), batches: [{ objects: [object] }] }),
     });
     const data: ExternalJson = await response.json();
@@ -136,21 +154,59 @@ export class SquareCatalogClient {
   }
 
   /** Makes `photo` the item's primary picture. A failure is logged, never thrown: the item itself is already saved. */
-  private async attachPhoto(itemId: string, name: string, photo: Buffer) {
+  private async attachPhoto(itemId: string, name: string, photo: Buffer, isPrimary = true) {
     try {
       const processedPhoto = await processProductPhoto(photo);
       await this.client.catalog.images.create({
         request: {
           idempotencyKey: randomUUID(),
           objectId: itemId,
-          isPrimary: true,
+          isPrimary,
           image: { type: 'IMAGE' as const, id: '#image', imageData: { name } },
         },
         imageFile: new Blob([new Uint8Array(processedPhoto)], { type: 'image/jpeg' }),
       });
+      return true;
     } catch (error) {
       this.warn('Error attaching photo to Square catalog item:', error);
+      return false;
     }
+  }
+
+  /**
+   * Adds photos to an item (converted to JPEG; the first becomes the main picture).
+   * Returns how many were saved, so a caller that deletes its own copies can check they all arrived.
+   */
+  async attachPhotos(itemId: string, name: string, photos: Buffer[]): Promise<number> {
+    let saved = 0;
+    for (const [index, photo] of photos.entries()) {
+      if (await this.attachPhoto(itemId, name, photo, index === 0)) saved += 1;
+    }
+    return saved;
+  }
+
+  /**
+   * Hides an item from (or shows it on) the website by adding or removing the "hidden from the website" category
+   * in Square (CASHIER_CATEGORY_ID). The item is read from Square and saved back with only its categories
+   * changed, so its variations, photos, taxes and every other setting stay exactly as they were.
+   * Returns the item's category ids afterwards.
+   */
+  async setItemHidden(itemId: string, hidden: boolean): Promise<string[]> {
+    const existing = await this.retrieveObject(itemId);
+    if (!existing || existing.type !== 'ITEM' || !existing.item_data)
+      throw new AppError('This item was not found in Square.', 404);
+    const categories = ((existing.item_data.categories ?? []) as { id: string }[]).filter(Boolean);
+    const marked = categories.some((c) => c.id === CASHIER_CATEGORY_ID);
+    if (marked === hidden) return categories.map((c) => c.id); // already in the wanted state: no write
+    const next = hidden
+      ? [...categories, { id: CASHIER_CATEGORY_ID }]
+      : categories.filter((c) => c.id !== CASHIER_CATEGORY_ID);
+    const { updated_at: _updatedAt, created_at: _createdAt, ...writable } = existing; // read-only in Square
+    const saved = await this.batchUpsert(
+      { ...writable, item_data: { ...existing.item_data, categories: next } },
+      'Failed to update the item in Square',
+    );
+    return ((saved?.item_data?.categories ?? next) as { id: string }[]).map((c) => c.id);
   }
 
   // Create a single catalog item scoped to this location only (not present at

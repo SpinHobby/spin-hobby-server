@@ -110,6 +110,8 @@ export interface CatalogProductRow {
   is_visible: boolean;
   /** `square` for items synced from Square, `manual` for items staff created in the admin. */
   source: 'square' | 'manual';
+  /** Set on a hand-entered product that was moved into Square: the id of its Square replacement. */
+  replaced_by: string | null;
   square_updated_at: string | null;
   synced_at: string;
   created_at: string;
