@@ -153,6 +153,24 @@ export class SquareCatalogClient {
     return data.objects?.[0] || null;
   }
 
+  /**
+   * Removes an item from Square together with its variations and the photos attached to it. Used to undo a
+   * product that was created by mistake (a failed move). An item that is already gone counts as done.
+   */
+  async deleteItem(itemId: string): Promise<void> {
+    const object = await this.retrieveObject(itemId);
+    if (!object) return;
+    const imageIds: string[] = object.item_data?.image_ids ?? [];
+    const response = await fetch(`${squareBaseUrl()}/v2/catalog/batch-delete`, {
+      method: 'POST',
+      headers: this.restHeaders(),
+      body: JSON.stringify({ object_ids: [itemId, ...imageIds] }),
+    });
+    const data: ExternalJson = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new Error(data?.errors?.[0]?.detail || 'Failed to delete the item from Square');
+  }
+
   /** Makes `photo` the item's primary picture. A failure is logged, never thrown: the item itself is already saved. */
   private async attachPhoto(itemId: string, name: string, photo: Buffer, isPrimary = true) {
     try {

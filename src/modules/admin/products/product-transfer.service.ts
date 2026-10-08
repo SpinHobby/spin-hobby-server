@@ -120,10 +120,24 @@ export class ProductTransferService {
         )
       ).map((p) => p.image_url);
 
-      const squareId = product.replaced_by ?? (await this.createInSquare(product));
-      await this.addPhotosAndStock(squareId, product, photoUrls);
-      await this.sync.syncItems([squareId]).catch(fromSquare);
-      await this.carryOver(product, squareId);
+      // A copy left in Square by an earlier attempt is reused, unless it has been removed since.
+      let squareId = product.replaced_by;
+      if (squareId && !(await this.square.getItem(squareId).catch(() => null))?.item) {
+        await this.db.exec(
+          'update public.catalog_products set replaced_by = null where square_item_id = $1',
+          [itemId],
+        );
+        squareId = null;
+      }
+      squareId ??= await this.createInSquare(product);
+      try {
+        await this.addPhotosAndStock(squareId, product, photoUrls);
+        await this.sync.syncItems([squareId]).catch(fromSquare);
+        await this.verifyCopy(product, squareId, photoUrls.length);
+        await this.carryOver(product, squareId);
+      } catch (error) {
+        throw await this.revert(product, squareId, error);
+      }
 
       let photosRemoved = 0;
       try {
@@ -165,7 +179,7 @@ export class ProductTransferService {
     return product;
   }
 
-  /** Step 1: the item in Square, and a note on our row saying where it went (so a retry resumes, never repeats). */
+  /** Step 1: the item in Square, and a note on our row saying where it went (so a retry never makes a second copy). */
   private async createInSquare(product: LocalProduct): Promise<string> {
     let categoryId: string | undefined;
     if (product.category?.trim()) {
@@ -183,10 +197,15 @@ export class ProductTransferService {
       })
       .catch(fromSquare);
     if (!created?.id) throw new AppError('Square did not return the new item.', 502);
-    await this.db.exec(
-      'update public.catalog_products set replaced_by = $2 where square_item_id = $1',
-      [product.square_item_id, created.id],
-    );
+    try {
+      await this.db.exec(
+        'update public.catalog_products set replaced_by = $2 where square_item_id = $1',
+        [product.square_item_id, created.id],
+      );
+    } catch (error) {
+      await this.square.deleteItem(created.id as string).catch(() => undefined); // do not leave an unnoticed copy
+      throw error;
+    }
     return created.id as string;
   }
 
@@ -201,10 +220,7 @@ export class ProductTransferService {
       const buffers = await Promise.all(toAdd.map((url) => this.download(url)));
       const saved = await this.square.attachPhotos(squareId, product.name, buffers);
       if (saved < toAdd.length)
-        throw new AppError(
-          `Square accepted only ${saved} of ${toAdd.length} photos. The product is in Square but was not switched over, and nothing was deleted here. Try again.`,
-          502,
-        );
+        throw new AppError(`Square accepted only ${saved} of ${toAdd.length} photos.`, 502);
     }
     const variationId = item.itemData?.variations?.[0]?.id;
     if (variationId && product.stock != null) {
@@ -221,7 +237,81 @@ export class ProductTransferService {
     return bytes;
   }
 
-  /** Step 3: what only we hold moves to the Square product, and the old row is retired. */
+  /**
+   * Step 3: checks the Square copy as our database now sees it (after the sync) against the product we are
+   * about to retire. Nothing has been changed or deleted here yet, so a mismatch simply cancels the move.
+   */
+  private async verifyCopy(product: LocalProduct, squareId: string, photoCount: number) {
+    const copy = await this.db.one<{
+      name: string;
+      is_active: boolean;
+      is_visible: boolean;
+      price_cents: number | null;
+      stock: number | null;
+      photos: number;
+    }>(
+      `select p.name, p.is_active, p.is_visible, v.price_cents, i.quantity as stock,
+              (select count(*)::int from public.product_images pi where pi.square_item_id = p.square_item_id) as photos
+         from public.catalog_products p
+         left join public.catalog_variations v on v.square_variation_id = p.default_variation_id
+         left join public.inventory_snapshots i on i.square_variation_id = v.square_variation_id
+        where p.square_item_id = $1 and p.source = 'square'`,
+      [squareId],
+    );
+    const problems: string[] = [];
+    if (!copy) problems.push('it did not arrive from Square');
+    else {
+      if (!copy.is_active) problems.push('it is not active in Square');
+      if (copy.name.trim() !== product.name.trim()) problems.push('the name differs');
+      if (Number(copy.price_cents) !== Number(product.price_cents))
+        problems.push('the price differs');
+      if (product.stock != null && Number(copy.stock ?? NaN) !== Number(product.stock))
+        problems.push('the stock differs');
+      if (copy.photos < photoCount)
+        problems.push(`only ${copy.photos} of ${photoCount} photos arrived`);
+      const wantHidden = !product.is_visible || product.availability === 'hidden';
+      if (wantHidden === copy.is_visible)
+        problems.push(
+          wantHidden ? 'it is visible but should be hidden' : 'it is hidden but should be visible',
+        );
+    }
+    if (problems.length)
+      throw new AppError(`The copy in Square did not match (${problems.join(', ')}).`, 502);
+  }
+
+  /**
+   * A step failed: take the copy out of Square again so the product is exactly as it was, and say so.
+   * If Square will not let go of the copy, keep the note on our row so the next try reuses it instead of
+   * making a second one. Nothing is ever deleted from our side before the move has fully succeeded.
+   */
+  private async revert(product: LocalProduct, squareId: string, error: unknown): Promise<unknown> {
+    let undone = false;
+    try {
+      await this.square.deleteItem(squareId);
+      await this.db.transaction(async (tx) => {
+        await this.db.exec(
+          "delete from public.catalog_products where square_item_id = $1 and source = 'square'",
+          [squareId],
+          tx,
+        );
+        await this.db.exec(
+          'update public.catalog_products set replaced_by = null where square_item_id = $1',
+          [product.square_item_id],
+          tx,
+        );
+      });
+      undone = true;
+    } catch {
+      /* reported below */
+    }
+    if (!(error instanceof AppError)) return error;
+    const outcome = undone
+      ? 'The move was undone: the product is back exactly as it was.'
+      : 'The copy in Square could not be removed automatically; the next try will reuse it. Nothing was deleted here.';
+    return new AppError(`${error.message} ${outcome}`, error.status);
+  }
+
+  /** Step 4: what only we hold moves to the Square product, and the old row is retired. */
   private async carryOver(product: LocalProduct, squareId: string) {
     const oldId = product.square_item_id;
     const mirrored = await this.db.one<Pick<CatalogProductRow, 'default_variation_id'>>(

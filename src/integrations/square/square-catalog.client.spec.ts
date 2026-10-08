@@ -224,6 +224,35 @@ describe('SquareCatalogClient.setItemHidden', () => {
   });
 });
 
+describe('SquareCatalogClient.deleteItem', () => {
+  const client = new SquareCatalogClient();
+  const urlOf = (call: number) => fetchMock.mock.calls[call][0] as string;
+  const bodyOf = (call: number) => JSON.parse(fetchMock.mock.calls[call][1].body);
+
+  it('deletes the item together with the photos attached to it', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        json({
+          objects: [{ id: 'ITEM1', type: 'ITEM', item_data: { image_ids: ['IMG1', 'IMG2'] } }],
+        }),
+      )
+      .mockResolvedValueOnce(json({ deleted_object_ids: ['ITEM1', 'V1', 'IMG1', 'IMG2'] }));
+    await client.deleteItem('ITEM1');
+    expect(urlOf(1)).toContain('/v2/catalog/batch-delete');
+    expect(bodyOf(1)).toEqual({ object_ids: ['ITEM1', 'IMG1', 'IMG2'] });
+  });
+
+  it('treats an item that is already gone as done, and surfaces why Square refused', async () => {
+    fetchMock.mockResolvedValueOnce(json({ objects: [] }));
+    await client.deleteItem('GONE');
+    expect(fetchMock).toHaveBeenCalledTimes(1); // nothing to delete
+
+    fetchMock.mockResolvedValueOnce(json({ objects: [{ id: 'ITEM1', item_data: {} }] }));
+    fetchMock.mockResolvedValueOnce(json({ errors: [{ detail: 'Item is in use.' }] }, 400));
+    await expect(client.deleteItem('ITEM1')).rejects.toThrow('Item is in use.');
+  });
+});
+
 describe('SquareCatalogClient.attachPhotos', () => {
   it('counts the photos that really arrived, so a caller can tell if any failed', async () => {
     const client = new SquareCatalogClient();

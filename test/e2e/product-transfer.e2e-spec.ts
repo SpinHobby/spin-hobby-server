@@ -166,7 +166,7 @@ describe('hide and show', () => {
 
 describe('move a product into Square', () => {
   /** Stands in for Square: what the sync reads back for the new item, plus the photo files and the storage delete. */
-  const fakes = () =>
+  const fakes = (copy: { name?: string; hidden?: boolean } = {}) =>
     mockFetch({
       'https://proj.supabase.co/storage/v1/object/public/product-images/': () =>
         new Response(Buffer.from('not-really-a-photo'), {
@@ -183,10 +183,13 @@ describe('move a product into Square', () => {
                 type: 'ITEM',
                 updated_at: '2026-10-08T00:00:00Z',
                 item_data: {
-                  name: 'Moved product',
+                  name: copy.name ?? 'Moved product',
                   description: 'Hand made',
-                  categories: [{ id: 'SQCAT' }],
-                  image_ids: ['SQ_IMG'],
+                  categories: [
+                    { id: 'SQCAT' },
+                    ...(copy.hidden ? [{ id: CASHIER_CATEGORY_ID }] : []),
+                  ],
+                  image_ids: ['SQ_IMG', 'SQ_IMG2'],
                   variations: [
                     {
                       id: 'SQ_NEW_V',
@@ -198,7 +201,9 @@ describe('move a product into Square', () => {
               },
             ],
           };
-        return { objects: [{ id: 'SQ_IMG', type: 'IMAGE', image_data: { url: SQUARE_PHOTO } }] };
+        return {
+          objects: ids.map((id) => ({ id, type: 'IMAGE', image_data: { url: SQUARE_PHOTO } })),
+        };
       },
       '/v2/catalog/search': () => ({
         objects: [{ id: 'SQCAT', type: 'CATEGORY', category_data: { name: 'Figures' } }],
@@ -229,6 +234,7 @@ describe('move a product into Square', () => {
         Promise.resolve(photosSaved ? photosSaved(buffers.length) : buffers.length),
       ),
     stock: vi.spyOn(square, 'setInitialInventoryCount').mockResolvedValue(undefined),
+    remove: vi.spyOn(square, 'deleteItem').mockResolvedValue(undefined),
   });
 
   it('creates it in Square, carries our extras over, retires the old row and frees the photos', async () => {
@@ -329,7 +335,7 @@ describe('move a product into Square', () => {
       .send({ visible: false })
       .expect(200);
     const spies = squareSpies();
-    const net = fakes();
+    const net = fakes({ name: 'Hidden mover', hidden: true });
     try {
       await http.post(`/admin/products/${id}/transfer-to-square`).set(as(owner)).expect(200);
       expect(spies.create).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
@@ -339,38 +345,98 @@ describe('move a product into Square', () => {
     }
   });
 
-  it('deletes nothing and can be retried when Square does not accept every photo', async () => {
+  /** The product is exactly as it was: still ours, still active, photos in place, nothing sent to storage deletion. */
+  const expectUntouched = async (id: string, net: ReturnType<typeof fakes>) => {
+    const state = await pglite.query(
+      'select is_active, replaced_by from public.catalog_products where square_item_id = $1',
+      [id],
+    );
+    expect(state.rows[0]).toEqual({ is_active: true, replaced_by: null });
+    const photos = await pglite.query(
+      'select count(*)::int as n from public.product_images where square_item_id = $1',
+      [id],
+    );
+    expect(photos.rows[0]).toEqual({ n: 2 });
+    expect(net.calls.some((c) => c.url.endsWith('/storage/v1/object/product-images'))).toBe(false);
+    const copy = await pglite.query(
+      "select count(*)::int as n from public.catalog_products where square_item_id = 'SQ_NEW'",
+    );
+    expect(copy.rows[0]).toEqual({ n: 0 }); // no leftover mirror of the Square copy
+  };
+
+  it('undoes the move when Square does not accept every photo, and can be tried again', async () => {
     const id = await createLocal('Flaky mover');
     const spies = squareSpies((count) => count - 1); // Square keeps one photo fewer than we sent
-    const net = fakes();
+    const net = fakes({ name: 'Flaky mover' });
     try {
       const failed = await http
         .post(`/admin/products/${id}/transfer-to-square`)
         .set(as(owner))
         .expect(502);
       expect(failed.body.error).toMatch(/accepted only 1 of 2 photos/);
-      // Our copy is untouched: still active, photos still there, nothing deleted from storage.
+      expect(failed.body.error).toMatch(/The move was undone/);
+      expect(spies.remove).toHaveBeenCalledWith('SQ_NEW'); // the copy is taken out of Square again
+      await expectUntouched(id, net);
+
+      // Trying again starts clean: a new copy is made and this time everything arrives.
+      spies.photos.mockImplementation((_i, _n, buffers) => Promise.resolve(buffers.length));
+      await http.post(`/admin/products/${id}/transfer-to-square`).set(as(owner)).expect(200);
+      expect(spies.create).toHaveBeenCalledTimes(2);
+      expect(
+        net.calls.filter((c) => c.url.endsWith('/storage/v1/object/product-images')),
+      ).toHaveLength(1);
+    } finally {
+      net.restore();
+      Object.values(spies).forEach((s) => s.mockRestore());
+    }
+  });
+
+  it('checks the Square copy before deleting anything, and undoes the move if it does not match', async () => {
+    // The pretend Square copy is always called "Moved product", so a product with another name cannot match it.
+    const id = await createLocal('Mismatch mover');
+    const spies = squareSpies();
+    const net = fakes();
+    try {
+      const failed = await http
+        .post(`/admin/products/${id}/transfer-to-square`)
+        .set(as(owner))
+        .expect(502);
+      expect(failed.body.error).toMatch(/did not match \(the name differs\)/);
+      expect(failed.body.error).toMatch(/The move was undone/);
+      expect(spies.remove).toHaveBeenCalledWith('SQ_NEW');
+      await expectUntouched(id, net);
+      // It stays in our shop and the list shows it once, as ours.
+      expect(await catalogItem('Mismatch mover')).toMatchObject({
+        id,
+        source: 'manual',
+        isActive: true,
+      });
+    } finally {
+      net.restore();
+      Object.values(spies).forEach((s) => s.mockRestore());
+    }
+  });
+
+  it('keeps a note of the Square copy when it cannot be removed, and reuses it on the next try', async () => {
+    const id = await createLocal('Stubborn mover');
+    const spies = squareSpies((count) => count - 1);
+    spies.remove.mockRejectedValue(new Error('Square is down'));
+    const net = fakes({ name: 'Stubborn mover' });
+    try {
+      const failed = await http
+        .post(`/admin/products/${id}/transfer-to-square`)
+        .set(as(owner))
+        .expect(502);
+      expect(failed.body.error).toMatch(/could not be removed automatically/);
       const state = await pglite.query(
         'select is_active, replaced_by from public.catalog_products where square_item_id = $1',
         [id],
       );
-      expect(state.rows[0]).toEqual({ is_active: true, replaced_by: 'SQ_NEW' }); // remembers where it went
-      const photos = await pglite.query(
-        'select count(*)::int as n from public.product_images where square_item_id = $1',
-        [id],
-      );
-      expect(photos.rows[0]).toEqual({ n: 2 });
-      expect(net.calls.some((c) => c.url.endsWith('/storage/v1/object/product-images'))).toBe(
-        false,
-      );
+      expect(state.rows[0]).toEqual({ is_active: true, replaced_by: 'SQ_NEW' });
 
-      // Retry: Square now has no photos recorded yet, so it receives both again; it never creates a second item.
       spies.photos.mockImplementation((_i, _n, buffers) => Promise.resolve(buffers.length));
       await http.post(`/admin/products/${id}/transfer-to-square`).set(as(owner)).expect(200);
-      expect(spies.create).toHaveBeenCalledTimes(1);
-      expect(
-        net.calls.filter((c) => c.url.endsWith('/storage/v1/object/product-images')),
-      ).toHaveLength(1);
+      expect(spies.create).toHaveBeenCalledTimes(1); // never a second copy
     } finally {
       net.restore();
       Object.values(spies).forEach((s) => s.mockRestore());
