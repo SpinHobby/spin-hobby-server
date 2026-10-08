@@ -4,7 +4,6 @@ import { Db } from '../../../database/db.service.js';
 import type { CatalogProductRow } from '../../../database/rows.js';
 import { SquareCatalogClient } from '../../../integrations/square/square-catalog.client.js';
 import { squareAccessToken, squareLocationId } from '../../../config/square.config.js';
-import { isManualId } from '../../catalog/manual-id.js';
 import { PhotoCleanupService } from '../../catalog/photo-cleanup.service.js';
 import { SquareSyncService } from '../../square-sync/square-sync.service.js';
 import { AdminLog } from '../admin-log.service.js';
@@ -93,8 +92,6 @@ export class ProductTransferService {
    * continues where it stopped (it never creates a second copy in Square).
    */
   async transferToSquare(adminId: string, itemId: string) {
-    if (!isManualId(itemId))
-      throw new AppError('Only products kept in our own database can be moved into Square.');
     if (!squareAccessToken() || !squareLocationId())
       throw new AppError('Square is not connected, so products cannot be moved there yet.', 503);
     if (this.moving.has(itemId)) throw new AppError('This product is already being moved.', 409);
