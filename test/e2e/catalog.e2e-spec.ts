@@ -3,7 +3,7 @@ import { startShop } from '../support/shop.js';
 
 const shop = await startShop();
 afterAll(shop.close);
-const { http } = shop;
+const { http, pglite } = shop;
 
 describe('storefront catalog', () => {
   it('lists visible products in the public shape and hides hidden ones', async () => {
@@ -133,5 +133,32 @@ describe('storefront sections and server-side filters', () => {
       .get('/products?group=nonsense')
       .expect(400, { success: false, error: 'Unknown section.' });
     await http.get('/products?categoryId=nope').expect(400);
+  });
+});
+
+describe('new arrivals', () => {
+  it('go by the day a product was added in Square, not when it was last synced or first seen here', async () => {
+    const order = async () =>
+      ((await http.get('/homepage').expect(200)).body.newInStock as { id: string }[]).map(
+        (p) => p.id,
+      );
+    // Square says CHB1 was added long ago and PRZ1 recently, even though our own rows were all created together.
+    await pglite.query(
+      "update public.catalog_products set square_created_at = '2026-01-01T00:00:00Z' where square_item_id = 'CHB1'",
+    );
+    await pglite.query(
+      "update public.catalog_products set square_created_at = '2026-10-01T00:00:00Z' where square_item_id = 'PRZ1'",
+    );
+    expect(await order()).toEqual(['PRZ1', 'CHB1']);
+    // A later edit or sync (updated_at) changes nothing.
+    await pglite.query(
+      "update public.catalog_products set updated_at = now() where square_item_id = 'CHB1'",
+    );
+    expect(await order()).toEqual(['PRZ1', 'CHB1']);
+    // And the other way round.
+    await pglite.query(
+      "update public.catalog_products set square_created_at = '2025-01-01T00:00:00Z' where square_item_id = 'PRZ1'",
+    );
+    expect(await order()).toEqual(['CHB1', 'PRZ1']);
   });
 });

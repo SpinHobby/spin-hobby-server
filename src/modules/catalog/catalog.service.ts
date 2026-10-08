@@ -245,7 +245,7 @@ export class CatalogService {
           'select * from public.storefront_products where rank is not null order by rank, id limit 5',
         ),
         this.db.many<StorefrontProductRow>(
-          "select * from public.storefront_products where status in ('in','low') order by updated_at desc, id limit 5",
+          "select * from public.storefront_products where status in ('in','low') order by created_at desc, id limit 5",
         ),
         this.db.many<StoreEventRow>(
           'select * from public.store_events where is_visible order by sort_order, created_at',
