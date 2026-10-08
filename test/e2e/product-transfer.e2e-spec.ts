@@ -277,21 +277,17 @@ describe('move a product into Square', () => {
       });
       expect(await onShop('SQ_NEW')).toEqual(['SQ_NEW']);
 
-      // The old hand-entered row is retired and points at its replacement; its photos are gone.
-      const old = await pglite.query(
-        'select is_active, is_visible, replaced_by from public.catalog_products where square_item_id = $1',
-        [id],
-      );
-      expect(old.rows[0]).toEqual({ is_active: false, is_visible: false, replaced_by: 'SQ_NEW' });
+      // The old hand-entered row is gone, with its photos and variation, so the product exists once.
+      for (const table of ['catalog_products', 'catalog_variations', 'product_images']) {
+        const left = await pglite.query(
+          `select count(*)::int as n from public.${table} where square_item_id = $1`,
+          [id],
+        );
+        expect(left.rows[0]).toEqual({ n: 0 });
+      }
       expect(await onShop(id)).toEqual([]);
-      // The admin list shows the product once (the Square copy), and the totals don't count the old row.
       const listed = await http.get('/admin/catalog?q=Moved%20product').set(as(staff)).expect(200);
       expect(listed.body.items.map((i: { id: string }) => i.id)).toEqual(['SQ_NEW']);
-      const left = await pglite.query(
-        'select count(*)::int as n from public.product_images where square_item_id = $1',
-        [id],
-      );
-      expect(left.rows[0]).toEqual({ n: 0 });
       const deletes = net.calls.filter((c) => c.url.endsWith('/storage/v1/object/product-images'));
       expect(deletes).toHaveLength(1);
       expect(deletes[0].body.prefixes).toEqual([
@@ -313,14 +309,10 @@ describe('move a product into Square', () => {
       );
       expect(alert.rows[0]).toEqual({ square_variation_id: 'SQ_NEW_V' });
 
-      // Doing it again changes nothing and never touches Square again.
+      // Doing it again finds nothing to move and never touches Square again.
       spies.create.mockClear();
       spies.stock.mockClear();
-      const again = await http
-        .post(`/admin/products/${id}/transfer-to-square`)
-        .set(as(owner))
-        .expect(200);
-      expect(again.body).toMatchObject({ id: 'SQ_NEW', alreadyMoved: true });
+      await http.post(`/admin/products/${id}/transfer-to-square`).set(as(owner)).expect(404);
       expect(spies.create).not.toHaveBeenCalled();
       expect(spies.stock).not.toHaveBeenCalled();
     } finally {
