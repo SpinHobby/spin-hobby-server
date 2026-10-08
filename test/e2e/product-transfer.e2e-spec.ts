@@ -244,6 +244,7 @@ describe('move a product into Square', () => {
       .post('/alerts')
       .send({ email: 'wait@example.com', variationId: `${id}-v` })
       .expect(200);
+    const addedBefore = (await catalogItem('Moved product')).createdAt;
     const spies = squareSpies();
     const net = fakes();
     try {
@@ -279,6 +280,7 @@ describe('move a product into Square', () => {
         photoSource: 'square',
         series: 'Test Series',
         stockCount: 3,
+        createdAt: addedBefore, // it keeps the date it was first added here, not the day it moved
         state: expect.stringMatching(/^(in|low)$/),
       });
       expect(await onShop('SQ_NEW')).toEqual(['SQ_NEW']);

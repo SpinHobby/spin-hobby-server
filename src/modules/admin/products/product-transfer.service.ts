@@ -352,6 +352,13 @@ export class ProductTransferService {
           tx,
         );
       }
+      // The product keeps the date it was first added here, not the day it was moved.
+      await this.db.exec(
+        `update public.catalog_products set square_created_at = (select created_at from public.catalog_products where square_item_id = $1)
+          where square_item_id = $2`,
+        [oldId, squareId],
+        tx,
+      );
       await this.db.exec(
         `update public.catalog_variations set is_sellable = false where square_item_id = $1`,
         [oldId],

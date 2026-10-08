@@ -39,6 +39,7 @@ describe('mapCatalogPage', () => {
         active: true,
         visible: true,
         updated_at: '2026-09-01T00:00:00Z',
+        created_at: null,
       },
     ]);
     expect(variationRows).toEqual([
@@ -97,6 +98,13 @@ describe('mapCatalogPage', () => {
       if (saved === undefined) delete process.env.SQUARE_LOCATION_ID;
       else process.env.SQUARE_LOCATION_ID = saved;
     }
+  });
+
+  it('records when Square created the item', () => {
+    expect(map([item({ created_at: '2026-08-06T12:36:27.876Z' })]).productRows[0].created_at).toBe(
+      '2026-08-06T12:36:27.876Z',
+    );
+    expect(map([item()]).productRows[0].created_at).toBeNull();
   });
 
   it('marks a deleted item neither active nor visible', () => {

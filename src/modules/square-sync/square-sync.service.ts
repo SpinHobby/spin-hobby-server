@@ -240,12 +240,13 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
     if (!catalogItems.length) return { products: 0, variations: 0 };
 
     await this.db.exec(
-      `insert into public.catalog_products (square_item_id, name, description, category, category_ids, default_variation_id, is_active, is_visible, square_updated_at, synced_at)
-       select r.id, r.name, r.description, r.category, array(select jsonb_array_elements_text(r.category_ids)), r.default_variation_id, r.active, r.visible, r.updated_at, now()
-         from jsonb_to_recordset($1::jsonb) as r(id text, name text, description text, category text, category_ids jsonb, default_variation_id text, active boolean, visible boolean, updated_at timestamptz)
+      `insert into public.catalog_products (square_item_id, name, description, category, category_ids, default_variation_id, is_active, is_visible, square_updated_at, square_created_at, synced_at)
+       select r.id, r.name, r.description, r.category, array(select jsonb_array_elements_text(r.category_ids)), r.default_variation_id, r.active, r.visible, r.updated_at, r.created_at, now()
+         from jsonb_to_recordset($1::jsonb) as r(id text, name text, description text, category text, category_ids jsonb, default_variation_id text, active boolean, visible boolean, updated_at timestamptz, created_at timestamptz)
        on conflict (square_item_id) do update set name = excluded.name, description = excluded.description, category = excluded.category,
          category_ids = excluded.category_ids, default_variation_id = excluded.default_variation_id, is_active = excluded.is_active,
-         is_visible = excluded.is_visible, square_updated_at = excluded.square_updated_at, synced_at = now()`,
+         is_visible = excluded.is_visible, square_updated_at = excluded.square_updated_at, synced_at = now(),
+         square_created_at = coalesce(public.catalog_products.square_created_at, excluded.square_created_at)`,
       [JSON.stringify(productRows)],
       tx,
     );

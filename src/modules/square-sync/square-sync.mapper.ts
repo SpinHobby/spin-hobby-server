@@ -12,6 +12,8 @@ export interface ProductRow {
   active: boolean;
   visible: boolean;
   updated_at: string | null;
+  /** When the item was created in Square. */
+  created_at: string | null;
 }
 export interface VariationRow {
   id: string;
@@ -70,6 +72,7 @@ export function mapCatalogPage(
       // or when Square itself says so (online visibility "Hidden", or not sold at this location).
       visible: !item.is_deleted && !isHiddenFromWebsite(item),
       updated_at: item.updated_at ?? null,
+      created_at: item.created_at ?? null,
     });
     for (const v of d.variations ?? []) {
       const vd = v.item_variation_data ?? {};
