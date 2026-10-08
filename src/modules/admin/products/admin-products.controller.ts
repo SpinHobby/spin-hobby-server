@@ -6,6 +6,7 @@ import { AdminProductsService } from './admin-products.service.js';
 import { ProductTransferService } from './product-transfer.service.js';
 import { AdminProductsQuery } from './dto/admin-products.query.dto.js';
 import { BulkCategoryDto } from './dto/bulk-category.dto.js';
+import { FrontPageOrderDto } from './dto/front-page-order.dto.js';
 import { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
 import { SetVisibleDto } from './dto/set-visible.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
@@ -46,6 +47,17 @@ export class AdminProductsController {
       success: true,
       product: await this.products.updateDetails(admin.id, squareItemId, dto),
     };
+  }
+
+  /**
+   * Sets the order of the featured products on the storefront homepage. The products listed become featured, in
+   * this order, ahead of any other featured product.
+   */
+  @Put('products/front-page-order')
+  @HttpCode(200)
+  async frontPageOrder(@CurrentUser() admin: AppUser, @Body() dto: FrontPageOrderDto) {
+    await this.products.setFrontPageOrder(admin.id, dto.ids);
+    return { success: true };
   }
 
   /** Moves many products into one shop category (or clears it with `categoryId: null`). */

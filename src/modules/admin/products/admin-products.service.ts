@@ -107,13 +107,29 @@ export class AdminProductsService {
     if (!exists) throw notFound('Product');
     const changes = sentFields(dto);
     await this.assertCategoryExists(changes.category_id as string | null | undefined);
-    const keys = Object.keys(changes);
-    const columns = ['square_item_id', ...keys];
-    const values = [squareItemId, ...keys.map((k) => changes[k])];
-    const updates = keys.length
-      ? keys.map((k) => `${k} = excluded.${k}`).join(', ')
-      : 'square_item_id = excluded.square_item_id';
     return this.db.transaction(async (tx) => {
+      // A product that is newly featured goes to the end of the front-page order, not into a tie at position 0.
+      if (changes.is_featured === true && !('sort_order' in changes)) {
+        const already = await this.db.one<{ is_featured: boolean }>(
+          'select is_featured from public.product_metadata where square_item_id = $1',
+          [squareItemId],
+          tx,
+        );
+        if (!already?.is_featured) {
+          const last = await this.db.one<{ next: number }>(
+            'select coalesce(max(sort_order), 0) + 1 as next from public.product_metadata where is_featured',
+            [],
+            tx,
+          );
+          changes.sort_order = last?.next ?? 1;
+        }
+      }
+      const keys = Object.keys(changes);
+      const columns = ['square_item_id', ...keys];
+      const values = [squareItemId, ...keys.map((k) => changes[k])];
+      const updates = keys.length
+        ? keys.map((k) => `${k} = excluded.${k}`).join(', ')
+        : 'square_item_id = excluded.square_item_id';
       const row = await this.db.one<ProductMetadataRow>(
         `insert into public.product_metadata (${columns.join(', ')}) values (${columns.map((_, i) => `$${i + 1}`).join(', ')})
          on conflict (square_item_id) do update set ${updates} returning *`,
@@ -122,6 +138,37 @@ export class AdminProductsService {
       );
       await this.log.write(adminId, 'product.updated', squareItemId, changes, tx);
       return row;
+    });
+  }
+
+  /**
+   * Saves the homepage order: these products become featured, in this order. Other featured products keep their
+   * relative order and follow after them. Unknown ids are refused so a typo cannot silently drop a product.
+   */
+  async setFrontPageOrder(adminId: string, ids: string[]) {
+    const known = await this.db.many<{ square_item_id: string }>(
+      'select square_item_id from public.catalog_products where square_item_id = any($1::text[])',
+      [ids],
+    );
+    if (known.length !== ids.length) throw notFound('Product');
+    await this.db.transaction(async (tx) => {
+      // The others first (so they end up after the listed ones), then the listed products.
+      await this.db.exec(
+        `update public.product_metadata m set sort_order = ranked.pos + $2
+           from (select square_item_id, row_number() over (order by sort_order, square_item_id) as pos
+                   from public.product_metadata where is_featured and square_item_id <> all($1::text[])) ranked
+          where m.square_item_id = ranked.square_item_id`,
+        [ids, ids.length],
+        tx,
+      );
+      await this.db.exec(
+        `insert into public.product_metadata (square_item_id, is_featured, sort_order)
+         select t.id, true, t.pos::int from unnest($1::text[]) with ordinality as t(id, pos)
+         on conflict (square_item_id) do update set is_featured = true, sort_order = excluded.sort_order`,
+        [ids],
+        tx,
+      );
+      await this.log.write(adminId, 'products.front_page_order', 'front-page', { ids }, tx);
     });
   }
 

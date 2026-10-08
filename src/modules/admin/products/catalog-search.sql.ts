@@ -40,6 +40,7 @@ export const SORTS: Record<string, string> = {
   status: `array_position(array['in','low','out','pre','closed','unavailable','hidden','retired'], state)`,
   updated: 'coalesce(square_updated_at, updated_at)',
   created: 'created_at',
+  front: 'front_rank',
   release: 'order_by_date',
   alerts: 'alerts_waiting',
 };
@@ -69,6 +70,11 @@ items as (
     (select count(*)::int from public.stock_alerts a join public.catalog_variations av on av.square_variation_id = a.square_variation_id
       where av.square_item_id = p.square_item_id and a.notified_at is null) as alerts_waiting,
     exists (select 1 from public.product_images pi where pi.square_item_id = p.square_item_id) as has_photo,
+    case when coalesce(m.is_featured, false) and p.is_active and p.is_visible and coalesce(m.availability, 'auto') <> 'hidden' and coalesce(v.is_sellable, false)
+      then row_number() over (
+        partition by (coalesce(m.is_featured, false) and p.is_active and p.is_visible and coalesce(m.availability, 'auto') <> 'hidden' and coalesce(v.is_sellable, false))
+        order by coalesce(m.sort_order, 0), p.square_item_id)
+    end::int as front_rank,
     case
       when not p.is_active then 'retired'
       when not p.is_visible or coalesce(m.availability, 'auto') = 'hidden' then 'hidden'
@@ -120,6 +126,8 @@ export type ItemRow = Pick<
     category: string | null;
     stock_count: InventorySnapshotRow['quantity'];
     rank: number | null;
+    /** Position on the homepage (1 = first) for a featured product that shoppers can see, otherwise null. */
+    front_rank: number | null;
     status: string;
     state: AdminState;
     variation_count: number;

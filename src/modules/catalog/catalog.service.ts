@@ -4,6 +4,7 @@ import { likePattern } from '../../common/validation/rules.js';
 import { Db } from '../../database/db.service.js';
 import type { HeroSlideRow, StoreEventRow, StorefrontProductRow } from '../../database/rows.js';
 import type { ProductQuery } from './dto/product-query.dto.js';
+import { FRONT_PAGE_SLOTS } from './front-page.js';
 import { publicProduct } from './product.mapper.js';
 
 const SORTS: Record<string, string> = {
@@ -236,7 +237,7 @@ export class CatalogService {
           'select * from public.hero_slides where is_visible order by sort_order, created_at',
         ),
         this.db.many<StorefrontProductRow>(
-          'select * from public.storefront_products where is_featured order by sort_order, id limit 8',
+          `select * from public.storefront_products where is_featured order by sort_order, id limit ${FRONT_PAGE_SLOTS}`,
         ),
         this.db.many<StorefrontProductRow>(
           "select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12",

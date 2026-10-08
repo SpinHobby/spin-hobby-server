@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AppError } from '../../../common/errors.js';
 import { likePattern } from '../../../common/validation/rules.js';
 import { Db } from '../../../database/db.service.js';
+import { FRONT_PAGE_SLOTS } from '../../catalog/front-page.js';
 import { photoLocation } from '../../catalog/photo-location.js';
 import type { ProductImageRow } from '../../../database/rows.js';
 import {
@@ -82,7 +83,9 @@ export class CatalogSearchService {
     const sortKey = query.sort ?? 'created';
     if (!SORTS[sortKey]) throw new AppError(`Unknown sort "${sortKey}".`);
     // Text sorts read A→Z by default; dates, prices and counts read biggest/newest first.
-    const dir = query.dir ?? (sortKey === 'name' || sortKey === 'category' ? 'asc' : 'desc');
+    const dir =
+      query.dir ??
+      (sortKey === 'name' || sortKey === 'category' || sortKey === 'front' ? 'asc' : 'desc');
     if (dir !== 'asc' && dir !== 'desc') throw new AppError('dir must be asc or desc.');
     const filter = where.length ? `where ${where.join(' and ')}` : '';
 
@@ -101,6 +104,7 @@ export class CatalogSearchService {
     return {
       items: await this.decorate(rows),
       total,
+      frontPageSlots: FRONT_PAGE_SLOTS,
       ...(next < total ? { cursor: String(next) } : {}),
     };
   }
@@ -189,6 +193,7 @@ export class CatalogSearchService {
       availability: r.availability,
       isFeatured: r.is_featured,
       sortOrder: r.sort_order,
+      frontPage: r.front_rank,
       source: r.source,
       alertsWaiting: r.alerts_waiting,
       // Admin-only: how Square (or staff) last touched it, and what can actually be bought.
