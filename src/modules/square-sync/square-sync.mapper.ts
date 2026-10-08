@@ -20,6 +20,7 @@ export interface VariationRow {
   item_id: string;
   name: string | null;
   sku: string | null;
+  upc: string | null;
   price: number;
   sellable: boolean;
   updated_at: string | null;
@@ -81,6 +82,7 @@ export function mapCatalogPage(
         item_id: item.id,
         name: vd.name ?? null,
         sku: vd.sku ?? null,
+        upc: vd.upc ?? null,
         price: Number(vd.price_money?.amount ?? 0),
         sellable: !v.is_deleted,
         updated_at: v.updated_at ?? item.updated_at ?? null,

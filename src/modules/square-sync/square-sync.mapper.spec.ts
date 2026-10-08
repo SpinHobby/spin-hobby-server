@@ -48,6 +48,7 @@ describe('mapCatalogPage', () => {
         item_id: 'ITEM1',
         name: 'Regular',
         sku: 'REM-1',
+        upc: null,
         price: 2500,
         sellable: true,
         updated_at: '2026-09-01T00:00:00Z',
@@ -98,6 +99,26 @@ describe('mapCatalogPage', () => {
       if (saved === undefined) delete process.env.SQUARE_LOCATION_ID;
       else process.env.SQUARE_LOCATION_ID = saved;
     }
+  });
+
+  it('keeps the barcode Square holds on a variation', () => {
+    const withUpc = item(
+      {},
+      {
+        variations: [
+          {
+            id: 'VAR1',
+            type: 'ITEM_VARIATION',
+            item_variation_data: {
+              name: 'Regular',
+              upc: '4901234567894',
+              price_money: { amount: 100 },
+            },
+          },
+        ],
+      },
+    );
+    expect(map([withUpc]).variationRows[0].upc).toBe('4901234567894');
   });
 
   it('records when Square created the item', () => {

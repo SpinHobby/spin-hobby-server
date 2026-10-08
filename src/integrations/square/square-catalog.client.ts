@@ -246,6 +246,8 @@ export class SquareCatalogClient {
     photo?: { buffer: Buffer; mimetype: string };
     hidden: boolean;
     categoryId?: string;
+    /** Barcode (UPC / EAN / JAN), digits only; Square's POS scans it. */
+    upc?: string;
   }) {
     const locationId = squareLocationId();
     const categories = this.categoriesFor(item.categoryId, item.hidden);
@@ -278,6 +280,7 @@ export class SquareCatalogClient {
                 name: 'Regular',
                 pricing_type: 'FIXED_PRICING',
                 price_money: { amount: item.price, currency: Currency.Cad },
+                ...(item.upc ? { upc: item.upc } : {}),
               },
             },
           ],

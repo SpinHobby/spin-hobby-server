@@ -252,10 +252,10 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
     );
     if (variationRows.length) {
       await this.db.exec(
-        `insert into public.catalog_variations (square_variation_id, square_item_id, name, sku, price_cents, currency, is_sellable, square_updated_at, synced_at)
-         select r.id, r.item_id, r.name, r.sku, r.price, 'CAD', r.sellable, r.updated_at, now()
-           from jsonb_to_recordset($1::jsonb) as r(id text, item_id text, name text, sku text, price integer, sellable boolean, updated_at timestamptz)
-         on conflict (square_variation_id) do update set square_item_id = excluded.square_item_id, name = excluded.name, sku = excluded.sku,
+        `insert into public.catalog_variations (square_variation_id, square_item_id, name, sku, upc, price_cents, currency, is_sellable, square_updated_at, synced_at)
+         select r.id, r.item_id, r.name, r.sku, r.upc, r.price, 'CAD', r.sellable, r.updated_at, now()
+           from jsonb_to_recordset($1::jsonb) as r(id text, item_id text, name text, sku text, upc text, price integer, sellable boolean, updated_at timestamptz)
+         on conflict (square_variation_id) do update set square_item_id = excluded.square_item_id, name = excluded.name, sku = excluded.sku, upc = excluded.upc,
            price_cents = excluded.price_cents, is_sellable = excluded.is_sellable, square_updated_at = excluded.square_updated_at, synced_at = now()`,
         [JSON.stringify(variationRows)],
         tx,

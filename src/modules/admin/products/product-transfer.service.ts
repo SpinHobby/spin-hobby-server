@@ -7,8 +7,7 @@ import { squareAccessToken, squareLocationId } from '../../../config/square.conf
 import { PhotoCleanupService } from '../../catalog/photo-cleanup.service.js';
 import { SquareSyncService } from '../../square-sync/square-sync.service.js';
 import { AdminLog } from '../admin-log.service.js';
-
-const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
+import { downloadPhoto } from './download-photo.js';
 
 /** What the move needs to know about a hand-entered product. */
 interface LocalProduct extends Pick<
@@ -217,7 +216,7 @@ export class ProductTransferService {
     const alreadyThere = (item.itemData?.imageIds ?? []).length;
     const toAdd = photoUrls.slice(alreadyThere);
     if (toAdd.length) {
-      const buffers = await Promise.all(toAdd.map((url) => this.download(url)));
+      const buffers = await Promise.all(toAdd.map((url) => downloadPhoto(url)));
       const saved = await this.square.attachPhotos(squareId, product.name, buffers);
       if (saved < toAdd.length)
         throw new AppError(`Square accepted only ${saved} of ${toAdd.length} photos.`, 502);
@@ -226,15 +225,6 @@ export class ProductTransferService {
     if (variationId && product.stock != null) {
       await this.square.setInitialInventoryCount(variationId, product.stock).catch(fromSquare);
     }
-  }
-
-  private async download(url: string): Promise<Buffer> {
-    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
-    if (!res?.ok) throw new AppError('One of the photos could not be read from our storage.', 502);
-    const bytes = Buffer.from(await res.arrayBuffer());
-    if (!bytes.length || bytes.length > MAX_PHOTO_BYTES)
-      throw new AppError('One of the photos has an unexpected size.', 502);
-    return bytes;
   }
 
   /**

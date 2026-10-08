@@ -4,6 +4,7 @@ import { AppError } from '../../common/errors.js';
 import { AiUsageService } from './ai-usage.service.js';
 import type { ArtworkCrop } from './image-processing.js';
 import { PRODUCT_CATEGORIES } from './product-categories.js';
+import { cleanBarcode } from '../../common/barcode.js';
 import { anthropicConfigured } from '../../config/ai.config.js';
 
 export const CASHIER_AI_TOOL = 'anthropic_cashier';
@@ -15,16 +16,22 @@ const IDENTIFY_SCHEMA = {
     title: {
       type: 'string',
       description:
-        "A short, customer-facing product title (character/series name + item type, e.g. 'Tanjiro Kamado Figure').",
+        "A short, customer-facing product title for an online store: character or product name, then the item type, with the series in parentheses when known (e.g. 'Tanjiro Kamado Figure (Demon Slayer)'). No marketing words, no all-caps, no emoji.",
     },
     description: {
       type: 'string',
-      description: 'A 1-2 sentence description of the item for a price tag or receipt.',
+      description:
+        'A customer-facing description of 2-3 plain sentences: what the item is, who or what it depicts, and what is visible (packaging, pose, accessories). Never invent sizes, materials, makers, release dates or edition details that are not visible in the photo.',
     },
     category: {
       type: 'string',
       enum: [...PRODUCT_CATEGORIES],
       description: 'The single best-fitting product category for this item.',
+    },
+    barcode: {
+      type: 'string',
+      description:
+        'Only include this if a barcode is clearly visible in the photo AND its printed digits are fully legible: the digits exactly as printed under the bars (8, 12, 13 or 14 digits). Never guess or complete missing digits. Omit otherwise.',
     },
     artworkCrop: {
       type: 'object',
@@ -161,12 +168,15 @@ export class IdentifyService {
       description: string;
       category: string;
       artworkCrop?: unknown;
+      barcode?: unknown;
     };
     return {
       title: result.title,
       description: result.description,
       category: result.category,
       artworkCrop: sanitizeArtworkCrop(result.artworkCrop),
+      // Only a code with a correct check digit is passed on, so a misread never reaches a listing.
+      barcode: cleanBarcode(result.barcode) ?? undefined,
     };
   }
 }

@@ -1,9 +1,14 @@
 import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { cleanBarcode } from '../../../common/barcode.js';
+import { AppError } from '../../../common/errors.js';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
 import { AdminProductsService } from './admin-products.service.js';
 import { ProductTransferService } from './product-transfer.service.js';
+import { QuickAddService } from './quick-add.service.js';
+import { QuickAddDto } from './dto/quick-add.dto.js';
+import { AddStockDto } from './dto/add-stock.dto.js';
 import { AdminProductsQuery } from './dto/admin-products.query.dto.js';
 import { BulkCategoryDto } from './dto/bulk-category.dto.js';
 import { FrontPageOrderDto } from './dto/front-page-order.dto.js';
@@ -19,6 +24,7 @@ export class AdminProductsController {
   constructor(
     private readonly products: AdminProductsService,
     private readonly transfer: ProductTransferService,
+    private readonly quickAdd: QuickAddService,
   ) {}
 
   /**
@@ -58,6 +64,38 @@ export class AdminProductsController {
   async frontPageOrder(@CurrentUser() admin: AppUser, @Body() dto: FrontPageOrderDto) {
     await this.products.setFrontPageOrder(admin.id, dto.ids);
     return { success: true };
+  }
+
+  /**
+   * Adds a new product straight into Square (with photos, barcode and stock), then into our database. The
+   * hand-entered route (`POST /admin/products`) stays for products kept only in our database.
+   */
+  @Post('products/quick-add')
+  @HttpCode(200)
+  async quickAddProduct(@CurrentUser() admin: AppUser, @Body() dto: QuickAddDto) {
+    return { success: true, product: await this.quickAdd.add(admin.id, dto) };
+  }
+
+  /** The product that already has this barcode, or `null`: checked before adding, so a restock is not a duplicate. */
+  @Get('products/by-barcode/:code')
+  async byBarcode(@Param('code') code: string) {
+    const clean = cleanBarcode(code);
+    if (!clean) throw new AppError('That barcode is not valid (check the digits).');
+    return { success: true, product: await this.quickAdd.findByBarcode(clean) };
+  }
+
+  /** Adds units to a Square product's stock. */
+  @Post('products/:id/add-stock')
+  @HttpCode(200)
+  async addStock(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Body() dto: AddStockDto,
+  ) {
+    return {
+      success: true,
+      stockCount: await this.quickAdd.addStock(admin.id, squareItemId, dto.quantity),
+    };
   }
 
   /** Moves many products into one shop category (or clears it with `categoryId: null`). */

@@ -125,6 +125,8 @@ export interface CatalogVariationRow {
   square_item_id: string;
   name: string | null;
   sku: string | null;
+  /** The barcode (UPC / EAN / JAN) Square holds on the variation. */
+  upc: string | null;
   price_cents: number;
   currency: 'CAD';
   is_sellable: boolean;
