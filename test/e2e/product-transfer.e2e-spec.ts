@@ -284,6 +284,9 @@ describe('move a product into Square', () => {
       );
       expect(old.rows[0]).toEqual({ is_active: false, is_visible: false, replaced_by: 'SQ_NEW' });
       expect(await onShop(id)).toEqual([]);
+      // The admin list shows the product once (the Square copy), and the totals don't count the old row.
+      const listed = await http.get('/admin/catalog?q=Moved%20product').set(as(staff)).expect(200);
+      expect(listed.body.items.map((i: { id: string }) => i.id)).toEqual(['SQ_NEW']);
       const left = await pglite.query(
         'select count(*)::int as n from public.product_images where square_item_id = $1',
         [id],

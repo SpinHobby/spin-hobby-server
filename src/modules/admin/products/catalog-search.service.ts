@@ -23,7 +23,8 @@ export class CatalogSearchService {
   async search(query: CatalogSearchQuery) {
     const limit = Math.min(Math.max(Number(query.limit ?? 50) || 50, 1), 100);
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
-    const where: string[] = [];
+    // A product that was moved into Square keeps its old row (past orders, a safe retry) but is not listed twice.
+    const where: string[] = ['replaced_by is null'];
     const params: unknown[] = [];
     const add = (clause: (n: string) => string, value: unknown) => {
       params.push(value);
@@ -115,7 +116,7 @@ export class CatalogSearchService {
          count(*) filter (where alerts_waiting > 0)::int as alerts,
          count(*) filter (where not has_photo)::int as no_photo,
          max(synced_at) filter (where source = 'square') as last_synced_at
-       from items`,
+       from items where replaced_by is null`,
     );
     return {
       total: row?.total ?? 0,
