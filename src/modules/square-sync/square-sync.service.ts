@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { AppError } from '../../common/errors.js';
+import { AppError, errorText } from '../../common/errors.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 import type { CatalogProductRow } from '../../database/rows.js';
 import { SquareHttpClient } from '../../integrations/square/square-http.client.js';
@@ -10,6 +10,7 @@ import {
   squareSyncRetireMaxRatio,
 } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
+import { PhotoCleanupService } from '../catalog/photo-cleanup.service.js';
 import { mapCatalogPage } from './square-sync.mapper.js';
 
 export interface SyncResult {
@@ -45,6 +46,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly db: Db,
     private readonly square: SquareHttpClient,
+    private readonly photos: PhotoCleanupService,
   ) {}
 
   onModuleInit() {
@@ -64,6 +66,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy() {
     clearInterval(this.timer);
+    clearTimeout(this.requested);
   }
 
   /** Concurrent callers share the in-flight run instead of starting a second one. */
@@ -98,24 +101,90 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
       );
       products += result.products;
       variations += result.variations;
-      for (const item of items) {
-        if (item.type !== 'ITEM' || !item.item_data) continue;
-        seenItems.add(item.id);
-        for (const v of item.item_data.variations ?? []) {
-          if (v.is_deleted) continue;
-          // Square only counts stock for variations with tracking on; an explicit `false` means "sell freely".
-          (v.item_variation_data?.track_inventory === false ? untracked : tracked).push(v.id);
-        }
-      }
+      for (const item of items) if (item.type === 'ITEM' && item.item_data) seenItems.add(item.id);
+      this.collectVariations(items, tracked, untracked);
       cursor = data.cursor;
     } while (cursor);
     const inventory = await this.syncInventory(tracked, untracked);
     // Only a pass that read the whole catalog may retire anything.
     const retired = await this.retireMissing(seenItems);
+    await this.tidyPhotos();
     this.logger.log(
       `Square sync: ${products} products, ${variations} variations, ${inventory} stock counts, ${retired} retired in ${Date.now() - started} ms`,
     );
     return { products, variations, inventory, retired, completedAt: new Date().toISOString() };
+  }
+
+  /** Sorts the live variations of these items into those Square counts stock for and those it does not. */
+  private collectVariations(items: ExternalJson[], tracked: string[], untracked: string[]) {
+    for (const item of items) {
+      if (item.type !== 'ITEM' || !item.item_data) continue;
+      for (const v of item.item_data.variations ?? []) {
+        if (v.is_deleted) continue;
+        // Square only counts stock for variations with tracking on; an explicit `false` means "sell freely".
+        (v.item_variation_data?.track_inventory === false ? untracked : tracked).push(v.id);
+      }
+    }
+  }
+
+  /** Frees the storage of photos left behind by products that were moved into Square. Never fails a sync. */
+  private async tidyPhotos() {
+    try {
+      const removed = await this.photos.purgeReplacedProducts();
+      if (removed)
+        this.logger.log(`Removed ${removed} leftover photo(s) of products moved into Square.`);
+    } catch (error) {
+      this.logger.warn(
+        `Could not clean up leftover photos (will retry next sync): ${errorText(error)}`,
+      );
+    }
+  }
+
+  /**
+   * Brings just these Square items (and their stock) into the database right now, without a full sync.
+   * Used right after a product is created in Square, so it shows up immediately.
+   */
+  async syncItems(itemIds: string[]): Promise<{ products: number; variations: number }> {
+    if (!squareAccessToken()) throw new AppError('Square catalog sync is not configured.', 503);
+    let products = 0;
+    let variations = 0;
+    const tracked: string[] = [];
+    const untracked: string[] = [];
+    const categories = await this.categoryNames();
+    for (const batch of chunks(itemIds, 1000)) {
+      const data = await this.square.request('/v2/catalog/batch-retrieve', { object_ids: batch });
+      const items = ((data.objects ?? []) as ExternalJson[]).filter((o) => o.type === 'ITEM');
+      const images = await this.imageObjects(items);
+      const result = await this.db.transaction((tx) =>
+        this.upsertPage(tx, items, images, categories),
+      );
+      products += result.products;
+      variations += result.variations;
+      this.collectVariations(items, tracked, untracked);
+    }
+    await this.syncInventory(tracked, untracked);
+    return { products, variations };
+  }
+
+  private requested?: NodeJS.Timeout;
+
+  /**
+   * Asks for a full sync soon. Square tells us (a webhook) that something in the catalog changed; a burst of
+   * changes becomes one sync, started once things go quiet. If a sync is already running it finishes first,
+   * so a change that arrived mid-run is never missed.
+   */
+  requestSync(delayMs = 20_000) {
+    if (this.requested || !squareAccessToken()) return;
+    this.requested = setTimeout(() => {
+      this.requested = undefined;
+      void (async () => {
+        await this.running?.catch(() => undefined);
+        await this.run();
+      })().catch((e: unknown) =>
+        this.logger.error(`Requested Square sync failed: ${errorText(e)}`),
+      );
+    }, delayMs);
+    this.requested.unref();
   }
 
   /**

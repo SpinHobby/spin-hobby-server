@@ -1,11 +1,13 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
 import { AdminProductsService } from './admin-products.service.js';
+import { ProductTransferService } from './product-transfer.service.js';
 import { AdminProductsQuery } from './dto/admin-products.query.dto.js';
 import { BulkCategoryDto } from './dto/bulk-category.dto.js';
 import { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
+import { SetVisibleDto } from './dto/set-visible.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
 
 /** The admin Products screen: browse everything, edit storefront details, move products between categories. */
@@ -13,7 +15,10 @@ import { UpdateProductDto } from './dto/update-product.dto.js';
 @Controller('admin')
 @Access('staff')
 export class AdminProductsController {
-  constructor(private readonly products: AdminProductsService) {}
+  constructor(
+    private readonly products: AdminProductsService,
+    private readonly transfer: ProductTransferService,
+  ) {}
 
   /**
    * Every item in the catalog (including retired, hidden and unsellable ones) with search, filters, sorting and
@@ -58,5 +63,35 @@ export class AdminProductsController {
   @HttpCode(200)
   async notifyRestock(@CurrentUser() admin: AppUser, @Param('id') squareItemId: string) {
     return { success: true, sent: await this.products.notifyRestock(admin.id, squareItemId) };
+  }
+
+  /**
+   * Shows or hides a product on the website. For a Square product the "hidden from the website" category is
+   * added to (or removed from) the item in Square as well, so Square and our database stay in step.
+   */
+  @Put('products/:id/visibility')
+  async visibility(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Body() dto: SetVisibleDto,
+  ) {
+    return {
+      success: true,
+      ...(await this.transfer.setVisible(admin.id, squareItemId, dto.visible)),
+    };
+  }
+
+  /**
+   * Moves a product kept in our own database into Square: it is created there (with its photos and stock),
+   * its extras are carried over, and its photos are deleted from our storage. Owner only.
+   */
+  @Post('products/:id/transfer-to-square')
+  @HttpCode(200)
+  @Access('owner')
+  async transferToSquare(@CurrentUser() admin: AppUser, @Param('id') squareItemId: string) {
+    return {
+      success: true,
+      ...(await this.transfer.transferToSquare(admin.id, squareItemId)),
+    };
   }
 }

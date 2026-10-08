@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { AppError } from '../../../common/errors.js';
 import { likePattern } from '../../../common/validation/rules.js';
 import { Db } from '../../../database/db.service.js';
+import { photoLocation } from '../../catalog/photo-location.js';
 import type { ProductImageRow } from '../../../database/rows.js';
 import {
   ADMIN_STATES,
@@ -168,6 +169,10 @@ export class CatalogSearchService {
       category: r.category,
       categoryId: r.category_id ?? null,
       images: photosByItem.get(r.id) ?? [],
+      // Where the first photo is kept: Square, our own storage, somewhere else, or nowhere.
+      photoSource: photoLocation(photosByItem.get(r.id)?.[0]),
+      // Set on a hand-entered product that was moved into Square: the id of its Square replacement.
+      replacedBy: r.replaced_by,
       priceCents: r.price_cents,
       compareAtCents: r.compare_at_cents,
       currency: 'CAD',

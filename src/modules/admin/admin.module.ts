@@ -22,6 +22,7 @@ import { AdminOrdersService } from './orders/admin-orders.service.js';
 import { AdminProductsController } from './products/admin-products.controller.js';
 import { AdminProductsService } from './products/admin-products.service.js';
 import { CatalogSearchService } from './products/catalog-search.service.js';
+import { ProductTransferService } from './products/product-transfer.service.js';
 import { AdminSettingsController } from './settings/admin-settings.controller.js';
 import { AdminSettingsService } from './settings/admin-settings.service.js';
 import { AdminSquareController } from './square/admin-square.controller.js';
@@ -54,6 +55,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     CatalogSearchService,
     AdminDashboardService,
     AdminProductsService,
+    ProductTransferService,
     AdminMerchService,
     AdminCategoriesService,
     AdminOrdersService,

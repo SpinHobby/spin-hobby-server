@@ -3,6 +3,7 @@ import { AppError } from '../../common/errors.js';
 import { stringValue } from '../../common/validation/rules.js';
 import { Db } from '../../database/db.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
+import { SquareSyncService } from '../square-sync/square-sync.service.js';
 import { squareSignatureValid } from './square-signature.js';
 import { squareWebhookSignatureKey, squareWebhookUrl } from '../../config/square.config.js';
 import type { ExternalJson } from '../../common/external-json.js';
@@ -19,6 +20,7 @@ export class WebhooksService {
   constructor(
     private readonly db: Db,
     private readonly paypal: PayPalClient,
+    private readonly squareSync: SquareSyncService,
   ) {}
 
   /** Stores the event. Returns true when this event id was already stored (the provider retried). */
@@ -55,6 +57,8 @@ export class WebhooksService {
     if (event.type === 'inventory.count.updated' && Array.isArray(counts)) {
       await this.applyInventoryCounts(counts, event.created_at ?? new Date().toISOString());
     }
+    // Something in the catalog changed in Square (an item added, edited, hidden or deleted): refresh soon.
+    if (event.type === 'catalog.version.updated') this.squareSync.requestSync();
     await this.db.exec('update public.webhook_events set processed_at = now() where id = $1', [
       eventId,
     ]);
