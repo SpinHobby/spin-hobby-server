@@ -33,7 +33,7 @@ export function configureApp(app: INestApplication) {
       cb(null, !origin || allowed(origin)),
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['authorization', 'x-client-info', 'apikey', 'content-type', 'idempotency-key'],
-    exposedHeaders: ['x-request-id', 'retry-after'],
+    exposedHeaders: ['x-request-id', 'retry-after', 'x-polish'],
     maxAge: 86400,
   });
   const prefix = apiPrefix();

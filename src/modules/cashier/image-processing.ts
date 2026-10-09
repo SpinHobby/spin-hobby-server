@@ -125,3 +125,20 @@ export async function processEditedPhoto(
     return { data: buffer, contentType: 'image/jpeg' };
   }
 }
+
+/**
+ * What Square receives for a photo: a picture with a transparent background (a cut-out) stays a PNG as it is, and
+ * every other photo gets the usual tidy-up (trimmed, centred on a clean square, JPEG).
+ */
+export async function processForSquare(
+  buffer: Buffer,
+): Promise<{ data: Buffer; contentType: string }> {
+  try {
+    const { hasAlpha } = await sharp(buffer).metadata();
+    if (hasAlpha && !(await sharp(buffer).stats()).isOpaque)
+      return await processEditedPhoto(buffer);
+  } catch {
+    /* fall through to the usual processing */
+  }
+  return { data: await processProductPhoto(buffer), contentType: 'image/jpeg' };
+}

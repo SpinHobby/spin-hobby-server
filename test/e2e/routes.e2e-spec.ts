@@ -124,6 +124,7 @@ const EXPECTED: string[] = [
   'POST /auth/signup [public]',
   'POST /cart/quote [public] limit 60/60s',
   'POST /cashier/identify [staff]',
+  'POST /cashier/polish [staff]',
   'POST /cashier/record [staff]',
   'POST /checkout/intent [public] limit 10/60s',
   'POST /paypal/capture [public] limit 20/60s',

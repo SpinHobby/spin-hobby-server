@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { Currency, EcomVisibility, SquareClient as SquareSdk, SquareEnvironment } from 'square';
-import { processProductPhoto } from '../../modules/cashier/image-processing.js';
+import { processForSquare } from '../../modules/cashier/image-processing.js';
 import {
   CASHIER_CATEGORY_ID,
   SQUARE_CATALOG_API_VERSION,
@@ -175,7 +175,7 @@ export class SquareCatalogClient {
   /** Makes `photo` the item's primary picture. A failure is logged, never thrown: the item itself is already saved. */
   private async attachPhoto(itemId: string, name: string, photo: Buffer, isPrimary = true) {
     try {
-      const processedPhoto = await processProductPhoto(photo);
+      const processedPhoto = await processForSquare(photo);
       await this.client.catalog.images.create({
         request: {
           idempotencyKey: randomUUID(),
@@ -183,7 +183,9 @@ export class SquareCatalogClient {
           isPrimary,
           image: { type: 'IMAGE' as const, id: '#image', imageData: { name } },
         },
-        imageFile: new Blob([new Uint8Array(processedPhoto)], { type: 'image/jpeg' }),
+        imageFile: new Blob([new Uint8Array(processedPhoto.data)], {
+          type: processedPhoto.contentType,
+        }),
       });
       return true;
     } catch (error) {

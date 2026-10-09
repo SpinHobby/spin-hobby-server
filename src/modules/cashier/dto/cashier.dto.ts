@@ -26,6 +26,10 @@ export class IdentifyDto {
   /** `sealed` for new-in-box items; anything else is treated as opened/used. */
   @IsOptional()
   condition?: string;
+
+  /** `true` to also have the AI locate shop price stickers in the same request (cheaper than asking twice). */
+  @IsOptional()
+  findStickers?: string;
 }
 
 /** A new item to put in Square from the cashier tool. */
@@ -118,4 +122,22 @@ export class CashierSearchQuery {
   /** Where to continue from. */
   @IsOptional()
   cursor?: string;
+}
+
+/** What to do to a photo in the polish step. Booleans and the sticker list arrive as multipart text fields. */
+export class PolishDto {
+  // A photo sent with no options has no text fields at all.
+  static readonly allowEmptyBody = true;
+
+  /** `true` to cut the product out of a green backdrop (free; skipped if there is no green backdrop). */
+  @IsOptional()
+  removeBackground?: string;
+
+  /** `true` to paint over shop stickers. Without `stickers`, the AI finds them first (a paid step). */
+  @IsOptional()
+  removeStickers?: string;
+
+  /** Sticker boxes found earlier, as JSON: `[{"x":0.7,"y":0.2,"width":0.1,"height":0.03}]`. */
+  @IsOptional()
+  stickers?: string;
 }

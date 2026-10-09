@@ -5,6 +5,7 @@ import { seriesKey } from '../../common/series-key.js';
 import { Db } from '../../database/db.service.js';
 import { AiUsageService } from './ai-usage.service.js';
 import type { ArtworkCrop } from './image-processing.js';
+import type { StickerBox } from './photo-polish.js';
 import { PRODUCT_CATEGORIES } from './product-categories.js';
 import { cleanBarcode } from '../../common/barcode.js';
 import { anthropicConfigured } from '../../config/ai.config.js';
@@ -89,6 +90,51 @@ export function sanitizeArtworkCrop(raw: unknown): ArtworkCrop | undefined {
   return { x, y, width, height, rotationDegrees };
 }
 
+const STICKERS_PROPERTY = {
+  type: 'array',
+  description:
+    'Stickers or labels a SHOP added to the box after manufacture (price stickers, shop labels, tape). Empty when there are none.',
+  items: {
+    type: 'object',
+    properties: {
+      x: { type: 'number', description: 'Left edge, fraction of the photo width (0-1).' },
+      y: { type: 'number', description: 'Top edge, fraction of the photo height (0-1).' },
+      width: { type: 'number', description: 'Width, fraction of the photo width (0-1).' },
+      height: { type: 'number', description: 'Height, fraction of the photo height (0-1).' },
+    },
+    required: ['x', 'y', 'width', 'height'],
+    additionalProperties: false,
+  },
+} as const;
+
+const STICKER_SCHEMA = {
+  type: 'object',
+  properties: { stickers: STICKERS_PROPERTY },
+  required: ['stickers'],
+  additionalProperties: false,
+} as Record<string, unknown>;
+
+const STICKER_PROMPT =
+  'Find every sticker or label that a SHOP stuck on the box after manufacture: price stickers (a white or cream label with a handwritten or printed price such as $40 or $50), shop labels and tape. Do NOT include anything printed on the box by the manufacturer (logos, age-rating marks, titles, barcodes). Return a tight bounding box for each as fractions (0-1) of the full photo width and height from the top-left corner: x, y, width, height. Return an empty list if there are none. Put it in `stickers`.';
+
+/** Boxes the AI named, clamped into the photo and limited to a few (a sticker is small). */
+export function sanitizeStickers(raw: unknown): StickerBox[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .slice(0, 4)
+    .map((b: Record<string, unknown>) => {
+      const x = clamp(Number(b?.x), 0, 0.98);
+      const y = clamp(Number(b?.y), 0, 0.98);
+      return {
+        x,
+        y,
+        width: clamp(Number(b?.width), 0.01, Math.min(0.4, 1 - x)),
+        height: clamp(Number(b?.height), 0.01, Math.min(0.3, 1 - y)),
+      };
+    })
+    .filter((b) => [b.x, b.y, b.width, b.height].every(Number.isFinite));
+}
+
 type ImageType = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 const SUPPORTED: ImageType[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
@@ -102,7 +148,15 @@ export class IdentifyService {
     private readonly db: Db,
   ) {}
 
-  async identify(photo: { buffer: Buffer; mimetype: string }, sealed: boolean) {
+  /**
+   * One question to Claude about one photo, answered as JSON in the given shape. Checks the monthly AI budget
+   * first, records what the call cost, and turns every failure into a message the admin can act on.
+   */
+  private async ask(
+    photo: { buffer: Buffer; mimetype: string },
+    schema: Record<string, unknown>,
+    prompt: string,
+  ) {
     if (!SUPPORTED.includes(photo.mimetype as ImageType))
       throw new AppError('Photo must be a JPEG, PNG, WebP or GIF image.');
     const budget = await this.usage.status(CASHIER_AI_TOOL);
@@ -113,11 +167,6 @@ export class IdentifyService {
       );
     }
     if (!anthropicConfigured()) throw new AppError('Photo identification is not configured.', 503);
-    const known = (
-      await this.db.many<{ name: string }>(
-        'select name from public.series order by lower(name) limit 600',
-      )
-    ).map((r) => r.name);
     this.client ??= new Anthropic();
 
     let response: Anthropic.Beta.BetaMessage;
@@ -130,13 +179,7 @@ export class IdentifyService {
         betas: ['server-side-fallback-2026-07-01'],
         fallbacks: 'default',
         // Low effort: a quick visual labelling task, and every call counts against the monthly AI budget.
-        output_config: {
-          effort: 'low',
-          format: {
-            type: 'json_schema',
-            schema: IDENTIFY_SCHEMA as unknown as Record<string, unknown>,
-          },
-        },
+        output_config: { effort: 'low', format: { type: 'json_schema', schema } },
         messages: [
           {
             role: 'user',
@@ -149,14 +192,7 @@ export class IdentifyService {
                   data: photo.buffer.toString('base64'),
                 },
               },
-              {
-                type: 'text',
-                text: `${known.length ? `KNOWN SERIES (use one of these exactly if it matches): ${known.join(' | ')}\n\n` : ''}This is a photo of anime/hobby merchandise being catalogued by a cashier, either at a convention booth or for the online store. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt), write a short title and description for it, and classify it into exactly one of these categories: ${PRODUCT_CATEGORIES.join(', ')}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".\n\n${
-                  sealed
-                    ? "This item is SEALED in its box. Also locate the printed product photo/artwork panel on the box's face and return it as `artworkCrop`, so it can be cropped out and used as the product photo - this is the manufacturer's own professional photo of the figure, already on the packaging. Include a small margin around the panel and estimate any rotation needed to straighten it."
-                    : "This item is not sealed (the actual product is what's photographed) - omit `artworkCrop` entirely."
-                }`,
-              },
+              { type: 'text', text: prompt },
             ],
           },
         ],
@@ -190,13 +226,53 @@ export class IdentifyService {
       );
     const text = response.content.find((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text');
     if (!text) throw new AppError('Photo identification returned no result.', 502);
-    const result = JSON.parse(text.text) as {
+    return {
+      result: JSON.parse(text.text) as Record<string, unknown>,
+      // What this one call cost, and the month so far against the stop limit, so the admin can see it.
+      usage: {
+        inputTokens: input,
+        outputTokens: output,
+        costUsd,
+        monthSpendUsd: budget.spendUsd + costUsd,
+        monthStopUsd: budget.stopThresholdUsd,
+      },
+    };
+  }
+
+  /**
+   * Title, description, category, series, barcode and (for a sealed box) the artwork crop. With `findStickers` the
+   * same single request also locates shop price stickers, which is cheaper than asking twice.
+   */
+  async identify(
+    photo: { buffer: Buffer; mimetype: string },
+    sealed: boolean,
+    findStickers = false,
+  ) {
+    const known = (
+      await this.db.many<{ name: string }>(
+        'select name from public.series order by lower(name) limit 600',
+      )
+    ).map((r) => r.name);
+    const schema = findStickers
+      ? {
+          ...IDENTIFY_SCHEMA,
+          properties: { ...IDENTIFY_SCHEMA.properties, stickers: STICKERS_PROPERTY },
+        }
+      : IDENTIFY_SCHEMA;
+    const prompt = `${known.length ? `KNOWN SERIES (use one of these exactly if it matches): ${known.join(' | ')}\n\n` : ''}This is a photo of anime/hobby merchandise being catalogued by a cashier, either at a convention booth or for the online store. Identify the item (character, series if recognizable, item type such as figure/keychain/plush/badge/shirt), write a short title and description for it, and classify it into exactly one of these categories: ${PRODUCT_CATEGORIES.join(', ')}. If you can't identify the specific character or series, describe what's visible instead of guessing. If nothing fits well, use "Other".\n\n${
+      sealed
+        ? "This item is SEALED in its box. Also locate the printed product photo/artwork panel on the box's face and return it as `artworkCrop`, so it can be cropped out and used as the product photo - this is the manufacturer's own professional photo of the figure, already on the packaging. Include a small margin around the panel and estimate any rotation needed to straighten it."
+        : "This item is not sealed (the actual product is what's photographed) - omit `artworkCrop` entirely."
+    }${findStickers ? `\n\n${STICKER_PROMPT}` : ''}`;
+    const { result: raw, usage } = await this.ask(photo, schema, prompt);
+    const result = raw as {
       title: string;
       description: string;
       category: string;
       artworkCrop?: unknown;
       barcode?: unknown;
       series?: unknown;
+      stickers?: unknown;
     };
     return {
       title: result.title,
@@ -206,14 +282,14 @@ export class IdentifyService {
       // Only a code with a correct check digit is passed on, so a misread never reaches a listing.
       barcode: cleanBarcode(result.barcode) ?? undefined,
       ...matchSeries(result.series, known),
-      // What this one suggestion cost, and the month so far against the stop limit, so the admin can see it.
-      usage: {
-        inputTokens: input,
-        outputTokens: output,
-        costUsd,
-        monthSpendUsd: budget.spendUsd + costUsd,
-        monthStopUsd: budget.stopThresholdUsd,
-      },
+      ...(findStickers ? { stickers: sanitizeStickers(result.stickers) } : {}),
+      usage,
     };
+  }
+
+  /** Finds shop stickers (price labels, tape) on a photo of a box, so they can be painted over. */
+  async findStickers(photo: { buffer: Buffer; mimetype: string }) {
+    const { result, usage } = await this.ask(photo, STICKER_SCHEMA, STICKER_PROMPT);
+    return { stickers: sanitizeStickers(result.stickers), usage };
   }
 }
