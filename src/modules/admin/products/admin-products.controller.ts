@@ -1,12 +1,27 @@
-import { Body, Controller, Get, HttpCode, Param, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Patch,
+  Post,
+  Put,
+  Query,
+  StreamableFile,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { cleanBarcode } from '../../../common/barcode.js';
 import { AppError } from '../../../common/errors.js';
+import { photoLocation } from '../../catalog/photo-location.js';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
 import { AdminProductsService } from './admin-products.service.js';
 import { ProductTransferService } from './product-transfer.service.js';
 import { QuickAddService } from './quick-add.service.js';
+import { SquarePhotosService } from './square-photos.service.js';
+import { AddPhotoDto, PhotoOrderDto } from './dto/photos.dto.js';
 import { QuickAddDto } from './dto/quick-add.dto.js';
 import { AddStockDto } from './dto/add-stock.dto.js';
 import { AdminProductsQuery } from './dto/admin-products.query.dto.js';
@@ -25,6 +40,7 @@ export class AdminProductsController {
     private readonly products: AdminProductsService,
     private readonly transfer: ProductTransferService,
     private readonly quickAdd: QuickAddService,
+    private readonly photos: SquarePhotosService,
   ) {}
 
   /**
@@ -96,6 +112,68 @@ export class AdminProductsController {
       success: true,
       stockCount: await this.quickAdd.addStock(admin.id, squareItemId, dto.quantity),
     };
+  }
+
+  /**
+   * Hands a Square-hosted photo to the photo editor. Browsers will not let a page edit a picture from another
+   * website, so the editor loads it through here. Only Square's own picture host is fetched.
+   */
+  @Get('photo-proxy')
+  async photoProxy(@Query('url') url: string) {
+    if (photoLocation(url) !== 'square')
+      throw new AppError('Only Square photos can be opened here.');
+    const res = await fetch(url, { signal: AbortSignal.timeout(20_000) }).catch(() => null);
+    if (!res?.ok) throw new AppError('That photo could not be loaded.', 502);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    if (!bytes.length || bytes.length > 10 * 1024 * 1024)
+      throw new AppError('That photo has an unexpected size.', 502);
+    return new StreamableFile(bytes, { type: res.headers.get('content-type') ?? 'image/jpeg' });
+  }
+
+  /** A Square product's photos: the ones shown (in order) and the ones hidden. */
+  @Get('products/:id/photos')
+  async photoList(@Param('id') squareItemId: string) {
+    return { success: true, ...(await this.photos.list(squareItemId)) };
+  }
+
+  /** Shows these photos in this order. Photos left out are hidden (kept in Square), and hidden ones listed come back. */
+  @Put('products/:id/photos')
+  @HttpCode(200)
+  async photoOrder(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Body() dto: PhotoOrderDto,
+  ) {
+    return { success: true, ...(await this.photos.setOrder(admin.id, squareItemId, dto.ids)) };
+  }
+
+  /** Adds a new photo (never replaces one). With `replaces`, it takes that photo's place and the original is hidden. */
+  @Post('products/:id/photos')
+  @HttpCode(200)
+  async photoAdd(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Body() dto: AddPhotoDto,
+  ) {
+    return {
+      success: true,
+      ...(await this.photos.add(
+        admin.id,
+        squareItemId,
+        Buffer.from(dto.data, 'base64'),
+        dto.replaces,
+      )),
+    };
+  }
+
+  /** Deletes one photo from Square for good. Only used when the admin chooses to delete it. */
+  @Delete('products/:id/photos/:imageId')
+  async photoDelete(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Param('imageId') imageId: string,
+  ) {
+    return { success: true, ...(await this.photos.remove(admin.id, squareItemId, imageId)) };
   }
 
   /** Moves many products into one shop category (or clears it with `categoryId: null`). */

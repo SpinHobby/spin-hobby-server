@@ -96,3 +96,32 @@ export async function processProductPhoto(buffer: Buffer): Promise<Buffer> {
     return buffer;
   }
 }
+
+/**
+ * Prepares a photo the admin edited for Square: upright, at most 1600 px on the long side, nothing cropped or
+ * recoloured (the admin already framed it). A picture with a transparent background stays a PNG; anything else
+ * becomes a high-quality JPEG. Falls back to the original bytes if it cannot be read.
+ */
+export async function processEditedPhoto(
+  buffer: Buffer,
+): Promise<{ data: Buffer; contentType: string }> {
+  try {
+    const image = sharp(buffer).rotate();
+    const { hasAlpha } = await image.metadata();
+    const resized = image.resize({
+      width: 1600,
+      height: 1600,
+      fit: 'inside',
+      withoutEnlargement: true,
+    });
+    if (hasAlpha && !(await sharp(buffer).stats()).isOpaque)
+      return { data: await resized.png().toBuffer(), contentType: 'image/png' };
+    return {
+      data: await resized.flatten({ background: BACKGROUND }).jpeg({ quality: 92 }).toBuffer(),
+      contentType: 'image/jpeg',
+    };
+  } catch (error) {
+    logger.error(`Error processing edited photo, using original: ${errorText(error)}`);
+    return { data: buffer, contentType: 'image/jpeg' };
+  }
+}

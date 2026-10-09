@@ -193,6 +193,82 @@ export class SquareCatalogClient {
   }
 
   /**
+   * Uploads one new picture for an item and returns its id. It is NOT put in the item's photo list here (the caller
+   * sets the order with `setItemImageIds`), so nothing already on the item changes.
+   */
+  async createImage(
+    itemId: string,
+    name: string,
+    photo: { data: Buffer; contentType: string },
+  ): Promise<string> {
+    const created = await this.client.catalog.images.create({
+      request: {
+        idempotencyKey: randomUUID(),
+        objectId: itemId,
+        isPrimary: false,
+        image: { type: 'IMAGE' as const, id: '#image', imageData: { name } },
+      },
+      imageFile: new Blob([new Uint8Array(photo.data)], { type: photo.contentType }),
+    });
+    const id = created.image?.id;
+    if (!id) throw new AppError('Square did not return the new photo.', 502);
+    return id;
+  }
+
+  /** The ids of the photos on an item, in order (the first is the main one). */
+  async readImageIds(itemId: string): Promise<string[]> {
+    const item = await this.retrieveObject(itemId);
+    if (!item || item.type !== 'ITEM')
+      throw new AppError('This item was not found in Square.', 404);
+    return (item.item_data?.image_ids ?? []) as string[];
+  }
+
+  /** Picture addresses by id (a picture Square no longer has is simply missing from the result). */
+  async imageUrls(ids: string[]): Promise<Record<string, string>> {
+    if (!ids.length) return {};
+    const response = await fetch(`${squareBaseUrl()}/v2/catalog/batch-retrieve`, {
+      method: 'POST',
+      headers: this.restHeaders(),
+      body: JSON.stringify({ object_ids: ids }),
+    });
+    const data: ExternalJson = await response.json();
+    if (!response.ok)
+      throw new Error(data?.errors?.[0]?.detail || 'Failed to read the photos from Square');
+    const urls: Record<string, string> = {};
+    for (const o of (data.objects ?? []) as ExternalJson[])
+      if (o.type === 'IMAGE' && !o.is_deleted && o.image_data?.url) urls[o.id] = o.image_data.url;
+    return urls;
+  }
+
+  /**
+   * Sets which photos an item shows and in what order. A photo left out is detached, not deleted: it stays in
+   * Square's catalog and can be put back. Everything else on the item is sent back as it was read.
+   */
+  async setItemImageIds(itemId: string, imageIds: string[]): Promise<void> {
+    const existing = await this.retrieveObject(itemId);
+    if (!existing || existing.type !== 'ITEM' || !existing.item_data)
+      throw new AppError('This item was not found in Square.', 404);
+    const { updated_at: _updatedAt, created_at: _createdAt, ...writable } = existing; // read-only in Square
+    await this.batchUpsert(
+      { ...writable, item_data: { ...existing.item_data, image_ids: imageIds } },
+      'Failed to update the item photos in Square',
+    );
+  }
+
+  /** Permanently removes pictures from Square's catalog. They must already be detached from the item. */
+  async deleteImages(imageIds: string[]): Promise<void> {
+    if (!imageIds.length) return;
+    const response = await fetch(`${squareBaseUrl()}/v2/catalog/batch-delete`, {
+      method: 'POST',
+      headers: this.restHeaders(),
+      body: JSON.stringify({ object_ids: imageIds }),
+    });
+    const data: ExternalJson = await response.json().catch(() => ({}));
+    if (!response.ok)
+      throw new Error(data?.errors?.[0]?.detail || 'Failed to delete the photo from Square');
+  }
+
+  /**
    * Adds photos to an item (converted to JPEG; the first becomes the main picture).
    * Returns how many were saved, so a caller that deletes its own copies can check they all arrived.
    */
