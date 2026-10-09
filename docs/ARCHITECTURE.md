@@ -218,6 +218,10 @@ Every product is one row in `catalog_products`, and `source` says where it is ma
 
 They live in Square only (nothing is kept in our storage). Square has no per-photo "hidden" flag, so a photo is **shown** when it is in the item's photo list (`image_ids`, first = main) and **hidden** when it is taken out of that list: the picture stays in Square's catalog and can be put back. `hidden_photos` only remembers which pictures belong to which product. Editing never overwrites: the editor's result is uploaded as a **new** photo in the original's place and the original is hidden. A photo is deleted from Square only by `DELETE /admin/products/:id/photos/:imageId`, which the admin presses explicitly. `GET /admin/photo-proxy` hands a Square-hosted picture to the browser editor (browsers will not let a page edit another site's picture); it only fetches Square's own picture host. See `SquarePhotosService`.
 
+### Polishing product photos (`POST /cashier/polish`)
+
+Everything that costs money is a separate, optional step the admin ticks; nothing runs by default. **Free:** cutting a product out of a plain green backdrop (a chroma key in `photo-polish.ts`, no AI) returns a transparent PNG cropped to the product; the backdrop is only removed if the photo's border really is green. **Paid (Claude, about 1.4-2 cents):** finding shop price stickers so they can be painted over, and writing the title/description. Asking for both sends `findStickers=true` to `POST /cashier/identify`, one request that costs less than two. When the sticker boxes are already known they are sent to `/cashier/polish`, which then makes no AI call. Photos with transparency keep it all the way to Square (`processForSquare`); the storefront draws the background and shadow behind them.
+
 ### Stock and holds
 
 - For items synced from Square, **Square owns the stock count** (we copy it in with the sync and
