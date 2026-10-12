@@ -64,17 +64,17 @@ sign-in form, type the username in the email box:
 | | |
 |---|---|
 | Username | `SpinHobby` |
-| Password | `123456` |
+| Password | ask the owner (it is in the Render service's Environment tab) |
 
-It is set by `STAGING_ADMIN_USERNAME` / `STAGING_ADMIN_PASSWORD` in `render.staging.yaml` (or the
-service's Environment tab on Render). The first sign-in creates a real owner account in the
+The username is set by `STAGING_ADMIN_USERNAME` in `render.staging.yaml`. The password,
+`STAGING_ADMIN_PASSWORD`, is only ever set in the service's Environment tab on Render, never in git. The first sign-in creates a real owner account in the
 staging Supabase project (`spinhobby@staging.spinhobby.com`, no email is ever sent), so sessions,
 refresh and sign-out behave like any other account. Changing the password in the environment
 updates the account on the next sign-in.
 
 The login only works when `APP_ENV=staging`, and never against the production Supabase project,
-so these variables have no effect if they are ever copied to production. Pick a stronger password
-before loading anything sensitive into staging.
+so these variables have no effect if they are ever copied to production. Leaving
+`STAGING_ADMIN_PASSWORD` empty turns the login off.
 
 Free-plan notes: the staging API sleeps after ~15 minutes idle (first request takes ~1 minute),
 and Supabase pauses a free project after a week without activity (restore it from the dashboard).
