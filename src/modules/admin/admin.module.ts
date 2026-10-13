@@ -7,6 +7,10 @@ import { CatalogModule } from '../catalog/catalog.module.js';
 import { SquareSyncModule } from '../square-sync/square-sync.module.js';
 import { StoreModule } from '../store/store.module.js';
 import { AdminLog } from './admin-log.service.js';
+import { AdminImportsController } from './imports/admin-imports.controller.js';
+import { GleamshelfController } from './imports/gleamshelf.controller.js';
+import { GleamshelfTokenGuard } from './imports/gleamshelf-token.guard.js';
+import { ImportsService } from './imports/imports.service.js';
 import { AdminCategoriesController } from './categories/admin-categories.controller.js';
 import { AdminCategoriesService } from './categories/admin-categories.service.js';
 import { AdminDashboardController } from './dashboard/admin-dashboard.controller.js';
@@ -54,9 +58,13 @@ import { AdminSquareService } from './square/admin-square.service.js';
     AdminEventsController,
     AdminSquareController,
     AdminSeriesController,
+    AdminImportsController,
+    GleamshelfController,
   ],
   providers: [
     AdminLog,
+    ImportsService,
+    GleamshelfTokenGuard,
     SeriesService,
     CatalogSearchService,
     AdminDashboardService,
