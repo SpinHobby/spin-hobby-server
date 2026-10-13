@@ -3,6 +3,7 @@ import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { AppError, notFound } from '../../../common/errors.js';
 import { Db } from '../../../database/db.service.js';
 import { IMAGE_TYPES, StorageService } from '../../../integrations/storage/storage.service.js';
+import { port, publicApiUrl } from '../../../config/app.config.js';
 import { PRODUCT_CATEGORIES } from '../../cashier/product-categories.js';
 import { AdminLog } from '../admin-log.service.js';
 import type { QuickAddDto } from '../products/dto/quick-add.dto.js';
@@ -85,7 +86,12 @@ export class ImportsService {
       );
     });
     await this.log.write(adminId, 'imports.pairing_started', 'gleamshelf');
-    return { code: `${code.slice(0, 4)}-${code.slice(4)}`, expiresAt: expiresAt.toISOString() };
+    return {
+      code: `${code.slice(0, 4)}-${code.slice(4)}`,
+      expiresAt: expiresAt.toISOString(),
+      // the address the app talks to (the API, not the website): shown next to the code
+      server: (publicApiUrl() ?? `http://localhost:${port()}`).replace(/\/$/, ''),
+    };
   }
 
   /** Trades a code for a token (shown once; only its hash is kept). */
@@ -232,6 +238,7 @@ export class ImportsService {
     );
     return {
       imports: rows.map(present),
+      categories: [...PRODUCT_CATEGORIES],
       counts: Object.fromEntries(
         IMPORT_STATUSES.map((s) => [s, counts.find((c) => c.status === s)?.n ?? 0]),
       ),
