@@ -3,6 +3,8 @@ import {
   Controller,
   Get,
   HttpCode,
+  Param,
+  ParseUUIDPipe,
   Post,
   UploadedFile,
   UseGuards,
@@ -14,9 +16,16 @@ import { AppError } from '../../../common/errors.js';
 import { RateLimit } from '../../../common/guards/rate-limit.guard.js';
 import { Access } from '../../auth/access.js';
 import type { Upload } from '../../cashier/cashier.service.js';
-import { PairDto, ReceiveDraftDto } from './dto/imports.dto.js';
+import {
+  ClaimJobDto,
+  JobFailDto,
+  JobResultDto,
+  PairDto,
+  ReceiveDraftDto,
+} from './dto/imports.dto.js';
 import { AppToken, GleamshelfTokenGuard } from './gleamshelf-token.guard.js';
 import { ImportsService } from './imports.service.js';
+import { PhotoJobsService } from './photo-jobs.service.js';
 
 /**
  * What a connected Gleamshelf app calls. Not for people: there is no sign-in here, the app proves itself with the token it got by trading the
@@ -26,7 +35,10 @@ import { ImportsService } from './imports.service.js';
 @Controller('gleamshelf')
 @Access('public')
 export class GleamshelfController {
-  constructor(private readonly imports: ImportsService) {}
+  constructor(
+    private readonly imports: ImportsService,
+    private readonly jobs: PhotoJobsService,
+  ) {}
 
   /** Trades the 8-digit code from the admin for the app's token. The token is shown once. */
   @Post('pair')
@@ -66,5 +78,46 @@ export class GleamshelfController {
   ) {
     if (!file) throw new AppError('photo is required');
     return { success: true, ...(await this.imports.receive(tokenId, dto.draft, file)) };
+  }
+
+  /** The next photo to improve, or no job. Asking also tells the shop this photo computer is awake and what it can do. */
+  @Post('jobs/claim')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async claim(@AppToken() tokenId: string, @Body() dto: ClaimJobDto) {
+    return { success: true, job: await this.jobs.claim(tokenId, dto.features) };
+  }
+
+  /** The improved photo of a job the app holds. */
+  @Post('jobs/:id/result')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 6 * 1024 * 1024 } }))
+  async result(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Upload | undefined,
+    @Body() dto: JobResultDto,
+  ) {
+    if (!file) throw new AppError('photo is required');
+    await this.jobs.submit(tokenId, id, dto.details, file);
+    return { success: true };
+  }
+
+  /** The app could not do this photo. */
+  @Post('jobs/:id/fail')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async fail(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: JobFailDto,
+  ) {
+    await this.jobs.fail(tokenId, id, dto.error ?? '');
+    return { success: true };
   }
 }

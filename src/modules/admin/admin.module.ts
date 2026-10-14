@@ -11,6 +11,8 @@ import { AdminImportsController } from './imports/admin-imports.controller.js';
 import { GleamshelfController } from './imports/gleamshelf.controller.js';
 import { GleamshelfTokenGuard } from './imports/gleamshelf-token.guard.js';
 import { ImportsService } from './imports/imports.service.js';
+import { AdminPhotoJobsController } from './imports/admin-photo-jobs.controller.js';
+import { PhotoJobsService } from './imports/photo-jobs.service.js';
 import { AdminCategoriesController } from './categories/admin-categories.controller.js';
 import { AdminCategoriesService } from './categories/admin-categories.service.js';
 import { AdminDashboardController } from './dashboard/admin-dashboard.controller.js';
@@ -59,11 +61,13 @@ import { AdminSquareService } from './square/admin-square.service.js';
     AdminSquareController,
     AdminSeriesController,
     AdminImportsController,
+    AdminPhotoJobsController,
     GleamshelfController,
   ],
   providers: [
     AdminLog,
     ImportsService,
+    PhotoJobsService,
     GleamshelfTokenGuard,
     SeriesService,
     CatalogSearchService,
