@@ -34,8 +34,23 @@ the add fails. The form keeps the product off the website by default.
 Tables: `import_pairings`, `import_tokens`, `product_imports` (migration `20261013120000_gleamshelf_imports.sql`). Photos of drafts are kept in the image
 storage under `imports/` and removed when the draft is added or rejected.
 
+## Better photos for many products at once (the photo queue)
+
+Gleamshelf is also a photo computer: a gaming PC left on overnight that improves the photos of products already in the shop.
+
+1. **Send.** In Admin, Products, tick products and press **Improve photos**. Choose the main photo or every photo, whole box or character, and which steps (price stickers off,
+   sharper and bigger, livelier colours; all on). Each Square photo becomes a job (`POST /admin/photo-batches`). Products kept in our own database are left out, and the dialog says so.
+2. **Work.** `npm run worker` on the PC asks the shop for a job (`POST /gleamshelf/jobs/claim`), downloads the original, runs the whole chain at the best settings and sends the result
+   back (`/gleamshelf/jobs/:id/result`). It only ever asks, so it needs no open port and works from behind a home router. A job is leased for 30 minutes and goes back in the queue if the
+   worker vanishes (failed after three tries); a photo the worker cannot do is reported (`/fail`) and the next one is taken.
+3. **Check.** Admin, **Photos**: whether the photo computer is on, a progress bar per batch, and each new photo beside the old one. **Use this photo** puts it in the old one's place through the
+   existing photo editing (the original is hidden, never deleted); **Don't use** discards it; **Try again** queues it again; **Use all** applies every finished photo of a batch.
+
+Tables: `photo_batches`, `photo_jobs` (migration `20261013130000_photo_jobs.sql`). A photo is in the queue once (a partial unique index). Nothing is applied automatically.
+
 ## Not done yet
 
-- A badge in the sidebar with the number of drafts waiting.
+- A badge in the sidebar with the number of drafts and of new photos waiting to be checked.
+- Photo jobs that also write a new title and description (needs the vision model on the photo computer, which today runs on a Mac only).
 - Pushing straight from the Gleamshelf editor (today it is the `push` command).
 - Other shops: the draft is shop-neutral; a connector for Shopify or WooCommerce is a second file next to `connectors/spinhobby.ts` in Gleamshelf.
