@@ -122,6 +122,92 @@ describe('connecting a Gleamshelf app', () => {
   });
 });
 
+describe('market prices on a draft', () => {
+  const market = {
+    low: 38.38,
+    median: 39.69,
+    high: 41,
+    count: 2,
+    canadian: 1,
+    rate: 1.4,
+    rateIsEstimate: false,
+    note: 'Only 2 matching listings found.',
+    listings: [
+      {
+        title: 'Relax Time Prize Figure',
+        url: 'https://otakuowlet.com/p/1',
+        site: 'otakuowlet.com',
+        price: 41,
+        currency: 'CAD',
+        cad: 41,
+        condition: 'new',
+        canadian: true,
+      },
+      {
+        title: 'Relax Time',
+        url: 'https://otakumode.com/p/2',
+        site: 'otakumode.com',
+        price: 26.99,
+        currency: 'USD',
+        cad: 37.79,
+        condition: null,
+        canadian: false,
+      },
+      {
+        title: 'not https',
+        url: 'http://insecure.example/x',
+        site: 'x',
+        price: 5,
+        currency: 'USD',
+        cad: 7,
+        condition: null,
+        canadian: false,
+      },
+      {
+        title: 'no price',
+        url: 'https://nope.example/x',
+        site: 'x',
+        price: 0,
+        currency: 'USD',
+        cad: 0,
+        condition: null,
+        canadian: false,
+      },
+    ],
+  };
+  const stored = async (token: string, key: string, extra: Record<string, unknown>) => {
+    await send(token, draft({ sourceKey: key, ...extra })).expect(200);
+    const list = (await http.get('/admin/imports').set({ Authorization: staff.auth }).expect(200))
+      .body.imports as { details: { market: unknown }; title: string }[];
+    return list.find((d) => d.title === 'Yukihana Lamy Figure (hololive)') ?? list[0];
+  };
+
+  it('keeps the listings with a price and an https link, and drops the rest', async () => {
+    const { token } = await connectedApp();
+    const d = (await stored(token, 'market-key-0001', { market })).details.market as {
+      listings: { url: string }[];
+      median: number;
+      count: number;
+    };
+    expect(d.median).toBe(39.69);
+    expect(d.count).toBe(2);
+    expect(d.listings.map((l) => l.url)).toEqual([
+      'https://otakuowlet.com/p/1',
+      'https://otakumode.com/p/2',
+    ]);
+  });
+
+  it('keeps no market when it is missing or unreadable', async () => {
+    const { token } = await connectedApp();
+    expect((await stored(token, 'market-key-0002', {})).details.market).toBeNull();
+    expect((await stored(token, 'market-key-0003', { market: 'cheap' })).details.market).toBeNull();
+    expect(
+      (await stored(token, 'market-key-0004', { market: { ...market, listings: [] } })).details
+        .market,
+    ).toBeNull();
+  });
+});
+
 describe('drafts', () => {
   it('stores a draft with its photo, keeps only what it understands, and shows it to staff', async () => {
     const { token } = await connectedApp();

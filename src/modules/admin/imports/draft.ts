@@ -9,7 +9,32 @@ export interface DraftDetails {
   sources: string[];
   /** The product lookup's outcome: did it find the product online, and what was it read as. */
   lookup: { state: string; read: string | null; detail: string } | null;
+  /** What the product sells for in North America (asking prices, in CAD) read from real listings; never a price to use without a person looking. */
+  market: MarketPrice | null;
   generator: string | null;
+}
+
+export interface MarketListing {
+  title: string;
+  url: string;
+  site: string;
+  price: number;
+  currency: 'CAD' | 'USD';
+  cad: number;
+  condition: 'new' | 'used' | null;
+  canadian: boolean;
+}
+
+export interface MarketPrice {
+  low: number;
+  median: number;
+  high: number;
+  count: number;
+  canadian: number;
+  rate: number;
+  rateIsEstimate: boolean;
+  note: string | null;
+  listings: MarketListing[];
 }
 
 export interface DraftInput {
@@ -50,6 +75,54 @@ const list = (value: unknown, field: string, count: number, max: number): string
     .filter((x): x is string => !!x);
 };
 
+const money = (value: unknown): number | null => {
+  const n = Number(value);
+  return Number.isFinite(n) && n > 0 && n < 1_000_000 ? Math.round(n * 100) / 100 : null;
+};
+
+/** The market prices as sent, cut to known fields and sizes: only https listing links are kept, and nothing is kept without a price in CAD. */
+function parseMarket(raw: unknown): MarketPrice | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const m = raw as Record<string, unknown>;
+  const listings: MarketListing[] = [];
+  for (const l of Array.isArray(m.listings) ? m.listings.slice(0, 12) : []) {
+    if (!l || typeof l !== 'object') continue;
+    const o = l as Record<string, unknown>;
+    const url = text(o.url, 'listing link', 500);
+    const price = money(o.price);
+    const cad = money(o.cad);
+    if (!url || !/^https:\/\//.test(url) || !price || !cad) continue;
+    listings.push({
+      title: text(o.title, 'listing title', 160) ?? '',
+      url,
+      site: text(o.site, 'listing site', 80) ?? '',
+      price,
+      currency: o.currency === 'USD' ? 'USD' : 'CAD',
+      cad,
+      condition: o.condition === 'new' || o.condition === 'used' ? o.condition : null,
+      canadian: o.canadian === true,
+    });
+  }
+  const low = money(m.low);
+  const median = money(m.median);
+  const high = money(m.high);
+  if (!low || !median || !high || !listings.length) return null;
+  const count = Number(m.count);
+  const canadian = Number(m.canadian);
+  const rate = Number(m.rate);
+  return {
+    low,
+    median,
+    high,
+    count: Number.isInteger(count) && count > 0 ? Math.min(count, 1000) : listings.length,
+    canadian: Number.isInteger(canadian) && canadian >= 0 ? Math.min(canadian, 1000) : 0,
+    rate: Number.isFinite(rate) && rate > 0 && rate < 10 ? Math.round(rate * 10000) / 10000 : 0,
+    rateIsEstimate: m.rateIsEstimate === true,
+    note: text(m.note, 'market note', 300),
+    listings,
+  };
+}
+
 /** Reads and cleans a draft the sender made. Anything it sent beyond these fields is dropped. */
 export function parseDraft(raw: unknown): DraftInput {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw))
@@ -79,6 +152,7 @@ export function parseDraft(raw: unknown): DraftInput {
             detail: text(lookup.detail, 'lookup detail', 400) ?? '',
           }
         : null,
+      market: parseMarket(d.market),
       generator: text(d.generator, 'generator', 60),
     },
   };
