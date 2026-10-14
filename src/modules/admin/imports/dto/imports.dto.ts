@@ -11,20 +11,37 @@ export class PairDto {
   label: string | null = null;
 }
 
+/** JSON sent as text next to a photo file (a rule runs twice, clean then check: the second time the text is already parsed). */
+const jsonText = (what: string, max: number) => (value: unknown) => {
+  if (value && typeof value === 'object') return value;
+  if (typeof value !== 'string' || !value.trim() || value.length > max)
+    throw new AppError(`The ${what} is missing or too long.`);
+  try {
+    return JSON.parse(value);
+  } catch {
+    throw new AppError(`The ${what} is not valid JSON.`);
+  }
+};
+
 /** A draft listing and its photo, sent by a connected app: the draft is JSON in a text field next to the photo file. */
 export class ReceiveDraftDto {
-  @Rule((value) => {
-    // a rule runs twice (clean, then check): the second time the text is already the parsed draft
-    if (value && typeof value === 'object') return value;
-    if (typeof value !== 'string' || !value.trim() || value.length > 40_000)
-      throw new AppError('The draft is missing or too long.');
-    try {
-      return JSON.parse(value);
-    } catch {
-      throw new AppError('The draft is not valid JSON.');
-    }
-  })
+  @Rule(jsonText('draft', 40_000))
   draft!: unknown;
+}
+
+/** The finished listing of an uploaded photo: the draft and what the app says about the work, next to the photo file. */
+export class ListingResultDto {
+  @Rule(jsonText('draft', 40_000))
+  draft!: unknown;
+
+  @Rule((v) => (v == null || v === '' ? {} : jsonText('details', 20_000)(v)))
+  details: unknown = {};
+}
+
+/** Which steps to do to uploaded photos (see photo-job-options.ts), as JSON text next to the photo files; anything left out is on. */
+export class UploadListingsDto {
+  @Rule((v) => (v == null || v === '' ? null : jsonText('options', 2_000)(v)))
+  options: unknown = null;
 }
 
 export class RejectImportDto {

@@ -19,7 +19,11 @@ export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 /** Writes admin-uploaded photos to the public Supabase Storage bucket (service role only). */
 @Injectable()
 export class StorageService {
-  async uploadImage(bytes: Buffer, contentType: string, folder: 'products' | 'slides' | 'imports') {
+  async uploadImage(
+    bytes: Buffer,
+    contentType: string,
+    folder: 'products' | 'slides' | 'imports' | 'uploads',
+  ) {
     const ext = IMAGE_TYPES[contentType];
     if (!ext) throw new AppError('Upload a WebP, JPEG or PNG image.');
     if (!bytes.length || bytes.length > MAX_IMAGE_BYTES)

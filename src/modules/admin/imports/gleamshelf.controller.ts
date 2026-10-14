@@ -20,11 +20,13 @@ import {
   ClaimJobDto,
   JobFailDto,
   JobResultDto,
+  ListingResultDto,
   PairDto,
   ReceiveDraftDto,
 } from './dto/imports.dto.js';
 import { AppToken, GleamshelfTokenGuard } from './gleamshelf-token.guard.js';
 import { ImportsService } from './imports.service.js';
+import { ListingJobsService } from './listing-jobs.service.js';
 import { PhotoJobsService } from './photo-jobs.service.js';
 
 /**
@@ -38,6 +40,7 @@ export class GleamshelfController {
   constructor(
     private readonly imports: ImportsService,
     private readonly jobs: PhotoJobsService,
+    private readonly listings: ListingJobsService,
   ) {}
 
   /** Trades the 8-digit code from the admin for the app's token. The token is shown once. */
@@ -118,6 +121,49 @@ export class GleamshelfController {
     @Body() dto: JobFailDto,
   ) {
     await this.jobs.fail(tokenId, id, dto.error ?? '');
+    return { success: true };
+  }
+
+  /** The next uploaded photo to make a listing from, or no job. The app says what it can do ("listing" means it can read a box and write a draft). */
+  @Post('listing-jobs/claim')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async claimListing(@AppToken() tokenId: string, @Body() dto: ClaimJobDto) {
+    return { success: true, job: await this.listings.claim(tokenId, dto.features) };
+  }
+
+  /** The draft and finished photo of a listing job the app holds: the draft goes into the Imports inbox. */
+  @Post('listing-jobs/:id/result')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 6 * 1024 * 1024 } }))
+  async listingResult(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Upload | undefined,
+    @Body() dto: ListingResultDto,
+  ) {
+    if (!file) throw new AppError('photo is required');
+    return {
+      success: true,
+      ...(await this.listings.submit(tokenId, id, dto.draft, dto.details, file)),
+    };
+  }
+
+  /** The app could not make a listing from this photo. */
+  @Post('listing-jobs/:id/fail')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async failListing(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: JobFailDto,
+  ) {
+    await this.listings.fail(tokenId, id, dto.error ?? '');
     return { success: true };
   }
 }
