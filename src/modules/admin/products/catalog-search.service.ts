@@ -16,6 +16,9 @@ import {
 } from './catalog-search.sql.js';
 import type { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
 
+/** The most products "select all" picks at once. */
+export const MAX_IDS = 500;
+
 /** Admin catalog search: every item Square (or staff) put in the catalog, with search, filters, sorting and paging. */
 @Injectable()
 export class CatalogSearchService {
@@ -24,6 +27,43 @@ export class CatalogSearchService {
   async search(query: CatalogSearchQuery) {
     const limit = Math.min(Math.max(Number(query.limit ?? 50) || 50, 1), 100);
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
+    const { filter, params, order } = this.filters(query);
+
+    const [rows, count] = await Promise.all([
+      this.db.many<ItemRow>(
+        `${ITEMS} select * from items ${filter} order by ${order} limit ${limit} offset ${offset}`,
+        params,
+      ),
+      this.db.one<{ total: number }>(
+        `${ITEMS} select count(*)::int as total from items ${filter}`,
+        params,
+      ),
+    ]);
+    const total = count?.total ?? 0;
+    const next = offset + rows.length;
+    return {
+      items: await this.decorate(rows),
+      total,
+      frontPageSlots: FRONT_PAGE_SLOTS,
+      ...(next < total ? { cursor: String(next) } : {}),
+    };
+  }
+
+  /** The ids of every product matching the filters (up to `MAX_IDS`), in list order: "select all" across pages. */
+  async ids(query: CatalogSearchQuery) {
+    const { filter, params, order } = this.filters(query);
+    const rows = await this.db.many<{ id: string }>(
+      `${ITEMS} select id from items ${filter} order by ${order} limit ${MAX_IDS + 1}`,
+      params,
+    );
+    return {
+      ids: rows.slice(0, MAX_IDS).map((r) => r.id),
+      truncated: rows.length > MAX_IDS,
+    };
+  }
+
+  /** The WHERE clause, its parameters and the ORDER BY for the search, filters and sort in `query`. */
+  private filters(query: CatalogSearchQuery) {
     // A product that was moved into Square keeps its old row (past orders, a safe retry) but is not listed twice.
     const where: string[] = ['replaced_by is null'];
     const params: unknown[] = [];
@@ -74,6 +114,17 @@ export class CatalogSearchService {
     if (flag(query.featured)) where.push('is_featured');
     if (flag(query.alerts)) where.push('alerts_waiting > 0');
     if (flag(query.noPhoto)) where.push('not has_photo');
+    // Added, or changed (in Square, or here for a hand-entered product), in the last N hours.
+    if (query.changedWithin != null && query.changedWithin !== '') {
+      const hours = Number(query.changedWithin);
+      if (!Number.isInteger(hours) || hours < 1 || hours > 24 * 90)
+        throw new AppError('changedWithin must be a number of hours (1 to 2160).');
+      add(
+        (n) =>
+          `greatest(created_at, coalesce(square_updated_at, updated_at)) >= now() - make_interval(hours => ${n}::int)`,
+        hours,
+      );
+    }
     for (const [key, op] of [
       ['min', '>='],
       ['max', '<='],
@@ -93,25 +144,7 @@ export class CatalogSearchService {
       (sortKey === 'name' || sortKey === 'category' || sortKey === 'front' ? 'asc' : 'desc');
     if (dir !== 'asc' && dir !== 'desc') throw new AppError('dir must be asc or desc.');
     const filter = where.length ? `where ${where.join(' and ')}` : '';
-
-    const [rows, count] = await Promise.all([
-      this.db.many<ItemRow>(
-        `${ITEMS} select * from items ${filter} order by ${SORTS[sortKey]} ${dir} nulls last, lower(name), id limit ${limit} offset ${offset}`,
-        params,
-      ),
-      this.db.one<{ total: number }>(
-        `${ITEMS} select count(*)::int as total from items ${filter}`,
-        params,
-      ),
-    ]);
-    const total = count?.total ?? 0;
-    const next = offset + rows.length;
-    return {
-      items: await this.decorate(rows),
-      total,
-      frontPageSlots: FRONT_PAGE_SLOTS,
-      ...(next < total ? { cursor: String(next) } : {}),
-    };
+    return { filter, params, order: `${SORTS[sortKey]} ${dir} nulls last, lower(name), id` };
   }
 
   /** Totals for the filter chips, over the whole catalog (not the current filters). */

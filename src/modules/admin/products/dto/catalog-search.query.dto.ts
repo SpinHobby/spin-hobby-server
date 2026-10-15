@@ -37,6 +37,10 @@ export class CatalogSearchQuery {
   @IsOptional()
   noPhoto?: string | null;
 
+  /** Only products added or changed in the last this-many hours (e.g. `24`). */
+  @IsOptional()
+  changedWithin?: string | null;
+
   /** Lowest price in dollars. */
   @IsOptional()
   min?: string | null;

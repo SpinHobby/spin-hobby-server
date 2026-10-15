@@ -21,12 +21,15 @@ import { AdminProductsService } from './admin-products.service.js';
 import { ProductTransferService } from './product-transfer.service.js';
 import { QuickAddService } from './quick-add.service.js';
 import { SquarePhotosService } from './square-photos.service.js';
+import { CatalogSearchService } from './catalog-search.service.js';
+import { LabelsService } from './labels.service.js';
 import { AddPhotoDto, PhotoOrderDto } from './dto/photos.dto.js';
 import { QuickAddDto } from './dto/quick-add.dto.js';
 import { AddStockDto } from './dto/add-stock.dto.js';
 import { AdminProductsQuery } from './dto/admin-products.query.dto.js';
 import { BulkCategoryDto } from './dto/bulk-category.dto.js';
 import { FrontPageOrderDto } from './dto/front-page-order.dto.js';
+import { LabelsDto } from './dto/labels.dto.js';
 import { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
 import { SetVisibleDto } from './dto/set-visible.dto.js';
 import { UpdateProductDto } from './dto/update-product.dto.js';
@@ -41,6 +44,8 @@ export class AdminProductsController {
     private readonly transfer: ProductTransferService,
     private readonly quickAdd: QuickAddService,
     private readonly photos: SquarePhotosService,
+    private readonly search: CatalogSearchService,
+    private readonly labels: LabelsService,
   ) {}
 
   /**
@@ -50,6 +55,22 @@ export class AdminProductsController {
   @Get('catalog')
   async catalog(@Query() query: CatalogSearchQuery) {
     return { success: true, ...(await this.products.searchCatalog(query)) };
+  }
+
+  /** The ids of every product matching the same filters as `GET catalog` (up to 500): "select all" across pages. */
+  @Get('catalog/ids')
+  async catalogIds(@Query() query: CatalogSearchQuery) {
+    return { success: true, ...(await this.search.ids(query)) };
+  }
+
+  /**
+   * What to print on each product's sticker: name, series and the code the cashier types or scans in Square's POS
+   * (the SKU). A product without a SKU is given one, saved in Square first.
+   */
+  @Post('products/labels')
+  @HttpCode(200)
+  async makeLabels(@CurrentUser() admin: AppUser, @Body() dto: LabelsDto) {
+    return { success: true, ...(await this.labels.prepare(admin.id, dto.ids)) };
   }
 
   /** Storefront products plus the admin-only fields the edit drawer needs. */

@@ -257,6 +257,39 @@ export class SquareCatalogClient {
     );
   }
 
+  /**
+   * Gives variations a SKU (the code Square's POS finds an item by, typed or scanned). Each variation is read from
+   * Square and saved back with only its SKU changed, all in one write. Returns the variation ids that were saved.
+   */
+  async setVariationSkus(skus: Record<string, string>): Promise<string[]> {
+    const ids = Object.keys(skus);
+    if (!ids.length) return [];
+    const response = await fetch(`${squareBaseUrl()}/v2/catalog/batch-retrieve`, {
+      method: 'POST',
+      headers: this.restHeaders(),
+      body: JSON.stringify({ object_ids: ids }),
+    });
+    const data: ExternalJson = await response.json();
+    if (!response.ok)
+      throw new Error(data?.errors?.[0]?.detail || 'Failed to read the items from Square');
+    const objects = ((data.objects ?? []) as ExternalJson[])
+      .filter((o) => o.type === 'ITEM_VARIATION' && !o.is_deleted && skus[o.id])
+      .map((o): ExternalJson => {
+        const { updated_at: _updatedAt, created_at: _createdAt, ...writable } = o; // read-only in Square
+        return { ...writable, item_variation_data: { ...o.item_variation_data, sku: skus[o.id] } };
+      });
+    if (!objects.length) return [];
+    const write = await fetch(`${squareBaseUrl()}/v2/catalog/batch-upsert`, {
+      method: 'POST',
+      headers: this.restHeaders(),
+      body: JSON.stringify({ idempotency_key: randomUUID(), batches: [{ objects }] }),
+    });
+    const saved: ExternalJson = await write.json();
+    if (!write.ok)
+      throw new Error(saved?.errors?.[0]?.detail || 'Failed to save the SKUs in Square');
+    return objects.map((o) => o.id as string);
+  }
+
   /** Permanently removes pictures from Square's catalog. They must already be detached from the item. */
   async deleteImages(imageIds: string[]): Promise<void> {
     if (!imageIds.length) return;
