@@ -43,6 +43,9 @@ interface JobRow {
   details: Partial<PhotoJobDetails>;
   error: string | null;
   created_at: string;
+  progress: number | null;
+  step: string | null;
+  started_at: string | null;
   decided_at: string | null;
 }
 
@@ -58,6 +61,9 @@ const present = (r: JobRow) => ({
   notes: r.details.notes ?? [],
   seconds: r.details.seconds ?? null,
   error: r.error,
+  progress: r.status === 'running' ? (r.progress ?? 0) : null,
+  step: r.status === 'running' ? r.step : null,
+  startedAt: r.status === 'running' ? r.started_at : null,
   decidedAt: r.decided_at,
 });
 
@@ -328,7 +334,7 @@ export class PhotoJobsService {
     return this.db.transaction(async (tx) => {
       // a worker that took a job and vanished: the job goes back, up to three times
       await this.db.exec(
-        "update public.photo_jobs set status = 'queued', lease_until = null, worker_id = null where status = 'running' and lease_until < now() and attempts < $1",
+        "update public.photo_jobs set status = 'queued', lease_until = null, worker_id = null, progress = null, step = null, started_at = null where status = 'running' and lease_until < now() and attempts < $1",
         [MAX_ATTEMPTS],
         tx,
       );
@@ -345,7 +351,7 @@ export class PhotoJobsService {
       );
       if (!next) return null;
       await this.db.exec(
-        `update public.photo_jobs set status = 'running', attempts = attempts + 1, worker_id = $2, lease_until = now() + interval '${LEASE_MINUTES} minutes' where id = $1`,
+        `update public.photo_jobs set status = 'running', attempts = attempts + 1, worker_id = $2, progress = 0, step = null, started_at = now(), lease_until = now() + interval '${LEASE_MINUTES} minutes' where id = $1`,
         [next.id, tokenId],
         tx,
       );
@@ -356,6 +362,17 @@ export class PhotoJobsService {
         options: parsePhotoOptions(next.options),
       };
     });
+  }
+
+  /** How far the worker has got with a job it holds (a percentage and the step it is on). It also keeps the job's lease alive while the work goes on. */
+  async progress(tokenId: string, jobId: string, percent: number, step: string | null) {
+    const p = Math.max(0, Math.min(100, Math.round(Number.isFinite(percent) ? percent : 0)));
+    const job = await this.db.one<{ id: string }>(
+      `update public.photo_jobs set progress = greatest(coalesce(progress, 0), $2), step = $3, lease_until = now() + interval '${LEASE_MINUTES} minutes'
+        where id = $1 and status = 'running' and worker_id = $4 returning id`,
+      [jobId, p, step ? step.replace(/\s+/g, ' ').trim().slice(0, 80) : null, tokenId],
+    );
+    if (!job) throw new AppError('This job is not yours any more.', 409);
   }
 
   /** The improved photo of a job this worker holds. */
@@ -393,7 +410,7 @@ export class PhotoJobsService {
     const text =
       message.replace(/\s+/g, ' ').trim().slice(0, 500) || 'The photo could not be improved.';
     const job = await this.db.one<{ id: string }>(
-      `update public.photo_jobs set status = case when attempts >= $4 then 'failed' else 'queued' end, error = $2, lease_until = null, worker_id = null
+      `update public.photo_jobs set status = case when attempts >= $4 then 'failed' else 'queued' end, error = $2, lease_until = null, worker_id = null, progress = null, step = null, started_at = null
         where id = $1 and status = 'running' and worker_id = $3 returning id`,
       [jobId, text, tokenId, MAX_ATTEMPTS],
     );

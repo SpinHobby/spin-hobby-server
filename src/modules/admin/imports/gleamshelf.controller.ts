@@ -19,6 +19,7 @@ import type { Upload } from '../../cashier/cashier.service.js';
 import {
   ClaimJobDto,
   JobFailDto,
+  JobProgressDto,
   JobResultDto,
   ListingResultDto,
   PairDto,
@@ -164,6 +165,34 @@ export class GleamshelfController {
     @Body() dto: JobFailDto,
   ) {
     await this.listings.fail(tokenId, id, dto.error ?? '');
+    return { success: true };
+  }
+
+  /** How far the app has got with a photo it is improving: shown in the admin as a progress bar. */
+  @Post('jobs/:id/progress')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async photoProgress(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: JobProgressDto,
+  ) {
+    await this.jobs.progress(tokenId, id, dto.percent, dto.step);
+    return { success: true };
+  }
+
+  /** How far the app has got with an uploaded photo it is making a listing from: shown in the admin as a progress bar. */
+  @Post('listing-jobs/:id/progress')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async listingProgress(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: JobProgressDto,
+  ) {
+    await this.listings.progress(tokenId, id, dto.percent, dto.step);
     return { success: true };
   }
 }

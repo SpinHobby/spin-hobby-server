@@ -120,3 +120,17 @@ export class AddImportDto extends QuickAddDto {
   @Rule((v) => (v === 'official' || v === 'both' ? v : 'own'))
   photo: 'own' | 'official' | 'both' = 'own';
 }
+
+/** How far a photo computer has got with a job: a percentage and, optionally, the step it is on. */
+export class JobProgressDto {
+  @Rule((v) => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0 || n > 100)
+      throw new AppError('percent must be a number from 0 to 100.');
+    return n;
+  })
+  percent!: number;
+
+  @OptionalText(80)
+  step: string | null = null;
+}

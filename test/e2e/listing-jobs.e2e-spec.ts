@@ -53,6 +53,8 @@ async function worker(label = 'Gaming PC') {
         .attach('photo', PHOTO, { filename: 'p.jpg', contentType: 'image/jpeg' }),
     fail: (id: string, error = 'the model crashed') =>
       http.post(`/gleamshelf/listing-jobs/${id}/fail`).set(as).send({ error }),
+    progress: (id: string, percent: number, step?: string) =>
+      http.post(`/gleamshelf/listing-jobs/${id}/progress`).set(as).send({ percent, step }),
   };
 }
 
@@ -71,6 +73,9 @@ const list = async () =>
       draftId: string | null;
       draftTitle: string | null;
       error: string | null;
+      progress: number | null;
+      step: string | null;
+      startedAt: string | null;
     }[];
     counts: Record<string, number>;
     workers: { label: string; online: boolean; canCreateListings: boolean }[];
@@ -166,6 +171,29 @@ describe('a photo computer', () => {
     await http.post(`/admin/listing-jobs/${failed.id}/retry`).set(asStaff).expect(200);
     expect((await list()).jobs.find((j) => j.id === failed.id)!.status).toBe('queued');
     await http.post(`/admin/listing-jobs/${failed.id}/retry`).set(asStaff).expect(409);
+  });
+});
+
+describe('progress', () => {
+  it('shows how far the photo computer has got, never going backwards, and only from the computer that holds the job', async () => {
+    const w = await worker('Progress PC');
+    const other = await worker('Other PC');
+    await upload(['progress.jpg']).expect(200);
+    let job = await w.claim();
+    while (job && job.fileName !== 'progress.jpg') job = await w.claim();
+    let row = (await list()).jobs.find((j) => j.id === job!.id)!;
+    expect(row).toMatchObject({ status: 'running', progress: 0, step: null });
+    expect(row.startedAt).toBeTruthy();
+    await w.progress(job!.id, 40, 'reading the box').expect(200);
+    await w.progress(job!.id, 20, 'a late report').expect(200);
+    row = (await list()).jobs.find((j) => j.id === job!.id)!;
+    expect(row).toMatchObject({ progress: 40, step: 'a late report' });
+    await other.progress(job!.id, 90).expect(409);
+    await w.progress(job!.id, 140).expect(400);
+    // going back to the queue clears it
+    await w.fail(job!.id, 'stopped').expect(200);
+    row = (await list()).jobs.find((j) => j.id === job!.id)!;
+    expect(row).toMatchObject({ status: 'queued', progress: null, step: null, startedAt: null });
   });
 });
 
