@@ -10,6 +10,7 @@ import type { QuickAddDto } from '../products/dto/quick-add.dto.js';
 import { QuickAddService } from '../products/quick-add.service.js';
 import { SeriesService } from '../series/series.service.js';
 import { isOfficialUrl, parseDraft, type DraftInput, type OfficialPhoto } from './draft.js';
+import { likelySameProducts, type ProductMatch, type ShopProduct } from './duplicates.js';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 export const TOKEN_PREFIX = 'gst_';
@@ -236,13 +237,90 @@ export class ImportsService {
     const counts = await this.db.many<{ status: ImportStatus; n: number }>(
       'select status, count(*)::int as n from public.product_imports group by status',
     );
+    // a draft of a product the shop already has: shown with the listing(s) it most likely is, so the photo can become more stock instead
+    const products = status === 'draft' && rows.length ? await this.shopProducts() : [];
     return {
-      imports: rows.map(present),
+      imports: rows.map((r) => ({
+        ...present(r),
+        matches: status === 'draft' ? this.matchesFor(r, products) : [],
+      })),
       categories: [...PRODUCT_CATEGORIES],
       counts: Object.fromEntries(
         IMPORT_STATUSES.map((s) => [s, counts.find((c) => c.status === s)?.n ?? 0]),
       ),
     };
+  }
+
+  /** Every product the shop has (hidden ones too: a hidden listing is still the same product), with what a person needs to tell them apart. */
+  async shopProducts(): Promise<ShopProduct[]> {
+    const rows = await this.db.many<{
+      id: string;
+      name: string;
+      series: string | null;
+      character: string | null;
+      stock_count: number | null;
+      image_url: string | null;
+      hidden: boolean;
+    }>(
+      `select p.square_item_id as id, p.name, m.series, m.character, i.quantity as stock_count,
+              (select pi.image_url from public.product_images pi where pi.square_item_id = p.square_item_id order by pi.sort_order limit 1) as image_url,
+              (not p.is_visible or coalesce(m.availability, 'auto') = 'hidden') as hidden
+         from public.catalog_products p
+         left join public.product_metadata m on m.square_item_id = p.square_item_id
+         left join public.catalog_variations v on v.square_variation_id = p.default_variation_id
+         left join public.inventory_snapshots i on i.square_variation_id = v.square_variation_id
+        where p.is_active`,
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      series: r.series,
+      character: r.character,
+      stockCount: r.stock_count,
+      imageUrl: r.image_url,
+      hidden: r.hidden,
+    }));
+  }
+
+  matchesFor(
+    row: Pick<ImportRow, 'title' | 'series' | 'details'>,
+    products: ShopProduct[],
+  ): ProductMatch[] {
+    const lookup = (row.details as { lookup?: { read?: string | null } | null }).lookup;
+    return likelySameProducts(
+      { title: row.title, series: row.series, read: lookup?.read ?? null },
+      products,
+    );
+  }
+
+  /**
+   * The draft is a product the shop already has: its units are added to that product's stock (the same add-stock as the Products screen) and the
+   * draft is closed as handled, pointing at that product. No second listing is made, and the draft's photo is not used.
+   */
+  async restock(adminId: string, id: string, productId: string, quantity: number) {
+    const row = await this.db.one<ImportRow>('select * from public.product_imports where id = $1', [
+      id,
+    ]);
+    if (!row) throw notFound('Draft');
+    if (row.status !== 'draft') throw new AppError(`This draft was already ${row.status}.`, 409);
+    const claimed = await this.db.one<{ id: string }>(
+      "update public.product_imports set status = 'added', decided_by = $2, decided_at = now(), square_item_id = $3 where id = $1 and status = 'draft' returning id",
+      [id, adminId, productId],
+    );
+    if (!claimed) throw new AppError('Someone else just handled this draft.', 409);
+    try {
+      const stockCount = await this.quickAdd.addStock(adminId, productId, quantity);
+      if (row.image_url) await this.storage.deleteImages([row.image_url]).catch(() => undefined);
+      await this.db.exec('update public.product_imports set image_url = null where id = $1', [id]);
+      await this.log.write(adminId, 'imports.restocked', id, { productId, quantity, stockCount });
+      return { productId, stockCount };
+    } catch (error) {
+      await this.db.exec(
+        "update public.product_imports set status = 'draft', decided_by = null, decided_at = null, square_item_id = null where id = $1",
+        [id],
+      );
+      throw error;
+    }
   }
 
   async get(id: string) {

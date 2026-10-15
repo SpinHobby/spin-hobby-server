@@ -39,6 +39,8 @@ interface JobRow {
   started_at: string | null;
   draft_title: string | null;
   draft_status: string | null;
+  draft_series: string | null;
+  draft_details: Record<string, unknown> | null;
 }
 
 const present = (r: JobRow) => ({
@@ -116,15 +118,29 @@ export class ListingJobsService {
 
   async list() {
     const rows = await this.db.many<JobRow>(
-      `select j.*, i.title as draft_title, i.status as draft_status
+      `select j.*, i.title as draft_title, i.status as draft_status, i.series as draft_series, i.details as draft_details
          from public.listing_jobs j left join public.product_imports i on i.id = j.import_id
         order by j.created_at desc, j.file_name limit 120`,
     );
     const counts = await this.db.many<{ status: ListingJobStatus; n: number }>(
       'select status, count(*)::int as n from public.listing_jobs group by status',
     );
+    // a finished photo whose draft looks like a product the shop already has: flagged here too, so nobody lists it twice
+    const waiting = rows.filter(
+      (r) => r.status === 'done' && r.draft_status === 'draft' && r.draft_title,
+    );
+    const products = waiting.length ? await this.imports.shopProducts() : [];
+    const alreadyInShop = new Map(
+      waiting.map((r) => [
+        r.id,
+        this.imports.matchesFor(
+          { title: r.draft_title!, series: r.draft_series, details: r.draft_details ?? {} },
+          products,
+        )[0]?.name ?? null,
+      ]),
+    );
     return {
-      jobs: rows.map(present),
+      jobs: rows.map((r) => ({ ...present(r), alreadyInShop: alreadyInShop.get(r.id) ?? null })),
       counts: Object.fromEntries(
         STATUSES.map((s) => [s, counts.find((c) => c.status === s)?.n ?? 0]),
       ),

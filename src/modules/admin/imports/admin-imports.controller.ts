@@ -12,7 +12,12 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
-import { AddImportDto, ImportsQuery, RejectImportDto } from './dto/imports.dto.js';
+import {
+  AddImportDto,
+  ImportsQuery,
+  RejectImportDto,
+  RestockImportDto,
+} from './dto/imports.dto.js';
 import { ImportsService } from './imports.service.js';
 
 /** Drafts sent by Gleamshelf, waiting for a person: look at each, type the price and stock, add it or reject it. */
@@ -63,6 +68,20 @@ export class AdminImportsController {
     @Body() dto: AddImportDto,
   ) {
     return { success: true, product: await this.imports.add(admin.id, id, dto, dto.photo) };
+  }
+
+  /** The draft is a product the shop already has: adds its units to that product's stock instead of making a second listing. */
+  @Post(':id/restock')
+  @HttpCode(200)
+  async restock(
+    @CurrentUser() admin: AppUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RestockImportDto,
+  ) {
+    return {
+      success: true,
+      ...(await this.imports.restock(admin.id, id, dto.productId, dto.quantity)),
+    };
   }
 
   @Post(':id/reject')

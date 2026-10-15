@@ -134,3 +134,17 @@ export class JobProgressDto {
   @OptionalText(80)
   step: string | null = null;
 }
+
+/** A draft that is a product the shop already has: how many units to add to that product's stock. */
+export class RestockImportDto {
+  @Text('productId', 64)
+  productId!: string;
+
+  @Rule((v) => {
+    const n = Number(v);
+    if (!Number.isInteger(n) || n < 1 || n > 10_000)
+      throw new AppError('quantity must be a whole number from 1 to 10,000.');
+    return n;
+  })
+  quantity!: number;
+}

@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { QuickAddService } from '../../src/modules/admin/products/quick-add.service.js';
-import { mockFetch } from '../support/harness.js';
+import { mockFetch, seedProduct } from '../support/harness.js';
 import { startShop } from '../support/shop.js';
 
 const shop = await startShop();
@@ -122,6 +122,101 @@ describe('connecting a Gleamshelf app', () => {
     expect(config.categories).toContain('Bishoujo Figures');
     expect(config.categories.at(-1)).toBe('Other');
     expect(config.series).toContain('hololive');
+  });
+});
+
+describe('a product the shop already has', () => {
+  it('shows the listing the draft most likely is, with its stock, and adds the units to it instead of making a second listing', async () => {
+    await seedProduct(shop.pglite, {
+      id: 'REM_AP',
+      name: 'Rem Animal Parade Figure',
+      category: 'Bishoujo Figures',
+      priceCents: 4500,
+      stock: 2,
+      series: 'Re:Zero',
+    });
+    const { token } = await connectedApp();
+    const id = (
+      await send(
+        token,
+        draft({
+          sourceKey: 'already-there-01',
+          title: 'Rem Animal Parade Figure (Re:Zero)',
+          series: 'Re:Zero',
+        }),
+      ).expect(200)
+    ).body.id as string;
+    const other = (
+      await send(
+        token,
+        draft({
+          sourceKey: 'not-there-0001',
+          title: 'Shirahoshi Figure (One Piece)',
+          series: 'One Piece',
+        }),
+      ).expect(200)
+    ).body.id as string;
+    const inbox = (await http.get('/admin/imports').set({ Authorization: staff.auth }).expect(200))
+      .body.imports as {
+      id: string;
+      matches: { id: string; name: string; stockCount: number | null }[];
+    }[];
+    expect(inbox.find((d) => d.id === id)!.matches[0]).toMatchObject({
+      id: 'REM_AP',
+      name: 'Rem Animal Parade Figure',
+      stockCount: 2,
+    });
+    expect(inbox.find((d) => d.id === other)!.matches).toEqual([]);
+
+    const addStock = vi.spyOn(quickAdd, 'addStock').mockResolvedValue(5);
+    await http
+      .post(`/admin/imports/${id}/restock`)
+      .set({ Authorization: shopper.auth })
+      .send({ productId: 'REM_AP', quantity: 3 })
+      .expect(403);
+    await http
+      .post(`/admin/imports/${id}/restock`)
+      .set({ Authorization: staff.auth })
+      .send({ productId: 'REM_AP', quantity: 0 })
+      .expect(400);
+    const done = await http
+      .post(`/admin/imports/${id}/restock`)
+      .set({ Authorization: staff.auth })
+      .send({ productId: 'REM_AP', quantity: 3 })
+      .expect(200);
+    expect(done.body).toMatchObject({ productId: 'REM_AP', stockCount: 5 });
+    expect(addStock.mock.calls[0].slice(1)).toEqual(['REM_AP', 3]);
+    const after = (await http.get(`/admin/imports/${id}`).set({ Authorization: staff.auth })).body
+      .draft;
+    expect(after).toMatchObject({ status: 'added', productId: 'REM_AP', imageUrl: null });
+    await http
+      .post(`/admin/imports/${id}/restock`)
+      .set({ Authorization: staff.auth })
+      .send({ productId: 'REM_AP', quantity: 3 })
+      .expect(409);
+    addStock.mockRestore();
+  });
+
+  it('leaves the draft a draft when the stock cannot be added', async () => {
+    const { token } = await connectedApp();
+    const id = (
+      await send(
+        token,
+        draft({ sourceKey: 'restock-fails-1', title: 'Rem Animal Parade Figure (Re:Zero)' }),
+      ).expect(200)
+    ).body.id as string;
+    const addStock = vi
+      .spyOn(quickAdd, 'addStock')
+      .mockRejectedValueOnce(new Error('Square is down'));
+    await http
+      .post(`/admin/imports/${id}/restock`)
+      .set({ Authorization: staff.auth })
+      .send({ productId: 'REM_AP', quantity: 1 })
+      .expect(500);
+    const after = (await http.get(`/admin/imports/${id}`).set({ Authorization: staff.auth })).body
+      .draft;
+    expect(after).toMatchObject({ status: 'draft', productId: null });
+    addStock.mockRestore();
   });
 });
 

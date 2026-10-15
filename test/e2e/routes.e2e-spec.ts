@@ -114,6 +114,7 @@ const EXPECTED: string[] = [
   'POST /admin/homepage/slides/reorder [staff]',
   'POST /admin/imports/:id/add [staff]',
   'POST /admin/imports/:id/reject [staff]',
+  'POST /admin/imports/:id/restock [staff]',
   'POST /admin/imports/pairing [owner]',
   'POST /admin/listing-jobs [staff]',
   'POST /admin/listing-jobs/:id/cancel [staff]',
