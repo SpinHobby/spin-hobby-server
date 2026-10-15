@@ -11,8 +11,51 @@ export interface DraftDetails {
   lookup: { state: string; read: string | null; detail: string } | null;
   /** What the product sells for in North America (asking prices, in CAD) read from real listings; never a price to use without a person looking. */
   market: MarketPrice | null;
+  /** The maker's own photo of this exact product, found and confirmed by the app; used only if a person chooses it when adding. */
+  official: OfficialPhoto | null;
   generator: string | null;
 }
+
+export interface OfficialPhoto {
+  imageUrl: string;
+  pageUrl: string;
+  site: string;
+}
+
+/** Makers' and their prize brands' official sites: the only places an official photo is taken from (the server downloads it when it is chosen). */
+export const OFFICIAL_SITES = [
+  '1kuji.com',
+  'bsp-prize.jp',
+  'bandaispirits.co.jp',
+  'p-bandai.jp',
+  'tamashiiweb.com',
+  'goodsmile.com',
+  'goodsmile.info',
+  'goodsmileus.com',
+  'furyu-hobby.com',
+  'charahiroba.com',
+  'segaplaza.jp',
+  'sega-prize.com',
+  'taito.co.jp',
+  'megahouse.co.jp',
+  'kotobukiya.co.jp',
+  'alter-web.jp',
+  'maxfactory.jp',
+];
+
+export const isOfficialUrl = (value: string): boolean => {
+  try {
+    const u = new URL(value);
+    return (
+      u.protocol === 'https:' &&
+      !u.username &&
+      !u.password &&
+      OFFICIAL_SITES.some((s) => u.hostname === s || u.hostname.endsWith(`.${s}`))
+    );
+  } catch {
+    return false;
+  }
+};
 
 export interface MarketListing {
   title: string;
@@ -123,6 +166,15 @@ function parseMarket(raw: unknown): MarketPrice | null {
   };
 }
 
+function parseOfficial(raw: unknown): OfficialPhoto | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const imageUrl = text(o.imageUrl, 'official photo', 500);
+  const pageUrl = text(o.pageUrl, 'official page', 500);
+  if (!imageUrl || !pageUrl || !isOfficialUrl(imageUrl) || !isOfficialUrl(pageUrl)) return null;
+  return { imageUrl, pageUrl, site: new URL(pageUrl).hostname.replace(/^www\./, '') };
+}
+
 /** Reads and cleans a draft the sender made. Anything it sent beyond these fields is dropped. */
 export function parseDraft(raw: unknown): DraftInput {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw))
@@ -153,6 +205,7 @@ export function parseDraft(raw: unknown): DraftInput {
           }
         : null,
       market: parseMarket(d.market),
+      official: parseOfficial(d.official),
       generator: text(d.generator, 'generator', 60),
     },
   };

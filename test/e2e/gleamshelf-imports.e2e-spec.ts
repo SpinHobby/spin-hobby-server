@@ -7,6 +7,9 @@ const shop = await startShop();
 /** Our photo storage (Supabase) stands in; the draft routes talk to nothing else. */
 const storage = mockFetch({
   'https://proj.supabase.co/storage/v1/object/product-images': () => [],
+  // a maker's official photo (the only outside address a draft may name)
+  'https://assets.1kuji.com/up/': () =>
+    new Response(Buffer.from('official-jpeg'), { headers: { 'content-type': 'image/jpeg' } }),
 });
 afterAll(() => {
   storage.restore();
@@ -119,6 +122,87 @@ describe('connecting a Gleamshelf app', () => {
     expect(config.categories).toContain('Bishoujo Figures');
     expect(config.categories.at(-1)).toBe('Other');
     expect(config.series).toContain('hololive');
+  });
+});
+
+describe("the maker's official photo", () => {
+  const official = {
+    imageUrl: 'https://assets.1kuji.com/up/rem-a.jpg',
+    pageUrl: 'https://1kuji.com/products/re-zero14',
+    site: 'ignored',
+  };
+  const body = { name: 'Rem Figure (Re:Zero)', priceCents: 4500, stockCount: 1 };
+  const addDraft = async (key: string, extra: Record<string, unknown>) => {
+    const { token } = await connectedApp();
+    const id = (await send(token, draft({ sourceKey: key, ...extra })).expect(200)).body
+      .id as string;
+    const d = (await http.get(`/admin/imports/${id}`).set({ Authorization: staff.auth })).body
+      .draft as { imageUrl: string; details: { official: unknown } };
+    return { id, d };
+  };
+
+  it("keeps a photo from a maker's site, and drops one from anywhere else", async () => {
+    const kept = await addDraft('official-key-01', { official });
+    expect(kept.d.details.official).toEqual({ ...official, site: '1kuji.com' });
+    const elsewhere = await addDraft('official-key-02', {
+      official: { ...official, imageUrl: 'https://jp.mercari.com/photo.jpg' },
+    });
+    expect(elsewhere.d.details.official).toBeNull();
+    const plain = await addDraft('official-key-03', {
+      official: { ...official, imageUrl: 'http://assets.1kuji.com/up/a.jpg' },
+    });
+    expect(plain.d.details.official).toBeNull();
+  });
+
+  it('adds with the official photo, or with both (own first), or with our own by default', async () => {
+    const add = vi.spyOn(quickAdd, 'add').mockResolvedValue({ id: 'SQ_O', name: 'x', photos: 1 });
+    const one = await addDraft('official-key-04', { official });
+    await http
+      .post(`/admin/imports/${one.id}/add`)
+      .set({ Authorization: staff.auth })
+      .send({ ...body, photo: 'official' })
+      .expect(200);
+    const used = add.mock.calls[0][1].imageUrls;
+    expect(used).toHaveLength(1);
+    expect(used[0]).not.toBe(one.d.imageUrl); // a copy in our own storage, not the maker's address
+    expect(used[0]).toMatch(/^https:\/\/proj\.supabase\.co\//);
+    const both = await addDraft('official-key-05', { official });
+    await http
+      .post(`/admin/imports/${both.id}/add`)
+      .set({ Authorization: staff.auth })
+      .send({ ...body, photo: 'both' })
+      .expect(200);
+    expect(add.mock.calls[1][1].imageUrls[0]).toBe(both.d.imageUrl);
+    expect(add.mock.calls[1][1].imageUrls).toHaveLength(2);
+    const own = await addDraft('official-key-06', { official });
+    await http
+      .post(`/admin/imports/${own.id}/add`)
+      .set({ Authorization: staff.auth })
+      .send(body)
+      .expect(200);
+    expect(add.mock.calls[2][1].imageUrls).toEqual([own.d.imageUrl]);
+    add.mockRestore();
+  });
+
+  it('refuses the official photo when the draft has none, and leaves the draft a draft when it cannot be downloaded', async () => {
+    const none = await addDraft('official-key-07', {});
+    const refused = await http
+      .post(`/admin/imports/${none.id}/add`)
+      .set({ Authorization: staff.auth })
+      .send({ ...body, photo: 'official' })
+      .expect(409);
+    expect(refused.body.error).toMatch(/no official photo/);
+    const gone = await addDraft('official-key-08', {
+      official: { ...official, imageUrl: 'https://assets.1kuji.com/gone/x.jpg' },
+    });
+    await http
+      .post(`/admin/imports/${gone.id}/add`)
+      .set({ Authorization: staff.auth })
+      .send({ ...body, photo: 'official' })
+      .expect(502);
+    const after = (await http.get(`/admin/imports/${gone.id}`).set({ Authorization: staff.auth }))
+      .body.draft;
+    expect(after.status).toBe('draft');
   });
 });
 

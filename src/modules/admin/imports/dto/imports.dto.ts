@@ -1,5 +1,6 @@
 import { AppError } from '../../../../common/errors.js';
 import { OptionalText, Rule, Text } from '../../../../common/validation/decorators.js';
+import { QuickAddDto } from '../../products/dto/quick-add.dto.js';
 
 /** A Gleamshelf app trading the code shown in the admin for its token. */
 export class PairDto {
@@ -112,4 +113,10 @@ export class JobResultDto {
 export class JobFailDto {
   @OptionalText(500)
   error: string | null = null;
+}
+
+/** Adding a draft: the quick add's body, and which photo to use: the shop's own, the maker's official one, or both (own first). */
+export class AddImportDto extends QuickAddDto {
+  @Rule((v) => (v === 'official' || v === 'both' ? v : 'own'))
+  photo: 'own' | 'official' | 'both' = 'own';
 }

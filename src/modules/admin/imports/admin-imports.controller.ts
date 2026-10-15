@@ -12,8 +12,7 @@ import {
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
-import { QuickAddDto } from '../products/dto/quick-add.dto.js';
-import { ImportsQuery, RejectImportDto } from './dto/imports.dto.js';
+import { AddImportDto, ImportsQuery, RejectImportDto } from './dto/imports.dto.js';
 import { ImportsService } from './imports.service.js';
 
 /** Drafts sent by Gleamshelf, waiting for a person: look at each, type the price and stock, add it or reject it. */
@@ -55,15 +54,15 @@ export class AdminImportsController {
     return { success: true, draft: await this.imports.get(id) };
   }
 
-  /** Adds the draft as a product: the same body as the quick add (the draft's photo is used; any photos sent are ignored). */
+  /** Adds the draft as a product: the same body as the quick add, and which photo to use (the draft's own, the maker's official one, or both). */
   @Post(':id/add')
   @HttpCode(200)
   async add(
     @CurrentUser() admin: AppUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: QuickAddDto,
+    @Body() dto: AddImportDto,
   ) {
-    return { success: true, product: await this.imports.add(admin.id, id, dto) };
+    return { success: true, product: await this.imports.add(admin.id, id, dto, dto.photo) };
   }
 
   @Post(':id/reject')

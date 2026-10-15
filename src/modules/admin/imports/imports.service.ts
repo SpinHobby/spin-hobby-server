@@ -9,7 +9,7 @@ import { AdminLog } from '../admin-log.service.js';
 import type { QuickAddDto } from '../products/dto/quick-add.dto.js';
 import { QuickAddService } from '../products/quick-add.service.js';
 import { SeriesService } from '../series/series.service.js';
-import { parseDraft, type DraftInput } from './draft.js';
+import { isOfficialUrl, parseDraft, type DraftInput, type OfficialPhoto } from './draft.js';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 export const TOKEN_PREFIX = 'gst_';
@@ -257,34 +257,67 @@ export class ImportsService {
    * Adds the draft as a product through the normal quick add (Square item, series, storefront details; undone again if any step fails), with the
    * draft's photo and whatever the staff member typed. The draft stays a draft if anything fails.
    */
-  async add(adminId: string, id: string, dto: QuickAddDto) {
+  async add(
+    adminId: string,
+    id: string,
+    dto: QuickAddDto,
+    photo: 'own' | 'official' | 'both' = 'own',
+  ) {
     const row = await this.db.one<ImportRow>('select * from public.product_imports where id = $1', [
       id,
     ]);
     if (!row) throw notFound('Draft');
     if (row.status !== 'draft') throw new AppError(`This draft was already ${row.status}.`, 409);
     if (!row.image_url) throw new AppError('This draft has no photo any more.', 409);
+    const official = (row.details as { official?: OfficialPhoto | null }).official ?? null;
+    if (photo !== 'own' && !official)
+      throw new AppError('This draft has no official photo to use.', 409);
     const claimed = await this.db.one<{ id: string }>(
       "update public.product_imports set status = 'added', decided_by = $2, decided_at = now() where id = $1 and status = 'draft' returning id",
       [id, adminId],
     );
     if (!claimed) throw new AppError('Someone else just handled this draft.', 409);
+    let officialCopy: string | null = null;
     try {
-      dto.imageUrls = [row.image_url];
+      if (photo !== 'own') officialCopy = await this.copyOfficialPhoto(official!.imageUrl);
+      dto.imageUrls =
+        photo === 'official'
+          ? [officialCopy!]
+          : photo === 'both'
+            ? [row.image_url, officialCopy!]
+            : [row.image_url];
       const product = await this.quickAdd.add(adminId, dto);
       await this.db.exec(
         'update public.product_imports set square_item_id = $2, image_url = null where id = $1',
         [id, product.id],
       );
-      await this.log.write(adminId, 'imports.added', id, { productId: product.id });
+      // the shop's own photo was not used: it is not needed any more
+      if (photo === 'official')
+        await this.storage.deleteImages([row.image_url]).catch(() => undefined);
+      await this.log.write(adminId, 'imports.added', id, { productId: product.id, photo });
       return product;
     } catch (error) {
+      if (officialCopy) await this.storage.deleteImages([officialCopy]).catch(() => undefined);
       await this.db.exec(
         "update public.product_imports set status = 'draft', decided_by = null, decided_at = null where id = $1",
         [id],
       );
       throw error;
     }
+  }
+
+  /** A copy of the maker's photo in our own storage, so the quick add treats it like any other photo. Only makers' official sites, never a redirect elsewhere. */
+  private async copyOfficialPhoto(url: string): Promise<string> {
+    if (!isOfficialUrl(url))
+      throw new AppError("The official photo is not on a maker's site.", 400);
+    const res = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(20_000) }).catch(
+      () => null,
+    );
+    const type = (res?.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    if (!res?.ok || !IMAGE_TYPES[type])
+      throw new AppError("The maker's photo could not be downloaded.", 502);
+    const bytes = Buffer.from(await res.arrayBuffer());
+    return (await this.storage.uploadImage(bytes, type, 'imports')).url;
   }
 
   async reject(adminId: string, id: string, reason: string | null) {
