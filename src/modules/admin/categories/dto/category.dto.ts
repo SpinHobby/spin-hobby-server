@@ -45,3 +45,21 @@ export class ReorderCategoriesDto {
   })
   ids!: string[];
 }
+
+/** Products to put in categories, as a person chose them on the "sort products" screen. */
+export class AssignCategoriesDto {
+  /** 1 to 3000 pairs of a product's Square item id and a shop category id. */
+  @Rule((value) => {
+    if (!Array.isArray(value) || !value.length || value.length > 3000)
+      throw new AppError('Choose at least one product.');
+    return value.map((a) => {
+      const pair = a as { id?: unknown; categoryId?: unknown };
+      if (typeof pair?.id !== 'string' || !pair.id || pair.id.length > 64)
+        throw new AppError('Invalid product.');
+      const category = categoryId(pair.categoryId);
+      if (!category) throw new AppError('Choose a category for every product.');
+      return { id: pair.id, categoryId: category };
+    });
+  })
+  assignments!: { id: string; categoryId: string }[];
+}

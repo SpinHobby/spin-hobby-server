@@ -17,6 +17,7 @@ import { AdminListingJobsController } from './imports/admin-listing-jobs.control
 import { ListingJobsService } from './imports/listing-jobs.service.js';
 import { AdminCategoriesController } from './categories/admin-categories.controller.js';
 import { AdminCategoriesService } from './categories/admin-categories.service.js';
+import { CategorySortingService } from './categories/category-sorting.service.js';
 import { AdminDashboardController } from './dashboard/admin-dashboard.controller.js';
 import { AdminDashboardService } from './dashboard/admin-dashboard.service.js';
 import { AdminEventsController } from './events/admin-events.controller.js';
@@ -84,6 +85,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     SquarePhotosService,
     AdminMerchService,
     AdminCategoriesService,
+    CategorySortingService,
     AdminOrdersService,
     AdminSettingsService,
     AdminHomepageService,
