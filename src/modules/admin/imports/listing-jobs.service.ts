@@ -283,14 +283,20 @@ export class ListingJobsService {
         'This job is not yours any more (it took too long and was given to another worker).',
         409,
       );
-    const draft = await this.imports.receive(tokenId, rawDraft, image, cutout);
+    const details = parseJobDetails(rawDetails);
+    // the uploaded photo goes on with the draft (offered as "as taken", and cropped to the product), instead of being deleted
+    const draft = await this.imports.receive(tokenId, rawDraft, image, cutout, {
+      originalUrl: job.source_url,
+      productRect: details.productRect,
+    });
     const done = await this.db.one<{ source_url: string | null }>(
       `update public.listing_jobs set status = 'done', import_id = $2, details = $3, error = null, lease_until = null, source_url = null
         where id = $1 and status = 'running' and worker_id = $4 returning $5::text as source_url`,
-      [jobId, draft.id, JSON.stringify(parseJobDetails(rawDetails)), tokenId, job.source_url],
+      [jobId, draft.id, JSON.stringify(details), tokenId, job.source_url],
     );
     if (!done) throw new AppError('This job is not yours any more.', 409);
-    if (job.source_url) await this.storage.deleteImages([job.source_url]).catch(() => undefined);
+    if (job.source_url && !draft.keptOriginal)
+      await this.storage.deleteImages([job.source_url]).catch(() => undefined);
     return { draftId: draft.id };
   }
 

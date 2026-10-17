@@ -181,6 +181,7 @@ const EXPECTED: string[] = [
   'PUT /admin/homepage/slides/:id [staff]',
   'PUT /admin/homepage/slides/reorder [staff]',
   'PUT /admin/photo-backgrounds/default [staff]',
+  'PUT /admin/products/:id/channel-photos/ebay [staff]',
   'PUT /admin/products/:id/photos [staff]',
   'PUT /admin/products/:id/photos/:imageId/background [staff]',
   'PUT /admin/products/:id/visibility [staff]',

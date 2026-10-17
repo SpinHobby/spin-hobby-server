@@ -132,6 +132,36 @@ export class AddImportDto extends QuickAddDto {
   /** The background to put the shop's own photo on, when the draft has a cut-out (left out: the shop's default; null: white). */
   @Rule(backgroundChoice)
   backgroundId?: string | null;
+
+  /**
+   * Which of the draft's photos go where, in order: each to Square (the website and the till), to eBay (kept until it is connected), or both. Left out,
+   * `photo` decides as before.
+   */
+  @Rule((v) => {
+    if (v == null) return null;
+    const keys = ['studio', 'background', 'original', 'cropped', 'official'];
+    if (
+      !Array.isArray(v) ||
+      v.length > 5 ||
+      v.some(
+        (c) => !c || typeof c !== 'object' || !keys.includes((c as { key?: string }).key ?? ''),
+      ) ||
+      new Set(v.map((c: { key: string }) => c.key)).size !== v.length
+    )
+      throw new AppError("photos must list each of the draft's photos at most once.");
+    return v.map((c: { key: string; square?: unknown; ebay?: unknown }) => ({
+      key: c.key,
+      square: c.square === true,
+      ebay: c.ebay === true,
+    }));
+  })
+  photos:
+    | {
+        key: 'studio' | 'background' | 'original' | 'cropped' | 'official';
+        square: boolean;
+        ebay: boolean;
+      }[]
+    | null = null;
 }
 
 /** How far a photo computer has got with a job: a percentage and, optionally, the step it is on. */

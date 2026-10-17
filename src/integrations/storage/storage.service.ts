@@ -22,7 +22,7 @@ export class StorageService {
   async uploadImage(
     bytes: Buffer,
     contentType: string,
-    folder: 'products' | 'slides' | 'imports' | 'uploads' | 'backgrounds',
+    folder: 'products' | 'slides' | 'imports' | 'uploads' | 'backgrounds' | 'channels',
   ) {
     const ext = IMAGE_TYPES[contentType];
     if (!ext) throw new AppError('Upload a WebP, JPEG or PNG image.');

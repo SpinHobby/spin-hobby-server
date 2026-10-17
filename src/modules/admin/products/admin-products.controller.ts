@@ -22,6 +22,8 @@ import { ProductTransferService } from './product-transfer.service.js';
 import { QuickAddService } from './quick-add.service.js';
 import { SquarePhotosService } from './square-photos.service.js';
 import { PhotoBackgroundsService } from './photo-backgrounds.service.js';
+import { ChannelPhotosService } from './channel-photos.service.js';
+import { ChannelPhotosDto } from './dto/channel-photos.dto.js';
 import { CatalogSearchService } from './catalog-search.service.js';
 import { LabelsService } from './labels.service.js';
 import { AddPhotoDto, PhotoOrderDto } from './dto/photos.dto.js';
@@ -48,6 +50,7 @@ export class AdminProductsController {
     private readonly search: CatalogSearchService,
     private readonly labels: LabelsService,
     private readonly backgrounds: PhotoBackgroundsService,
+    private readonly channels: ChannelPhotosService,
   ) {}
 
   /**
@@ -164,7 +167,27 @@ export class AdminProductsController {
         [...lists.shown, ...lists.hidden].map((p) => p.id),
       )
       .catch(() => undefined);
-    return { success: true, ...lists, cutouts: await this.backgrounds.cutouts(squareItemId) };
+    return {
+      success: true,
+      ...lists,
+      cutouts: await this.backgrounds.cutouts(squareItemId),
+      // the photos picked for eBay (not connected yet: kept for when it is)
+      ebay: await this.channels.list(squareItemId, 'ebay'),
+    };
+  }
+
+  /** Which of the product's photos go on eBay, in order (eBay is not connected yet: they are kept for when it is). */
+  @Put('products/:id/channel-photos/ebay')
+  @HttpCode(200)
+  async ebayPhotos(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Body() dto: ChannelPhotosDto,
+  ) {
+    return {
+      success: true,
+      ebay: await this.channels.set(admin.id, squareItemId, dto.urls, 'ebay'),
+    };
   }
 
   /** Shows these photos in this order. Photos left out are hidden (kept in Square), and hidden ones listed come back. */

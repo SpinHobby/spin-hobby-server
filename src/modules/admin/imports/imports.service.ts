@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import sharp from 'sharp';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { AppError, notFound } from '../../../common/errors.js';
 import { Db } from '../../../database/db.service.js';
@@ -7,6 +8,8 @@ import { port, publicApiUrl } from '../../../config/app.config.js';
 import { PRODUCT_CATEGORIES } from '../../cashier/product-categories.js';
 import { AdminLog } from '../admin-log.service.js';
 import type { QuickAddDto } from '../products/dto/quick-add.dto.js';
+import { cropToProduct } from '../products/compose-photo.js';
+import { downloadPhoto } from '../products/download-photo.js';
 import { PhotoBackgroundsService } from '../products/photo-backgrounds.service.js';
 import { QuickAddService } from '../products/quick-add.service.js';
 import { SquarePhotosService } from '../products/square-photos.service.js';
@@ -20,6 +23,7 @@ export const TOKEN_PREFIX = 'gst_';
 const PAIRING_MINUTES = 10;
 
 export type ImportStatus = 'draft' | 'added' | 'rejected';
+type ProductRect = { x: number; y: number; width: number; height: number };
 export const IMPORT_STATUSES: ImportStatus[] = ['draft', 'added', 'rejected'];
 
 interface ImportRow {
@@ -33,10 +37,42 @@ interface ImportRow {
   details: Record<string, unknown>;
   image_url: string | null;
   cutout_url: string | null;
+  original_url: string | null;
+  cropped_url: string | null;
   square_item_id: string | null;
   reject_reason: string | null;
   created_at: string;
   decided_at: string | null;
+}
+
+export type PhotoKey = 'studio' | 'background' | 'original' | 'cropped' | 'official';
+export interface PhotoChoice {
+  key: PhotoKey;
+  square: boolean;
+  ebay: boolean;
+}
+
+/** The photos a draft offers, in the order they are shown. `background` is the cut-out, which is placed on a background chosen when it is used. */
+function draftPhotos(r: ImportRow): { key: PhotoKey; url: string }[] {
+  const official = (r.details as { official?: OfficialPhoto | null }).official ?? null;
+  return [
+    r.image_url && { key: 'studio' as const, url: r.image_url },
+    r.cutout_url && { key: 'background' as const, url: r.cutout_url },
+    r.cropped_url && { key: 'cropped' as const, url: r.cropped_url },
+    r.original_url && { key: 'original' as const, url: r.original_url },
+    official && { key: 'official' as const, url: official.imageUrl },
+  ].filter((p): p is { key: PhotoKey; url: string } => !!p);
+}
+
+/** The choices the older "which photo" setting meant: the shop's own (on its background when there is one), the official one, or both. */
+function legacyChoices(photo: 'own' | 'official' | 'both', onBackground: boolean): PhotoChoice[] {
+  const own: PhotoChoice = {
+    key: onBackground ? 'background' : 'studio',
+    square: true,
+    ebay: false,
+  };
+  const off: PhotoChoice = { key: 'official', square: true, ebay: false };
+  return photo === 'official' ? [off] : photo === 'both' ? [own, off] : [own];
 }
 
 const present = (r: ImportRow) => ({
@@ -50,6 +86,8 @@ const present = (r: ImportRow) => ({
   imageUrl: r.image_url,
   // the product alone on a transparent background, to put on one of the shop's backgrounds
   cutoutUrl: r.image_url ? r.cutout_url : null,
+  // every photo a person can choose from for the product
+  photos: r.image_url ? draftPhotos(r) : [],
   productId: r.square_item_id,
   rejectReason: r.reject_reason,
   createdAt: r.created_at,
@@ -196,7 +234,8 @@ export class ImportsService {
     rawDraft: unknown,
     image: { buffer: Buffer; mimetype: string },
     cutout: { buffer: Buffer; mimetype: string } | null = null,
-  ) {
+    source: { originalUrl?: string | null; productRect?: ProductRect | null } = {},
+  ): Promise<{ id: string; created: boolean; status: ImportStatus; keptOriginal: boolean }> {
     const draft: DraftInput = parseDraft(rawDraft);
     if (!IMAGE_TYPES[image.mimetype])
       throw new AppError('The photo must be a WebP, JPEG or PNG image.');
@@ -206,15 +245,21 @@ export class ImportsService {
       [draft.sourceKey],
     );
     if (existing && existing.status !== 'draft')
-      return { id: existing.id, created: false, status: existing.status };
+      return { id: existing.id, created: false, status: existing.status, keptOriginal: false };
     const stored = await this.storage.uploadImage(image.buffer, image.mimetype, 'imports');
     const storedCutout = cutout
       ? (await this.storage.uploadImage(cutout.buffer, cutout.mimetype, 'imports')).url
       : null;
+    // the photo as taken, and that photo cropped to the product (no AI): offered next to the photo computer's own, for a person to choose
+    const originalUrl = source.originalUrl ?? null;
+    const croppedUrl =
+      originalUrl && source.productRect
+        ? await this.cropped(originalUrl, source.productRect)
+        : null;
     const details = JSON.stringify(draft.details);
     if (existing) {
       await this.db.exec(
-        'update public.product_imports set title = $2, description = $3, category = $4, series = $5, details = $6, image_url = $7, token_id = $8, cutout_url = $9 where id = $1',
+        'update public.product_imports set title = $2, description = $3, category = $4, series = $5, details = $6, image_url = $7, token_id = $8, cutout_url = $9, original_url = $10, cropped_url = $11 where id = $1',
         [
           existing.id,
           draft.title,
@@ -225,15 +270,29 @@ export class ImportsService {
           stored.url,
           tokenId,
           storedCutout,
+          originalUrl,
+          croppedUrl,
         ],
       );
       await this.storage
-        .deleteImages([existing.image_url, existing.cutout_url].filter((u): u is string => !!u))
+        .deleteImages(
+          [
+            existing.image_url,
+            existing.cutout_url,
+            existing.original_url,
+            existing.cropped_url,
+          ].filter((u): u is string => !!u && u !== originalUrl),
+        )
         .catch(() => undefined);
-      return { id: existing.id, created: false, status: 'draft' as const };
+      return {
+        id: existing.id,
+        created: false,
+        status: 'draft' as const,
+        keptOriginal: !!originalUrl,
+      };
     }
     const row = await this.db.one<{ id: string }>(
-      'insert into public.product_imports (source_key, title, description, category, series, details, image_url, token_id, cutout_url) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id',
+      'insert into public.product_imports (source_key, title, description, category, series, details, image_url, token_id, cutout_url, original_url, cropped_url) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id',
       [
         draft.sourceKey,
         draft.title,
@@ -244,9 +303,21 @@ export class ImportsService {
         stored.url,
         tokenId,
         storedCutout,
+        originalUrl,
+        croppedUrl,
       ],
     );
-    return { id: row!.id, created: true, status: 'draft' as const };
+    return { id: row!.id, created: true, status: 'draft' as const, keptOriginal: !!originalUrl };
+  }
+
+  /** The original photo cropped to the product, stored; null when it cannot be made (a crop is a nice extra, never a reason to lose the draft). */
+  private async cropped(originalUrl: string, rect: ProductRect): Promise<string | null> {
+    try {
+      const bytes = await cropToProduct(await downloadPhoto(originalUrl), rect);
+      return (await this.storage.uploadImage(bytes, 'image/jpeg', 'imports')).url;
+    } catch {
+      return null;
+    }
   }
 
   async list(status: ImportStatus) {
@@ -331,10 +402,14 @@ export class ImportsService {
     try {
       const stockCount = await this.quickAdd.addStock(adminId, productId, quantity);
       await this.storage
-        .deleteImages([row.image_url, row.cutout_url].filter((u): u is string => !!u))
+        .deleteImages(
+          [row.image_url, row.cutout_url, row.original_url, row.cropped_url].filter(
+            (u): u is string => !!u,
+          ),
+        )
         .catch(() => undefined);
       await this.db.exec(
-        'update public.product_imports set image_url = null, cutout_url = null where id = $1',
+        'update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null where id = $1',
         [id],
       );
       await this.log.write(adminId, 'imports.restocked', id, { productId, quantity, stockCount });
@@ -358,7 +433,9 @@ export class ImportsService {
 
   /**
    * Adds the draft as a product through the normal quick add (Square item, series, storefront details; undone again if any step fails), with the
-   * draft's photo and whatever the staff member typed. The draft stays a draft if anything fails.
+   * photos a person chose and whatever the staff member typed. Each photo the draft offers (the photo computer's studio photo, the product on one of
+   * the shop's backgrounds, the photo as taken, that photo cropped to the product, the maker's official photo) can go to Square (the website and the
+   * till), to eBay (kept for when it is connected), to both or to neither, in the order given. The draft stays a draft if anything fails.
    */
   async add(
     adminId: string,
@@ -366,6 +443,7 @@ export class ImportsService {
     dto: QuickAddDto,
     photo: 'own' | 'official' | 'both' = 'own',
     backgroundChoice?: string | null,
+    picked?: PhotoChoice[] | null,
   ) {
     const row = await this.db.one<ImportRow>('select * from public.product_imports where id = $1', [
       id,
@@ -374,56 +452,116 @@ export class ImportsService {
     if (row.status !== 'draft') throw new AppError(`This draft was already ${row.status}.`, 409);
     if (!row.image_url) throw new AppError('This draft has no photo any more.', 409);
     const official = (row.details as { official?: OfficialPhoto | null }).official ?? null;
-    if (photo !== 'own' && !official)
-      throw new AppError('This draft has no official photo to use.', 409);
-    // the shop's own photo on one of its backgrounds, from the draft's cut-out: checked before anything changes
-    const ownOnBackground = photo !== 'official' && !!row.cutout_url;
-    const background = ownOnBackground ? await this.backgrounds.resolve(backgroundChoice) : null;
-    const compose = ownOnBackground && !!background;
+    const available = new Set(draftPhotos(row).map((p) => p.key));
+    // checked before anything changes: a background deleted from the library meanwhile is refused, not quietly swapped for white
+    const defaultBackground = row.cutout_url
+      ? await this.backgrounds.resolve(backgroundChoice)
+      : null;
+    const choices = picked?.length
+      ? picked
+      : legacyChoices(photo, !!row.cutout_url && !!defaultBackground);
+    for (const c of choices)
+      if (!available.has(c.key))
+        throw new AppError(
+          c.key === 'official'
+            ? 'This draft has no official photo to use.'
+            : `This draft has no "${c.key}" photo.`,
+          409,
+        );
+    if (!choices.some((c) => c.square || c.ebay)) throw new AppError('Choose at least one photo.');
+    const background = choices.some((c) => c.key === 'background') ? defaultBackground : null;
     const claimed = await this.db.one<{ id: string }>(
       "update public.product_imports set status = 'added', decided_by = $2, decided_at = now() where id = $1 and status = 'draft' returning id",
       [id, adminId],
     );
     if (!claimed) throw new AppError('Someone else just handled this draft.', 409);
-    let officialCopy: string | null = null;
-    let composed: string | null = null;
+    const made: string[] = []; // files made for this add (the official copy, the photo on its background, eBay's copies): removed if it fails
     try {
-      if (photo !== 'own') officialCopy = await this.copyOfficialPhoto(official!.imageUrl);
-      if (compose)
-        composed = (
+      // each chosen photo as a file in our storage
+      const urls = new Map<PhotoKey, string>();
+      for (const c of choices) {
+        if (urls.has(c.key)) continue;
+        if (c.key === 'studio') urls.set(c.key, row.image_url);
+        else if (c.key === 'original') urls.set(c.key, row.original_url!);
+        else if (c.key === 'cropped') urls.set(c.key, row.cropped_url!);
+        else if (c.key === 'official') {
+          const copy = await this.copyOfficialPhoto(official!.imageUrl);
+          made.push(copy);
+          urls.set(c.key, copy);
+        } else {
+          const composed = (
+            await this.storage.uploadImage(
+              await this.backgrounds.compose(row.cutout_url!, background),
+              'image/jpeg',
+              'imports',
+            )
+          ).url;
+          made.push(composed);
+          urls.set(c.key, composed);
+        }
+      }
+      // eBay keeps its own copies (Square's are deleted from our storage once Square has them)
+      const ebay: string[] = [];
+      for (const c of choices.filter((x) => x.ebay)) {
+        const copy = (
           await this.storage.uploadImage(
-            await this.backgrounds.compose(row.cutout_url!, background),
+            await sharp(await downloadPhoto(urls.get(c.key)!))
+              .rotate()
+              .flatten({ background: '#ffffff' })
+              .jpeg({ quality: 92 })
+              .toBuffer(),
             'image/jpeg',
-            'imports',
+            'channels',
           )
         ).url;
-      const own = composed ?? row.image_url;
-      dto.imageUrls =
-        photo === 'official' ? [officialCopy!] : photo === 'both' ? [own, officialCopy!] : [own];
+        made.push(copy);
+        ebay.push(copy);
+      }
+      const square = choices.filter((c) => c.square);
+      dto.imageUrls = square.map((c) => urls.get(c.key)!);
       const product = await this.quickAdd.add(adminId, dto);
       await this.db.exec(
-        'update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null where id = $1',
+        'update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null where id = $1',
         [id, product.id],
       );
-      // the white-square photo was not used (another photo or a background took its place): it is not needed any more
-      if (photo === 'official' || composed)
-        await this.storage.deleteImages([row.image_url]).catch(() => undefined);
-      // the cut-out stays with the product, behind its first photo, so the background can be changed later
+      for (const [i, url] of ebay.entries())
+        await this.db.exec(
+          'insert into public.channel_photos (square_item_id, channel, image_url, position) values ($1, $2, $3, $4) on conflict do nothing',
+          [product.id, 'ebay', url, i],
+        );
+      // the files Square did not take (the quick add deletes the ones it sent) are not needed any more
+      const sent = new Set(dto.imageUrls);
+      const unused = [
+        row.image_url,
+        row.original_url,
+        row.cropped_url,
+        ...made.filter((u) => !ebay.includes(u)),
+      ].filter((u): u is string => !!u && !sent.has(u));
+      await this.storage.deleteImages(unused).catch(() => undefined);
+      // the cut-out stays with the product, behind the Square photo made from it, so its background can be changed later
       if (row.cutout_url) {
-        const kept = photo === 'official' ? null : await this.firstPhotoId(product.id);
+        const at = square.findIndex((c) => c.key === 'background' || c.key === 'studio');
+        const kept = at >= 0 ? await this.photoIdAt(product.id, at) : null;
         if (kept)
-          await this.backgrounds.remember(product.id, kept, row.cutout_url, background?.id ?? null);
+          await this.backgrounds.remember(
+            product.id,
+            kept,
+            row.cutout_url,
+            square[at].key === 'background' ? (background?.id ?? null) : null,
+          );
         else await this.storage.deleteImages([row.cutout_url]).catch(() => undefined);
       }
       await this.log.write(adminId, 'imports.added', id, {
         productId: product.id,
-        photo,
-        background: compose ? (background?.name ?? 'white') : null,
+        square: square.map((c) => c.key),
+        ebay: choices.filter((c) => c.ebay).map((c) => c.key),
+        background: choices.some((c) => c.key === 'background')
+          ? (background?.name ?? 'white')
+          : null,
       });
       return product;
     } catch (error) {
-      if (officialCopy) await this.storage.deleteImages([officialCopy]).catch(() => undefined);
-      if (composed) await this.storage.deleteImages([composed]).catch(() => undefined);
+      await this.storage.deleteImages(made).catch(() => undefined);
       await this.db.exec(
         "update public.product_imports set status = 'draft', decided_by = null, decided_at = null where id = $1",
         [id],
@@ -432,10 +570,10 @@ export class ImportsService {
     }
   }
 
-  /** The id of a new product's first photo in Square (the shop's own photo is put first), or null when Square cannot say. */
-  private async firstPhotoId(productId: string): Promise<string | null> {
+  /** The Square id of a new product's photo at this place in its list, or null when Square cannot say. */
+  private async photoIdAt(productId: string, index: number): Promise<string | null> {
     try {
-      return (await this.photos.list(productId)).shown[0]?.id ?? null;
+      return (await this.photos.list(productId)).shown[index]?.id ?? null;
     } catch {
       return null;
     }
@@ -466,10 +604,14 @@ export class ImportsService {
       throw new AppError('This draft was already handled.', 409);
     }
     await this.storage
-      .deleteImages([row.image_url, row.cutout_url].filter((u): u is string => !!u))
+      .deleteImages(
+        [row.image_url, row.cutout_url, row.original_url, row.cropped_url].filter(
+          (u): u is string => !!u,
+        ),
+      )
       .catch(() => undefined);
     await this.db.exec(
-      'update public.product_imports set image_url = null, cutout_url = null where id = $1',
+      'update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null where id = $1',
       [id],
     );
     await this.log.write(adminId, 'imports.rejected', id, { reason });

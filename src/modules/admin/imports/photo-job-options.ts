@@ -48,6 +48,7 @@ export interface PhotoJobDetails {
   notes: string[];
   seconds: number | null;
   modeUsed: string | null;
+  productRect: { x: number; y: number; width: number; height: number } | null;
 }
 
 const texts = (value: unknown, count: number, max: number): string[] =>
@@ -67,5 +68,20 @@ export function parseJobDetails(raw: unknown): PhotoJobDetails {
     notes: texts(o.notes, 20, 300),
     seconds: Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 10) / 10 : null,
     modeUsed: typeof o.modeUsed === 'string' ? o.modeUsed.slice(0, 20) : null,
+    productRect: rect(o.productRect),
   };
+}
+
+/** Where the product is in the photo as taken (fractions of its width and height), so the shop can offer a plain crop of it; null when unknown. */
+function rect(raw: unknown): { x: number; y: number; width: number; height: number } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const r = raw as Record<string, unknown>;
+  const [x, y, width, height] = [r.x, r.y, r.width, r.height].map(Number);
+  const ok =
+    [x, y, width, height].every((v) => Number.isFinite(v) && v >= 0 && v <= 1) &&
+    width > 0.02 &&
+    height > 0.02 &&
+    x + width <= 1.001 &&
+    y + height <= 1.001;
+  return ok ? { x: x, y: y, width: width, height: height } : null;
 }

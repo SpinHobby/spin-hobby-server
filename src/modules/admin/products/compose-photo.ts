@@ -93,3 +93,26 @@ export async function hasTransparency(bytes: Buffer): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * The photo as it was taken, cropped to the product with a little room around it: no AI, no repainting, nothing taken off. `rect` is where the
+ * product is, as fractions of the (upright) photo; `margin` is added on each side as a fraction of the product's own size.
+ */
+export async function cropToProduct(
+  photo: Buffer,
+  rect: { x: number; y: number; width: number; height: number },
+  margin = 0.04,
+): Promise<Buffer> {
+  const upright = await sharp(photo).rotate().toBuffer({ resolveWithObject: true });
+  const { width: W, height: H } = upright.info;
+  const left = Math.max(0, Math.floor((rect.x - rect.width * margin) * W));
+  const top = Math.max(0, Math.floor((rect.y - rect.height * margin) * H));
+  const right = Math.min(W, Math.ceil((rect.x + rect.width * (1 + margin)) * W));
+  const bottom = Math.min(H, Math.ceil((rect.y + rect.height * (1 + margin)) * H));
+  if (right - left < 16 || bottom - top < 16)
+    throw new AppError('The product is too small in this photo to crop.', 422);
+  return sharp(upright.data)
+    .extract({ left, top, width: right - left, height: bottom - top })
+    .jpeg({ quality: 92 })
+    .toBuffer();
+}

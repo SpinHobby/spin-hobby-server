@@ -69,7 +69,7 @@ export class AdminImportsController {
   ) {
     return {
       success: true,
-      product: await this.imports.add(admin.id, id, dto, dto.photo, dto.backgroundId),
+      product: await this.imports.add(admin.id, id, dto, dto.photo, dto.backgroundId, dto.photos),
     };
   }
 
