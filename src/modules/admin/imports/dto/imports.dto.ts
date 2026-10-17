@@ -1,5 +1,6 @@
 import { AppError } from '../../../../common/errors.js';
 import { OptionalText, Rule, Text } from '../../../../common/validation/decorators.js';
+import { backgroundChoice } from '../../products/dto/backgrounds.dto.js';
 import { QuickAddDto } from '../../products/dto/quick-add.dto.js';
 
 /** A Gleamshelf app trading the code shown in the admin for its token. */
@@ -83,6 +84,10 @@ export class CreatePhotoBatchDto {
 export class ApplyPhotosDto {
   @Rule((v) => (v == null ? null : idList('jobIds', 500)(v)))
   jobIds: string[] | null = null;
+
+  /** The background to put the photos that have a cut-out on (left out: the shop's default; null: white). */
+  @Rule(backgroundChoice)
+  backgroundId?: string | null;
 }
 
 /** A photo computer asking for work: what it can do. */
@@ -119,6 +124,10 @@ export class JobFailDto {
 export class AddImportDto extends QuickAddDto {
   @Rule((v) => (v === 'official' || v === 'both' ? v : 'own'))
   photo: 'own' | 'official' | 'both' = 'own';
+
+  /** The background to put the shop's own photo on, when the draft has a cut-out (left out: the shop's default; null: white). */
+  @Rule(backgroundChoice)
+  backgroundId?: string | null;
 }
 
 /** How far a photo computer has got with a job: a percentage and, optionally, the step it is on. */

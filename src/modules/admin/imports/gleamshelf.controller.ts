@@ -6,11 +6,11 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
-  UploadedFile,
+  UploadedFiles,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { AppError } from '../../../common/errors.js';
 import { RateLimit } from '../../../common/guards/rate-limit.guard.js';
@@ -29,6 +29,21 @@ import { AppToken, GleamshelfTokenGuard } from './gleamshelf-token.guard.js';
 import { ImportsService } from './imports.service.js';
 import { ListingJobsService } from './listing-jobs.service.js';
 import { PhotoJobsService } from './photo-jobs.service.js';
+
+/** The finished photo, and (from Gleamshelf 0.2 on) the product alone on a transparent background, so the shop can put it on its own backgrounds. */
+const PHOTO_AND_CUTOUT = FileFieldsInterceptor(
+  [
+    { name: 'photo', maxCount: 1 },
+    { name: 'cutout', maxCount: 1 },
+  ],
+  { limits: { fileSize: 6 * 1024 * 1024 } },
+);
+type PhotoFiles = { photo?: Upload[]; cutout?: Upload[] };
+const photoFiles = (files: PhotoFiles | undefined) => {
+  const file = files?.photo?.[0];
+  if (!file) throw new AppError('photo is required');
+  return { file, cutout: files?.cutout?.[0] ?? null };
+};
 
 /**
  * What a connected Gleamshelf app calls. Not for people: there is no sign-in here, the app proves itself with the token it got by trading the
@@ -74,14 +89,14 @@ export class GleamshelfController {
   @UseGuards(GleamshelfTokenGuard)
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 6 * 1024 * 1024 } }))
+  @UseInterceptors(PHOTO_AND_CUTOUT)
   async receive(
     @AppToken() tokenId: string,
-    @UploadedFile() file: Upload | undefined,
+    @UploadedFiles() files: PhotoFiles | undefined,
     @Body() dto: ReceiveDraftDto,
   ) {
-    if (!file) throw new AppError('photo is required');
-    return { success: true, ...(await this.imports.receive(tokenId, dto.draft, file)) };
+    const { file, cutout } = photoFiles(files);
+    return { success: true, ...(await this.imports.receive(tokenId, dto.draft, file, cutout)) };
   }
 
   /** The next photo to improve, or no job. Asking also tells the shop this photo computer is awake and what it can do. */
@@ -99,15 +114,15 @@ export class GleamshelfController {
   @UseGuards(GleamshelfTokenGuard)
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 6 * 1024 * 1024 } }))
+  @UseInterceptors(PHOTO_AND_CUTOUT)
   async result(
     @AppToken() tokenId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @UploadedFile() file: Upload | undefined,
+    @UploadedFiles() files: PhotoFiles | undefined,
     @Body() dto: JobResultDto,
   ) {
-    if (!file) throw new AppError('photo is required');
-    await this.jobs.submit(tokenId, id, dto.details, file);
+    const { file, cutout } = photoFiles(files);
+    await this.jobs.submit(tokenId, id, dto.details, file, cutout);
     return { success: true };
   }
 
@@ -140,17 +155,17 @@ export class GleamshelfController {
   @UseGuards(GleamshelfTokenGuard)
   @ApiBearerAuth()
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: 6 * 1024 * 1024 } }))
+  @UseInterceptors(PHOTO_AND_CUTOUT)
   async listingResult(
     @AppToken() tokenId: string,
     @Param('id', ParseUUIDPipe) id: string,
-    @UploadedFile() file: Upload | undefined,
+    @UploadedFiles() files: PhotoFiles | undefined,
     @Body() dto: ListingResultDto,
   ) {
-    if (!file) throw new AppError('photo is required');
+    const { file, cutout } = photoFiles(files);
     return {
       success: true,
-      ...(await this.listings.submit(tokenId, id, dto.draft, dto.details, file)),
+      ...(await this.listings.submit(tokenId, id, dto.draft, dto.details, file, cutout)),
     };
   }
 

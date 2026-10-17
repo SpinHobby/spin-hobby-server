@@ -259,6 +259,7 @@ export class ListingJobsService {
     rawDraft: unknown,
     rawDetails: unknown,
     image: { buffer: Buffer; mimetype: string },
+    cutout: { buffer: Buffer; mimetype: string } | null = null,
   ) {
     const job = await this.db.one<JobRow>('select * from public.listing_jobs where id = $1', [
       jobId,
@@ -269,7 +270,7 @@ export class ListingJobsService {
         'This job is not yours any more (it took too long and was given to another worker).',
         409,
       );
-    const draft = await this.imports.receive(tokenId, rawDraft, image);
+    const draft = await this.imports.receive(tokenId, rawDraft, image, cutout);
     const done = await this.db.one<{ source_url: string | null }>(
       `update public.listing_jobs set status = 'done', import_id = $2, details = $3, error = null, lease_until = null, source_url = null
         where id = $1 and status = 'running' and worker_id = $4 returning $5::text as source_url`,

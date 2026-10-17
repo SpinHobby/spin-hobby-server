@@ -21,6 +21,7 @@ import { AdminProductsService } from './admin-products.service.js';
 import { ProductTransferService } from './product-transfer.service.js';
 import { QuickAddService } from './quick-add.service.js';
 import { SquarePhotosService } from './square-photos.service.js';
+import { PhotoBackgroundsService } from './photo-backgrounds.service.js';
 import { CatalogSearchService } from './catalog-search.service.js';
 import { LabelsService } from './labels.service.js';
 import { AddPhotoDto, PhotoOrderDto } from './dto/photos.dto.js';
@@ -46,6 +47,7 @@ export class AdminProductsController {
     private readonly photos: SquarePhotosService,
     private readonly search: CatalogSearchService,
     private readonly labels: LabelsService,
+    private readonly backgrounds: PhotoBackgroundsService,
   ) {}
 
   /**
@@ -154,7 +156,15 @@ export class AdminProductsController {
   /** A Square product's photos: the ones shown (in order) and the ones hidden. */
   @Get('products/:id/photos')
   async photoList(@Param('id') squareItemId: string) {
-    return { success: true, ...(await this.photos.list(squareItemId)) };
+    const lists = await this.photos.list(squareItemId);
+    // the photos made from a Gleamshelf cut-out, whose background can be changed; cut-outs of photos Square no longer has are forgotten
+    await this.backgrounds
+      .forgetMissing(
+        squareItemId,
+        [...lists.shown, ...lists.hidden].map((p) => p.id),
+      )
+      .catch(() => undefined);
+    return { success: true, ...lists, cutouts: await this.backgrounds.cutouts(squareItemId) };
   }
 
   /** Shows these photos in this order. Photos left out are hidden (kept in Square), and hidden ones listed come back. */

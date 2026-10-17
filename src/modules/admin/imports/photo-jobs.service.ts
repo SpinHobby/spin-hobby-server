@@ -4,6 +4,8 @@ import { Db } from '../../../database/db.service.js';
 import { IMAGE_TYPES, StorageService } from '../../../integrations/storage/storage.service.js';
 import { AdminLog } from '../admin-log.service.js';
 import { downloadPhoto } from '../products/download-photo.js';
+import { hasTransparency } from '../products/compose-photo.js';
+import { PhotoBackgroundsService } from '../products/photo-backgrounds.service.js';
 import { SquarePhotosService } from '../products/square-photos.service.js';
 import {
   parseJobDetails,
@@ -40,6 +42,7 @@ interface JobRow {
   status: JobStatus;
   attempts: number;
   result_url: string | null;
+  cutout_url: string | null;
   details: Partial<PhotoJobDetails>;
   error: string | null;
   created_at: string;
@@ -57,6 +60,8 @@ const present = (r: JobRow) => ({
   status: r.status,
   before: r.source_url,
   after: r.result_url,
+  // the product alone on a transparent background: it can be put on one of the shop's backgrounds when the photo is used
+  cutout: r.result_url ? r.cutout_url : null,
   flags: r.details.flags ?? [],
   notes: r.details.notes ?? [],
   seconds: r.details.seconds ?? null,
@@ -79,6 +84,7 @@ export class PhotoJobsService {
     private readonly photos: SquarePhotosService,
     private readonly storage: StorageService,
     private readonly log: AdminLog,
+    private readonly backgrounds: PhotoBackgroundsService,
   ) {}
 
   // ---- the admin sends photos in ----------------------------------------------------------------------------------------------------
@@ -219,8 +225,12 @@ export class PhotoJobsService {
 
   // ---- what the admin decides --------------------------------------------------------------------------------------------------------
 
-  /** Puts the improved photo on the product in the old one's place. The job stays "done" if Square refuses, so it can be tried again. */
-  async apply(adminId: string, jobId: string) {
+  /**
+   * Puts the improved photo on the product in the old one's place. The job stays "done" if Square refuses, so it can be tried again. With a cut-out
+   * the photo is the product placed on the chosen background (left out: the shop's default; null: white), and the cut-out is kept with the product so
+   * its background can be changed later; without one it is the photo computer's own white square.
+   */
+  async apply(adminId: string, jobId: string, backgroundChoice?: string | null) {
     const job = await this.db.one<JobRow>('select * from public.photo_jobs where id = $1', [jobId]);
     if (!job) throw notFound('Photo job');
     if (job.status !== 'done' || !job.result_url)
@@ -230,18 +240,26 @@ export class PhotoJobsService {
           : 'This photo is not ready to use.',
         409,
       );
+    // the background is checked before anything changes: one deleted from the library meanwhile is refused, not quietly swapped for white
+    const background = job.cutout_url ? await this.backgrounds.resolve(backgroundChoice) : null;
     const claimed = await this.db.one<{ id: string }>(
       "update public.photo_jobs set status = 'applied', decided_by = $2, decided_at = now() where id = $1 and status = 'done' returning id",
       [jobId, adminId],
     );
     if (!claimed) throw new AppError('Someone else just handled this photo.', 409);
     try {
-      await this.photos.add(
-        adminId,
-        job.square_item_id,
-        await downloadPhoto(job.result_url),
-        job.image_id,
-      );
+      const photo =
+        job.cutout_url && (background || backgroundChoice === null)
+          ? await this.backgrounds.compose(job.cutout_url, background)
+          : await downloadPhoto(job.result_url);
+      const { created } = await this.photos.add(adminId, job.square_item_id, photo, job.image_id);
+      if (job.cutout_url)
+        await this.backgrounds.remember(
+          job.square_item_id,
+          created,
+          job.cutout_url,
+          background?.id ?? null,
+        );
     } catch (error) {
       await this.db.exec(
         "update public.photo_jobs set status = 'done', decided_by = null, decided_at = null where id = $1",
@@ -250,15 +268,25 @@ export class PhotoJobsService {
       throw error;
     }
     await this.storage.deleteImages([job.result_url]).catch(() => undefined);
-    await this.db.exec('update public.photo_jobs set result_url = null where id = $1', [jobId]);
+    // the cut-out now belongs to the product (product_cutouts), not to the job
+    await this.db.exec(
+      'update public.photo_jobs set result_url = null, cutout_url = null where id = $1',
+      [jobId],
+    );
     await this.log.write(adminId, 'photos.job_applied', job.square_item_id, {
       jobId,
       imageId: job.image_id,
+      background: job.cutout_url ? (background?.name ?? 'white') : null,
     });
   }
 
   /** Uses every finished photo of a batch (or just the ones named), one after the other; the ones Square refuses are reported and stay waiting. */
-  async applyMany(adminId: string, batchId: string, only?: string[]) {
+  async applyMany(
+    adminId: string,
+    batchId: string,
+    only?: string[],
+    backgroundChoice?: string | null,
+  ) {
     const jobs = await this.db.many<{ id: string; product_name: string }>(
       "select id, product_name from public.photo_jobs where batch_id = $1 and status = 'done' order by product_name, created_at",
       [batchId],
@@ -268,7 +296,7 @@ export class PhotoJobsService {
     const failed: { id: string; product: string; error: string }[] = [];
     for (const j of chosen) {
       try {
-        await this.apply(adminId, j.id);
+        await this.apply(adminId, j.id, backgroundChoice);
         applied++;
       } catch (e) {
         failed.push({
@@ -291,15 +319,20 @@ export class PhotoJobsService {
         throw notFound('Photo job');
       throw new AppError('This photo cannot be rejected now.', 409);
     }
-    if (job.result_url) await this.storage.deleteImages([job.result_url]).catch(() => undefined);
-    await this.db.exec('update public.photo_jobs set result_url = null where id = $1', [jobId]);
+    await this.storage
+      .deleteImages([job.result_url, job.cutout_url].filter((u): u is string => !!u))
+      .catch(() => undefined);
+    await this.db.exec(
+      'update public.photo_jobs set result_url = null, cutout_url = null where id = $1',
+      [jobId],
+    );
     await this.log.write(adminId, 'photos.job_rejected', job.square_item_id, { jobId });
   }
 
   /** Puts a failed or rejected photo back in the queue. */
   async retry(adminId: string, jobId: string) {
     const job = await this.db.one<{ square_item_id: string }>(
-      "update public.photo_jobs set status = 'queued', attempts = 0, error = null, lease_until = null, worker_id = null, result_url = null, decided_by = null, decided_at = null where id = $1 and status in ('failed', 'rejected') returning square_item_id",
+      "update public.photo_jobs set status = 'queued', attempts = 0, error = null, lease_until = null, worker_id = null, result_url = null, cutout_url = null, decided_by = null, decided_at = null where id = $1 and status in ('failed', 'rejected') returning square_item_id",
       [jobId],
     );
     if (!job) {
@@ -381,9 +414,11 @@ export class PhotoJobsService {
     jobId: string,
     rawDetails: unknown,
     image: { buffer: Buffer; mimetype: string },
+    cutout: { buffer: Buffer; mimetype: string } | null = null,
   ) {
     if (!IMAGE_TYPES[image.mimetype])
       throw new AppError('The photo must be a WebP, JPEG or PNG image.');
+    await checkCutout(cutout);
     const job = await this.db.one<JobRow & { worker_id: string | null }>(
       'select * from public.photo_jobs where id = $1',
       [jobId],
@@ -395,12 +430,23 @@ export class PhotoJobsService {
         409,
       );
     const stored = await this.storage.uploadImage(image.buffer, image.mimetype, 'imports');
+    const storedCutout = cutout
+      ? await this.storage.uploadImage(cutout.buffer, cutout.mimetype, 'imports')
+      : null;
     const done = await this.db.one<{ id: string }>(
-      "update public.photo_jobs set status = 'done', result_url = $2, details = $3, error = null, lease_until = null where id = $1 and status = 'running' and worker_id = $4 returning id",
-      [jobId, stored.url, JSON.stringify(parseJobDetails(rawDetails)), tokenId],
+      "update public.photo_jobs set status = 'done', result_url = $2, details = $3, error = null, lease_until = null, cutout_url = $5 where id = $1 and status = 'running' and worker_id = $4 returning id",
+      [
+        jobId,
+        stored.url,
+        JSON.stringify(parseJobDetails(rawDetails)),
+        tokenId,
+        storedCutout?.url ?? null,
+      ],
     );
     if (!done) {
-      await this.storage.deleteImages([stored.url]).catch(() => undefined);
+      await this.storage
+        .deleteImages([stored.url, storedCutout?.url].filter((u): u is string => !!u))
+        .catch(() => undefined);
       throw new AppError('This job is not yours any more.', 409);
     }
   }
@@ -416,4 +462,13 @@ export class PhotoJobsService {
     );
     if (!job) throw new AppError('This job is not yours any more.', 409);
   }
+}
+
+/** A cut-out must be a PNG or WebP with see-through pixels: anything else is refused, so a white photo is never taken for one. */
+export async function checkCutout(cutout: { buffer: Buffer; mimetype: string } | null) {
+  if (!cutout) return;
+  if (cutout.mimetype !== 'image/png' && cutout.mimetype !== 'image/webp')
+    throw new AppError('The cut-out must be a PNG or WebP with a transparent background.');
+  if (!(await hasTransparency(cutout.buffer)))
+    throw new AppError('The cut-out has no transparent background.');
 }

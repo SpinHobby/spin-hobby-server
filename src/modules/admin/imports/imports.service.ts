@@ -7,7 +7,10 @@ import { port, publicApiUrl } from '../../../config/app.config.js';
 import { PRODUCT_CATEGORIES } from '../../cashier/product-categories.js';
 import { AdminLog } from '../admin-log.service.js';
 import type { QuickAddDto } from '../products/dto/quick-add.dto.js';
+import { PhotoBackgroundsService } from '../products/photo-backgrounds.service.js';
 import { QuickAddService } from '../products/quick-add.service.js';
+import { SquarePhotosService } from '../products/square-photos.service.js';
+import { checkCutout } from './photo-jobs.service.js';
 import { SeriesService } from '../series/series.service.js';
 import { isOfficialUrl, parseDraft, type DraftInput, type OfficialPhoto } from './draft.js';
 import { likelySameProducts, type ProductMatch, type ShopProduct } from './duplicates.js';
@@ -29,6 +32,7 @@ interface ImportRow {
   series: string | null;
   details: Record<string, unknown>;
   image_url: string | null;
+  cutout_url: string | null;
   square_item_id: string | null;
   reject_reason: string | null;
   created_at: string;
@@ -44,6 +48,8 @@ const present = (r: ImportRow) => ({
   series: r.series,
   details: r.details,
   imageUrl: r.image_url,
+  // the product alone on a transparent background, to put on one of the shop's backgrounds
+  cutoutUrl: r.image_url ? r.cutout_url : null,
   productId: r.square_item_id,
   rejectReason: r.reject_reason,
   createdAt: r.created_at,
@@ -66,6 +72,8 @@ export class ImportsService {
     private readonly quickAdd: QuickAddService,
     private readonly series: SeriesService,
     private readonly log: AdminLog,
+    private readonly backgrounds: PhotoBackgroundsService,
+    private readonly photos: SquarePhotosService,
   ) {}
 
   // ---- connecting an app ------------------------------------------------------------------------------------------------------------
@@ -183,10 +191,16 @@ export class ImportsService {
   // ---- drafts ------------------------------------------------------------------------------------------------------------------------
 
   /** Stores a draft with its photo. A draft sent again for the same source photo replaces the earlier one while it is still a draft. */
-  async receive(tokenId: string, rawDraft: unknown, image: { buffer: Buffer; mimetype: string }) {
+  async receive(
+    tokenId: string,
+    rawDraft: unknown,
+    image: { buffer: Buffer; mimetype: string },
+    cutout: { buffer: Buffer; mimetype: string } | null = null,
+  ) {
     const draft: DraftInput = parseDraft(rawDraft);
     if (!IMAGE_TYPES[image.mimetype])
       throw new AppError('The photo must be a WebP, JPEG or PNG image.');
+    await checkCutout(cutout);
     const existing = await this.db.one<ImportRow>(
       'select * from public.product_imports where source_key = $1',
       [draft.sourceKey],
@@ -194,10 +208,13 @@ export class ImportsService {
     if (existing && existing.status !== 'draft')
       return { id: existing.id, created: false, status: existing.status };
     const stored = await this.storage.uploadImage(image.buffer, image.mimetype, 'imports');
+    const storedCutout = cutout
+      ? (await this.storage.uploadImage(cutout.buffer, cutout.mimetype, 'imports')).url
+      : null;
     const details = JSON.stringify(draft.details);
     if (existing) {
       await this.db.exec(
-        'update public.product_imports set title = $2, description = $3, category = $4, series = $5, details = $6, image_url = $7, token_id = $8 where id = $1',
+        'update public.product_imports set title = $2, description = $3, category = $4, series = $5, details = $6, image_url = $7, token_id = $8, cutout_url = $9 where id = $1',
         [
           existing.id,
           draft.title,
@@ -207,14 +224,16 @@ export class ImportsService {
           details,
           stored.url,
           tokenId,
+          storedCutout,
         ],
       );
-      if (existing.image_url)
-        await this.storage.deleteImages([existing.image_url]).catch(() => undefined);
+      await this.storage
+        .deleteImages([existing.image_url, existing.cutout_url].filter((u): u is string => !!u))
+        .catch(() => undefined);
       return { id: existing.id, created: false, status: 'draft' as const };
     }
     const row = await this.db.one<{ id: string }>(
-      'insert into public.product_imports (source_key, title, description, category, series, details, image_url, token_id) values ($1, $2, $3, $4, $5, $6, $7, $8) returning id',
+      'insert into public.product_imports (source_key, title, description, category, series, details, image_url, token_id, cutout_url) values ($1, $2, $3, $4, $5, $6, $7, $8, $9) returning id',
       [
         draft.sourceKey,
         draft.title,
@@ -224,6 +243,7 @@ export class ImportsService {
         details,
         stored.url,
         tokenId,
+        storedCutout,
       ],
     );
     return { id: row!.id, created: true, status: 'draft' as const };
@@ -310,8 +330,13 @@ export class ImportsService {
     if (!claimed) throw new AppError('Someone else just handled this draft.', 409);
     try {
       const stockCount = await this.quickAdd.addStock(adminId, productId, quantity);
-      if (row.image_url) await this.storage.deleteImages([row.image_url]).catch(() => undefined);
-      await this.db.exec('update public.product_imports set image_url = null where id = $1', [id]);
+      await this.storage
+        .deleteImages([row.image_url, row.cutout_url].filter((u): u is string => !!u))
+        .catch(() => undefined);
+      await this.db.exec(
+        'update public.product_imports set image_url = null, cutout_url = null where id = $1',
+        [id],
+      );
       await this.log.write(adminId, 'imports.restocked', id, { productId, quantity, stockCount });
       return { productId, stockCount };
     } catch (error) {
@@ -340,6 +365,7 @@ export class ImportsService {
     id: string,
     dto: QuickAddDto,
     photo: 'own' | 'official' | 'both' = 'own',
+    backgroundChoice?: string | null,
   ) {
     const row = await this.db.one<ImportRow>('select * from public.product_imports where id = $1', [
       id,
@@ -350,37 +376,68 @@ export class ImportsService {
     const official = (row.details as { official?: OfficialPhoto | null }).official ?? null;
     if (photo !== 'own' && !official)
       throw new AppError('This draft has no official photo to use.', 409);
+    // the shop's own photo on one of its backgrounds, from the draft's cut-out: checked before anything changes
+    const ownOnBackground = photo !== 'official' && !!row.cutout_url;
+    const background = ownOnBackground ? await this.backgrounds.resolve(backgroundChoice) : null;
+    const compose = ownOnBackground && (!!background || backgroundChoice === null);
     const claimed = await this.db.one<{ id: string }>(
       "update public.product_imports set status = 'added', decided_by = $2, decided_at = now() where id = $1 and status = 'draft' returning id",
       [id, adminId],
     );
     if (!claimed) throw new AppError('Someone else just handled this draft.', 409);
     let officialCopy: string | null = null;
+    let composed: string | null = null;
     try {
       if (photo !== 'own') officialCopy = await this.copyOfficialPhoto(official!.imageUrl);
+      if (compose)
+        composed = (
+          await this.storage.uploadImage(
+            await this.backgrounds.compose(row.cutout_url!, background),
+            'image/jpeg',
+            'imports',
+          )
+        ).url;
+      const own = composed ?? row.image_url;
       dto.imageUrls =
-        photo === 'official'
-          ? [officialCopy!]
-          : photo === 'both'
-            ? [row.image_url, officialCopy!]
-            : [row.image_url];
+        photo === 'official' ? [officialCopy!] : photo === 'both' ? [own, officialCopy!] : [own];
       const product = await this.quickAdd.add(adminId, dto);
       await this.db.exec(
-        'update public.product_imports set square_item_id = $2, image_url = null where id = $1',
+        'update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null where id = $1',
         [id, product.id],
       );
-      // the shop's own photo was not used: it is not needed any more
-      if (photo === 'official')
+      // the white-square photo was not used (another photo or a background took its place): it is not needed any more
+      if (photo === 'official' || composed)
         await this.storage.deleteImages([row.image_url]).catch(() => undefined);
-      await this.log.write(adminId, 'imports.added', id, { productId: product.id, photo });
+      // the cut-out stays with the product, behind its first photo, so the background can be changed later
+      if (row.cutout_url) {
+        const kept = photo === 'official' ? null : await this.firstPhotoId(product.id);
+        if (kept)
+          await this.backgrounds.remember(product.id, kept, row.cutout_url, background?.id ?? null);
+        else await this.storage.deleteImages([row.cutout_url]).catch(() => undefined);
+      }
+      await this.log.write(adminId, 'imports.added', id, {
+        productId: product.id,
+        photo,
+        background: compose ? (background?.name ?? 'white') : null,
+      });
       return product;
     } catch (error) {
       if (officialCopy) await this.storage.deleteImages([officialCopy]).catch(() => undefined);
+      if (composed) await this.storage.deleteImages([composed]).catch(() => undefined);
       await this.db.exec(
         "update public.product_imports set status = 'draft', decided_by = null, decided_at = null where id = $1",
         [id],
       );
       throw error;
+    }
+  }
+
+  /** The id of a new product's first photo in Square (the shop's own photo is put first), or null when Square cannot say. */
+  private async firstPhotoId(productId: string): Promise<string | null> {
+    try {
+      return (await this.photos.list(productId)).shown[0]?.id ?? null;
+    } catch {
+      return null;
     }
   }
 
@@ -408,8 +465,13 @@ export class ImportsService {
         throw notFound('Draft');
       throw new AppError('This draft was already handled.', 409);
     }
-    if (row.image_url) await this.storage.deleteImages([row.image_url]).catch(() => undefined);
-    await this.db.exec('update public.product_imports set image_url = null where id = $1', [id]);
+    await this.storage
+      .deleteImages([row.image_url, row.cutout_url].filter((u): u is string => !!u))
+      .catch(() => undefined);
+    await this.db.exec(
+      'update public.product_imports set image_url = null, cutout_url = null where id = $1',
+      [id],
+    );
     await this.log.write(adminId, 'imports.rejected', id, { reason });
   }
 }

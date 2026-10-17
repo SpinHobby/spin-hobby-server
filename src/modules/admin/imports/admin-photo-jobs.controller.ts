@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
 import { ApplyPhotosDto, CreatePhotoBatchDto } from './dto/imports.dto.js';
+import { backgroundChoice } from '../products/dto/backgrounds.dto.js';
 import { PhotoJobsService } from './photo-jobs.service.js';
 
 /** Better photos for many products at once: send photos to the photo computer, look at the results, use the ones that are good. */
@@ -45,7 +46,10 @@ export class AdminPhotoJobsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: ApplyPhotosDto,
   ) {
-    return { success: true, ...(await this.jobs.applyMany(admin.id, id, dto.jobIds ?? undefined)) };
+    return {
+      success: true,
+      ...(await this.jobs.applyMany(admin.id, id, dto.jobIds ?? undefined, dto.backgroundId)),
+    };
   }
 
   /** Takes the photos that have not been started out of the queue. */
@@ -57,8 +61,13 @@ export class AdminPhotoJobsController {
 
   @Post('photos/:jobId/apply')
   @HttpCode(200)
-  async apply(@CurrentUser() admin: AppUser, @Param('jobId', ParseUUIDPipe) jobId: string) {
-    await this.jobs.apply(admin.id, jobId);
+  async apply(
+    @CurrentUser() admin: AppUser,
+    @Param('jobId', ParseUUIDPipe) jobId: string,
+    @Body() body: { backgroundId?: unknown } | undefined,
+  ) {
+    // the body is optional (no background chosen: the shop's default), so it is read by hand rather than through a DTO
+    await this.jobs.apply(admin.id, jobId, backgroundChoice(body?.backgroundId));
     return { success: true };
   }
 

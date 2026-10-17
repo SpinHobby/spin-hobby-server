@@ -67,7 +67,10 @@ export class AdminImportsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: AddImportDto,
   ) {
-    return { success: true, product: await this.imports.add(admin.id, id, dto, dto.photo) };
+    return {
+      success: true,
+      product: await this.imports.add(admin.id, id, dto, dto.photo, dto.backgroundId),
+    };
   }
 
   /** The draft is a product the shop already has: adds its units to that product's stock instead of making a second listing. */

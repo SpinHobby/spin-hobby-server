@@ -1,3 +1,5 @@
+import { AdminPhotoBackgroundsController } from './products/admin-photo-backgrounds.controller.js';
+import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js';
 import { Module } from '@nestjs/common';
 import { EmailModule } from '../../integrations/email/email.module.js';
 import { PayPalModule } from '../../integrations/paypal/paypal.module.js';
@@ -66,6 +68,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     AdminSeriesController,
     AdminImportsController,
     AdminPhotoJobsController,
+    AdminPhotoBackgroundsController,
     AdminListingJobsController,
     GleamshelfController,
   ],
@@ -83,6 +86,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     ProductTransferService,
     QuickAddService,
     SquarePhotosService,
+    PhotoBackgroundsService,
     AdminMerchService,
     AdminCategoriesService,
     CategorySortingService,
