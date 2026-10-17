@@ -206,9 +206,10 @@ export class PhotoJobsService {
       label: string;
       last_used_at: string | null;
       features: string[];
+      status_note: string | null;
       running: number;
     }>(
-      `select t.id, t.label, t.last_used_at, t.features,
+      `select t.id, t.label, t.last_used_at, t.features, t.status_note,
               (select count(*)::int from public.photo_jobs j where j.worker_id = t.id and j.status = 'running') as running
          from public.import_tokens t where t.revoked_at is null order by t.last_used_at desc nulls last`,
     );
@@ -219,6 +220,7 @@ export class PhotoJobsService {
       lastSeen: r.last_used_at,
       online: !!r.last_used_at && now - Date.parse(r.last_used_at) < ONLINE_SECONDS * 1000,
       canImprovePhotos: r.features.includes('photo'),
+      note: r.status_note,
       working: r.running,
     }));
   }
@@ -358,10 +360,14 @@ export class PhotoJobsService {
   // ---- what a worker does -------------------------------------------------------------------------------------------------------------
 
   /** The next photo to improve, leased to this worker; null when there is none (or the worker cannot do photos). Also notes that the worker is alive. */
-  async claim(tokenId: string, features: string[]) {
+  async claim(tokenId: string, features: string[], note: string | null = null) {
     await this.db.exec(
-      'update public.import_tokens set features = $2, last_used_at = now() where id = $1',
-      [tokenId, features.slice(0, 10)],
+      'update public.import_tokens set features = $2, last_used_at = now(), status_note = $3 where id = $1',
+      [
+        tokenId,
+        features.slice(0, 10),
+        note ? note.replace(/\s+/g, ' ').trim().slice(0, 200) : null,
+      ],
     );
     if (!features.includes('photo')) return null;
     return this.db.transaction(async (tx) => {

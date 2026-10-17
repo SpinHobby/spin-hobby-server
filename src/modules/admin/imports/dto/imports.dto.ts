@@ -98,6 +98,10 @@ export class ClaimJobDto {
     return v;
   })
   features: string[] = [];
+
+  /** Why the app cannot do some of its work right now (web search down, no vision model); null when it can do everything it lists. */
+  @OptionalText(200)
+  note: string | null = null;
 }
 
 /** The improved photo's details, as JSON text next to the photo file. */

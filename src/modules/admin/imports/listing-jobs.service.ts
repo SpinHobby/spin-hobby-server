@@ -37,6 +37,7 @@ interface JobRow {
   progress: number | null;
   step: string | null;
   started_at: string | null;
+  lease_until: string | null;
   draft_title: string | null;
   draft_status: string | null;
   draft_series: string | null;
@@ -57,6 +58,11 @@ const present = (r: JobRow) => ({
   progress: r.status === 'running' ? (r.progress ?? 0) : null,
   step: r.status === 'running' ? r.step : null,
   startedAt: r.status === 'running' ? r.started_at : null,
+  // when the photo computer last said it was working on this photo (each report renews the lease): a long silence means it may have stopped
+  heardAt:
+    r.status === 'running' && r.lease_until
+      ? new Date(Date.parse(r.lease_until) - LEASE_MINUTES * 60_000).toISOString()
+      : null,
   createdAt: r.created_at,
 });
 
@@ -155,9 +161,10 @@ export class ListingJobsService {
       label: string;
       last_used_at: string | null;
       features: string[];
+      status_note: string | null;
       running: number;
     }>(
-      `select t.id, t.label, t.last_used_at, t.features,
+      `select t.id, t.label, t.last_used_at, t.features, t.status_note,
               (select count(*)::int from public.listing_jobs j where j.worker_id = t.id and j.status = 'running') as running
          from public.import_tokens t where t.revoked_at is null order by t.last_used_at desc nulls last`,
     );
@@ -168,6 +175,8 @@ export class ListingJobsService {
       lastSeen: r.last_used_at,
       online: !!r.last_used_at && now - Date.parse(r.last_used_at) < ONLINE_SECONDS * 1000,
       canCreateListings: r.features.includes('listing'),
+      // why it cannot write drafts right now, in its own words (web search down, no vision model)
+      note: r.status_note,
       working: r.running,
     }));
   }
@@ -204,10 +213,14 @@ export class ListingJobsService {
   // ---- what a worker does -------------------------------------------------------------------------------------------------------------
 
   /** The next photo to make a listing from, leased to this worker; null when there is none or the worker cannot write listings. */
-  async claim(tokenId: string, features: string[]) {
+  async claim(tokenId: string, features: string[], note: string | null = null) {
     await this.db.exec(
-      'update public.import_tokens set features = $2, last_used_at = now() where id = $1',
-      [tokenId, features.slice(0, 10)],
+      'update public.import_tokens set features = $2, last_used_at = now(), status_note = $3 where id = $1',
+      [
+        tokenId,
+        features.slice(0, 10),
+        note ? note.replace(/\s+/g, ' ').trim().slice(0, 200) : null,
+      ],
     );
     if (!features.includes('listing')) return null;
     return this.db.transaction(async (tx) => {

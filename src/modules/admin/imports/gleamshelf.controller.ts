@@ -105,7 +105,7 @@ export class GleamshelfController {
   @UseGuards(GleamshelfTokenGuard)
   @ApiBearerAuth()
   async claim(@AppToken() tokenId: string, @Body() dto: ClaimJobDto) {
-    return { success: true, job: await this.jobs.claim(tokenId, dto.features) };
+    return { success: true, job: await this.jobs.claim(tokenId, dto.features, dto.note) };
   }
 
   /** The improved photo of a job the app holds. */
@@ -146,7 +146,7 @@ export class GleamshelfController {
   @UseGuards(GleamshelfTokenGuard)
   @ApiBearerAuth()
   async claimListing(@AppToken() tokenId: string, @Body() dto: ClaimJobDto) {
-    return { success: true, job: await this.listings.claim(tokenId, dto.features) };
+    return { success: true, job: await this.listings.claim(tokenId, dto.features, dto.note) };
   }
 
   /** The draft and finished photo of a listing job the app holds: the draft goes into the Imports inbox. */

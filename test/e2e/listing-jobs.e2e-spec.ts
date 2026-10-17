@@ -36,9 +36,14 @@ async function worker(label = 'Gaming PC') {
   const token = (await http.post('/gleamshelf/pair').send({ code, label })).body.token as string;
   const as = { Authorization: `Bearer ${token}` };
   return {
-    claim: async (features: string[] = ['photo', 'listing']) =>
-      (await http.post('/gleamshelf/listing-jobs/claim').set(as).send({ features }).expect(200))
-        .body.job as {
+    claim: async (features: string[] = ['photo', 'listing'], note?: string) =>
+      (
+        await http
+          .post('/gleamshelf/listing-jobs/claim')
+          .set(as)
+          .send({ features, note })
+          .expect(200)
+      ).body.job as {
         id: string;
         sourceUrl: string;
         fileName: string;
@@ -76,9 +81,10 @@ const list = async () =>
       progress: number | null;
       step: string | null;
       startedAt: string | null;
+      heardAt: string | null;
     }[];
     counts: Record<string, number>;
-    workers: { label: string; online: boolean; canCreateListings: boolean }[];
+    workers: { label: string; online: boolean; canCreateListings: boolean; note: string | null }[];
   };
 
 describe('uploading photos', () => {
@@ -184,6 +190,8 @@ describe('progress', () => {
     let row = (await list()).jobs.find((j) => j.id === job!.id)!;
     expect(row).toMatchObject({ status: 'running', progress: 0, step: null });
     expect(row.startedAt).toBeTruthy();
+    // when the photo computer last spoke about this photo: just now
+    expect(Math.abs(Date.parse(row.heardAt!) - Date.now())).toBeLessThan(60_000);
     await w.progress(job!.id, 40, 'reading the box').expect(200);
     await w.progress(job!.id, 20, 'a late report').expect(200);
     row = (await list()).jobs.find((j) => j.id === job!.id)!;
@@ -194,6 +202,22 @@ describe('progress', () => {
     await w.fail(job!.id, 'stopped').expect(200);
     row = (await list()).jobs.find((j) => j.id === job!.id)!;
     expect(row).toMatchObject({ status: 'queued', progress: null, step: null, startedAt: null });
+  });
+});
+
+describe('why photos wait', () => {
+  it("shows a connected photo computer's own reason for not writing drafts, and clears it when it can again", async () => {
+    const w = await worker('Note PC');
+    await w.claim(['photo'], 'web search is not answering, so it cannot look products up');
+    let me = (await list()).workers.find((x) => x.label === 'Note PC')!;
+    expect(me).toMatchObject({
+      online: true,
+      canCreateListings: false,
+      note: 'web search is not answering, so it cannot look products up',
+    });
+    await w.claim();
+    me = (await list()).workers.find((x) => x.label === 'Note PC')!;
+    expect(me).toMatchObject({ canCreateListings: true, note: null });
   });
 });
 
