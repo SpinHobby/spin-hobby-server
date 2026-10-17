@@ -227,8 +227,8 @@ export class PhotoJobsService {
 
   /**
    * Puts the improved photo on the product in the old one's place. The job stays "done" if Square refuses, so it can be tried again. With a cut-out
-   * the photo is the product placed on the chosen background (left out: the shop's default; null: white), and the cut-out is kept with the product so
-   * its background can be changed later; without one it is the photo computer's own white square.
+   * and a background (chosen, or the shop's default when none is chosen) the photo is the product placed on it; otherwise (null: white) it is the photo
+   * computer's own white square. The cut-out is kept with the product either way, so its background can be changed later.
    */
   async apply(adminId: string, jobId: string, backgroundChoice?: string | null) {
     const job = await this.db.one<JobRow>('select * from public.photo_jobs where id = $1', [jobId]);
@@ -249,7 +249,7 @@ export class PhotoJobsService {
     if (!claimed) throw new AppError('Someone else just handled this photo.', 409);
     try {
       const photo =
-        job.cutout_url && (background || backgroundChoice === null)
+        job.cutout_url && background
           ? await this.backgrounds.compose(job.cutout_url, background)
           : await downloadPhoto(job.result_url);
       const { created } = await this.photos.add(adminId, job.square_item_id, photo, job.image_id);

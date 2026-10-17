@@ -379,7 +379,7 @@ export class ImportsService {
     // the shop's own photo on one of its backgrounds, from the draft's cut-out: checked before anything changes
     const ownOnBackground = photo !== 'official' && !!row.cutout_url;
     const background = ownOnBackground ? await this.backgrounds.resolve(backgroundChoice) : null;
-    const compose = ownOnBackground && (!!background || backgroundChoice === null);
+    const compose = ownOnBackground && !!background;
     const claimed = await this.db.one<{ id: string }>(
       "update public.product_imports set status = 'added', decided_by = $2, decided_at = now() where id = $1 and status = 'draft' returning id",
       [id, adminId],
