@@ -26,7 +26,7 @@ the add fails. The form keeps the product off the website by default.
 | --- | --- | --- |
 | `POST /gleamshelf/pair` | anyone (10 a minute per address, 20 wrong codes in 10 minutes in all) | trades a code for the app's token |
 | `GET /gleamshelf/ping`, `GET /gleamshelf/config` | the app's token | still connected? the category and series lists |
-| `POST /gleamshelf/imports` | the app's token | a draft (JSON in the `draft` field) with its photo (the `photo` file, up to 6 MB) |
+| `POST /gleamshelf/imports` | the app's token | a draft (JSON in the `draft` field) with its photo (the `photo` file, up to 6 MB) and, optionally, its cut-out (the `cutout` file: a PNG or WebP with a transparent background) |
 | `GET /admin/imports?status=draft\|added\|rejected` | staff | the list, the counts and the category names |
 | `GET /admin/imports/:id`, `POST …/:id/add`, `POST …/:id/reject` | staff | look, add, reject |
 | `POST /admin/imports/pairing`, `GET /admin/imports/connections`, `DELETE …/connections/:id` | owner | connect and disconnect apps |
@@ -47,6 +47,25 @@ Gleamshelf is also a photo computer: a gaming PC left on overnight that improves
    existing photo editing (the original is hidden, never deleted); **Don't use** discards it; **Try again** queues it again; **Use all** applies every finished photo of a batch.
 
 Tables: `photo_batches`, `photo_jobs` (migration `20261013130000_photo_jobs.sql`). A photo is in the queue once (a partial unique index). Nothing is applied automatically.
+
+## Backgrounds (the shop's own, not Square's)
+
+Gleamshelf sends each finished photo twice: on its white studio square (`photo`) and as the product alone on a transparent background (`cutout`, on every
+`/gleamshelf/imports`, `/gleamshelf/jobs/:id/result` and `/gleamshelf/listing-jobs/:id/result`; optional, so older apps still work). A cut-out without
+see-through pixels is refused, so a white photo is never taken for one.
+
+- **The library.** Admin, Photos, **Backgrounds**: upload pictures (at least 600 px a side, up to 40), rename, delete, and choose the **default** (or
+  White). They live in our image storage (`backgrounds/`), never in Square. Routes: `GET/POST /admin/photo-backgrounds`, `PATCH/DELETE
+  /admin/photo-backgrounds/:id`, `PUT /admin/photo-backgrounds/default`.
+- **Using a photo.** When a queued photo is used (`POST /admin/photo-batches/photos/:id/apply`, body `{ backgroundId }`) or a draft is added
+  (`POST /admin/imports/:id/add`, `backgroundId` next to the quick-add fields), the server places the cut-out on the background (`compose-photo.ts`:
+  centred inside an 8% margin, a soft shadow, the product's pixels only scaled) and sends that to Square. Left out, the default is used; `null` (White)
+  keeps Gleamshelf's own white photo. The admin shows a live preview of each choice.
+- **Changing it later.** The cut-out is kept with the product (`product_cutouts`: the Square photo it made, the background). A product's photos list
+  returns `cutouts`, and `PUT /admin/products/:id/photos/:imageId/background` (`{ backgroundId }`, `null` for white) makes the photo again on the new
+  background; it takes the old one's place and the old one (made here from the same cut-out) is deleted, so swaps do not pile up hidden photos.
+
+Tables: `photo_backgrounds`, `product_cutouts`, and `cutout_url` on `photo_jobs` and `product_imports` (migration `20261016120000_photo_backgrounds.sql`).
 
 ## Not done yet
 
