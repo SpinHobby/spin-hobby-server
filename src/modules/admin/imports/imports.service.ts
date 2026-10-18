@@ -6,6 +6,12 @@ import { Db } from '../../../database/db.service.js';
 import { IMAGE_TYPES, StorageService } from '../../../integrations/storage/storage.service.js';
 import { port, publicApiUrl } from '../../../config/app.config.js';
 import { PRODUCT_CATEGORIES } from '../../cashier/product-categories.js';
+import {
+  findCategory,
+  labelCategories,
+  type CategoryNode,
+  type LabelledCategory,
+} from '../categories/category-paths.js';
 import { AdminLog } from '../admin-log.service.js';
 import type { QuickAddDto } from '../products/dto/quick-add.dto.js';
 import { cropToProduct } from '../products/compose-photo.js';
@@ -88,12 +94,34 @@ function legacyChoices(photo: 'own' | 'official' | 'both', onBackground: boolean
   return photo === 'official' ? [off] : photo === 'both' ? [own, off] : [own];
 }
 
-const present = (r: ImportRow) => ({
+/**
+ * The draft's category as one of the shop's (its id), or, when the product fits none of them, the new category to suggest and the existing one to put
+ * it under. A category name the shop does not have (a draft from before the shop's own tree was sent, or one it has since deleted) is suggested too.
+ */
+function categoryOf(r: ImportRow, categories: LabelledCategory[]) {
+  const found = findCategory(categories, r.category);
+  if (found) return { categoryId: found.id, suggestedCategory: null };
+  const suggested =
+    (r.details as Partial<DraftInput['details']>).suggestedCategory ??
+    (r.category ? { name: r.category, under: null } : null);
+  if (!suggested) return { categoryId: null, suggestedCategory: null };
+  // a "new" category the shop already has is simply that category
+  const existing = findCategory(categories, suggested.name);
+  if (existing) return { categoryId: existing.id, suggestedCategory: null };
+  const parent = findCategory(categories, suggested.under);
+  return {
+    categoryId: null,
+    suggestedCategory: { name: suggested.name, parentId: parent?.id ?? null },
+  };
+}
+
+const present = (r: ImportRow, categories: LabelledCategory[]) => ({
   id: r.id,
   status: r.status,
   title: r.title,
   description: r.description,
   category: r.category,
+  ...categoryOf(r, categories),
   series: r.series,
   details: r.details,
   imageUrl: r.image_url,
@@ -104,6 +132,7 @@ const present = (r: ImportRow) => ({
   productId: r.square_item_id,
   rejectReason: r.reject_reason,
   createdAt: r.created_at,
+  receivedAt: (r.details as { receivedAt?: string }).receivedAt ?? r.created_at,
   decidedAt: r.decided_at,
 });
 
@@ -233,10 +262,28 @@ export class ImportsService {
 
   /** The shop's own category and series lists, so the app writes into them instead of inventing its own. */
   async config() {
+    const categories = await this.categories();
     return {
-      categories: [...PRODUCT_CATEGORIES],
+      // the names to choose from (a name two categories share comes with its path); a shop without its own tree yet gets the cashier's list
+      categories: categories.length ? categories.map((c) => c.label) : [...PRODUCT_CATEGORIES],
+      // the same categories as a tree, for an app that shows the model where each one sits
+      categoryTree: categories.map((c) => ({
+        id: c.id,
+        parentId: c.parentId,
+        name: c.name,
+        label: c.label,
+      })),
       series: (await this.series.list()).map((s) => s.name),
     };
+  }
+
+  /** The shop's category tree (the website's own, under Admin → Categories), labelled. */
+  private async categories(): Promise<LabelledCategory[]> {
+    return labelCategories(
+      await this.db.many<CategoryNode>(
+        'select id, parent_id as "parentId", name from public.store_categories',
+      ),
+    );
   }
 
   // ---- drafts ------------------------------------------------------------------------------------------------------------------------
@@ -269,7 +316,8 @@ export class ImportsService {
       originalUrl && source.productRect
         ? await this.cropped(originalUrl, source.productRect)
         : null;
-    const details = JSON.stringify(draft.details);
+    // when the app sent it: a draft sent again for the same photo is a new draft to review, which the admin tells apart by this
+    const details = JSON.stringify({ ...draft.details, receivedAt: new Date().toISOString() });
     if (existing) {
       await this.db.exec(
         'update public.product_imports set title = $2, description = $3, category = $4, series = $5, details = $6, image_url = $7, token_id = $8, cutout_url = $9, original_url = $10, cropped_url = $11 where id = $1',
@@ -343,12 +391,12 @@ export class ImportsService {
     );
     // a draft of a product the shop already has: shown with the listing(s) it most likely is, so the photo can become more stock instead
     const products = status === 'draft' && rows.length ? await this.shopProducts() : [];
+    const categories = await this.categories();
     return {
       imports: rows.map((r) => ({
-        ...present(r),
+        ...present(r, categories),
         matches: status === 'draft' ? this.matchesFor(r, products) : [],
       })),
-      categories: [...PRODUCT_CATEGORIES],
       counts: Object.fromEntries(
         IMPORT_STATUSES.map((s) => [s, counts.find((c) => c.status === s)?.n ?? 0]),
       ),
@@ -441,7 +489,7 @@ export class ImportsService {
       id,
     ]);
     if (!row) throw notFound('Draft');
-    return present(row);
+    return present(row, await this.categories());
   }
 
   /**
@@ -639,7 +687,7 @@ export class ImportsService {
     );
     if (before) await this.storage.deleteImages([before]).catch(() => undefined);
     await this.log.write(adminId, 'imports.photo_edited', id, { photo: key });
-    return present(await this.draftRow(id));
+    return present(await this.draftRow(id), await this.categories());
   }
 
   /** Undoes the edit of one photo: the photo as offered is used again. */
@@ -653,7 +701,7 @@ export class ImportsService {
     );
     await this.storage.deleteImages([before]).catch(() => undefined);
     await this.log.write(adminId, 'imports.photo_edit_undone', id, { photo: key });
-    return present(await this.draftRow(id));
+    return present(await this.draftRow(id), await this.categories());
   }
 
   private async draftRow(id: string): Promise<ImportRow> {

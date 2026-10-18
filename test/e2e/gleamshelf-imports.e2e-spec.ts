@@ -425,8 +425,11 @@ describe('drafts', () => {
     ).expect(200);
     expect(second.body).toMatchObject({ id: first.body.id, created: false, status: 'draft' });
     const list = (await http.get('/admin/imports').set({ Authorization: staff.auth }).expect(200))
-      .body.imports as { id: string; title: string }[];
-    expect(list.filter((d) => d.id === first.body.id).map((d) => d.title)).toEqual(['Second try']);
+      .body.imports as { id: string; title: string; createdAt: string; receivedAt: string }[];
+    const mine = list.filter((d) => d.id === first.body.id);
+    expect(mine.map((d) => d.title)).toEqual(['Second try']);
+    // the admin tells a draft sent again from the first by when it was received
+    expect(Date.parse(mine[0].receivedAt)).toBeGreaterThanOrEqual(Date.parse(mine[0].createdAt));
   });
 
   it('refuses a draft with no title, a bad key, no photo, or something that is not an image', async () => {
@@ -557,5 +560,86 @@ describe('deciding on a draft', () => {
     expect(rejected.imports.map((d: { id: string }) => d.id)).toContain(id);
     expect(rejected.counts.rejected).toBeGreaterThanOrEqual(1);
     await http.get('/admin/imports').expect(401);
+  });
+});
+
+describe("the shop's own category tree", () => {
+  it('sends the tree to the app, files a draft under the category it names, and suggests a new one when none fits', async () => {
+    const make = async (name: string, parentId: string | null = null) =>
+      (
+        await http
+          .post('/admin/categories')
+          .set({ Authorization: staff.auth })
+          .send({ name, parentId })
+          .expect(200)
+      ).body.category.id as string;
+    const figures = await make('Figures');
+    const bishoujo = await make('Bishoujo Figures', figures);
+    const goods = await make('Goods');
+    await make('Other', figures);
+    await make('Other', goods);
+
+    const { token } = await connectedApp();
+    const config = (
+      await http
+        .get('/gleamshelf/config')
+        .set({ Authorization: `Bearer ${token}` })
+        .expect(200)
+    ).body;
+    // a name two categories share comes with its path, so the app's answer means one category
+    expect(config.categories).toEqual(
+      expect.arrayContaining([
+        'Figures',
+        'Bishoujo Figures',
+        'Goods',
+        'Figures › Other',
+        'Goods › Other',
+      ]),
+    );
+    expect(config.categories).not.toContain('Other');
+    expect(config.categoryTree).toContainEqual({
+      id: bishoujo,
+      parentId: figures,
+      name: 'Bishoujo Figures',
+      label: 'Bishoujo Figures',
+    });
+
+    const fits = (
+      await send(
+        token,
+        draft({ sourceKey: 'tree-fits-0001', category: 'figures > bishoujo figures' }),
+      ).expect(200)
+    ).body.id;
+    const none = (
+      await send(
+        token,
+        draft({
+          sourceKey: 'tree-none-0001',
+          category: null,
+          newCategory: { name: 'Scale Figures', under: 'Figures' },
+        }),
+      ).expect(200)
+    ).body.id;
+    const named = (
+      await send(token, draft({ sourceKey: 'tree-named-001', category: 'Plushies' })).expect(200)
+    ).body.id;
+    const get = async (id: string) =>
+      (await http.get(`/admin/imports/${id}`).set({ Authorization: staff.auth }).expect(200)).body
+        .draft;
+
+    expect(await get(fits)).toMatchObject({ categoryId: bishoujo, suggestedCategory: null });
+    expect(await get(none)).toMatchObject({
+      categoryId: null,
+      suggestedCategory: { name: 'Scale Figures', parentId: figures },
+    });
+    // a name the shop does not have (from an older app) is a suggestion at the top level
+    expect(await get(named)).toMatchObject({
+      categoryId: null,
+      suggestedCategory: { name: 'Plushies', parentId: null },
+    });
+
+    // once the suggested category exists, the draft is simply in it
+    const scale = await make('Scale Figures', figures);
+    expect(await get(none)).toMatchObject({ categoryId: scale, suggestedCategory: null });
   });
 });

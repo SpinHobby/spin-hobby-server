@@ -13,6 +13,8 @@ export interface DraftDetails {
   market: MarketPrice | null;
   /** The maker's own photo of this exact product, found and confirmed by the app; used only if a person chooses it when adding. */
   official: OfficialPhoto | null;
+  /** When the product fits none of the shop's categories: the new category the app suggests, and the existing one it would go under (null: top level). */
+  suggestedCategory: { name: string; under: string | null } | null;
   generator: string | null;
 }
 
@@ -125,6 +127,14 @@ const money = (value: unknown): number | null => {
   return Number.isFinite(n) && n > 0 && n < 1_000_000 ? Math.round(n * 100) / 100 : null;
 };
 
+/** A suggested new category: a name of at most 80 characters (the shop's limit), and the category to put it under. */
+function parseSuggestedCategory(raw: unknown): DraftDetails['suggestedCategory'] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const c = raw as Record<string, unknown>;
+  const name = text(c.name, 'suggested category', 80);
+  return name ? { name, under: text(c.under, 'suggested category parent', 200) } : null;
+}
+
 /** The market prices as sent, cut to known fields and sizes: only https listing links are kept, and nothing is kept without a price in CAD. */
 function parseMarket(raw: unknown): MarketPrice | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
@@ -221,6 +231,7 @@ export function parseDraft(raw: unknown): DraftInput {
         : null,
       market: parseMarket(d.market),
       official: parseOfficial(d.official),
+      suggestedCategory: parseSuggestedCategory(d.newCategory),
       generator: text(d.generator, 'generator', 60),
     },
   };
