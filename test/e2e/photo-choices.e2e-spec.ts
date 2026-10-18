@@ -149,6 +149,45 @@ describe('the photos a draft offers', () => {
   });
 });
 
+describe("the maker's other photos", () => {
+  it("offers each as its own choice, only from makers' sites", async () => {
+    const as = await worker();
+    const draft = {
+      sourceKey: 'choices-official-more',
+      title: 'Rem Figure',
+      description: null,
+      category: null,
+      series: null,
+      flags: [],
+      sources: [],
+      lookup: null,
+      generator: 'gleamshelf 0.2.0',
+      official: {
+        imageUrl: 'https://assets.1kuji.com/up/rem_01.jpg',
+        pageUrl: 'https://1kuji.com/products/re-zero14',
+        more: [
+          'https://assets.1kuji.com/up/rem_02.jpg',
+          'https://evil.example/x.jpg',
+          'https://assets.1kuji.com/up/rem_03.jpg',
+        ],
+      },
+    };
+    const r = await http
+      .post('/gleamshelf/imports')
+      .set(as)
+      .field('draft', JSON.stringify(draft))
+      .attach('photo', await studio(), { filename: 'p.jpg', contentType: 'image/jpeg' })
+      .expect(200);
+    const d = (await http.get(`/admin/imports/${r.body.id}`).set(asStaff).expect(200)).body.draft;
+    expect(d.photos.map((p: { key: string; url: string }) => [p.key, p.url])).toEqual([
+      ['studio', expect.any(String)],
+      ['official', 'https://assets.1kuji.com/up/rem_01.jpg'],
+      ['official2', 'https://assets.1kuji.com/up/rem_02.jpg'],
+      ['official3', 'https://assets.1kuji.com/up/rem_03.jpg'],
+    ]);
+  });
+});
+
 describe('choosing which photos go where', () => {
   it('sends the ones for Square in order, keeps eBay copies of the ones for eBay, and keeps the cut-out behind its Square photo', async () => {
     const d = await draftFromUpload('choices-3.jpg');

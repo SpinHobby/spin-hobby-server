@@ -20,7 +20,7 @@ import {
   RejectImportDto,
   RestockImportDto,
 } from './dto/imports.dto.js';
-import { ImportsService } from './imports.service.js';
+import { ImportsService, type PhotoKey } from './imports.service.js';
 import { AddPhotoDto } from '../products/dto/photos.dto.js';
 import { AppError } from '../../../common/errors.js';
 
@@ -145,8 +145,8 @@ export class AdminImportsController {
   }
 }
 
-const PHOTO_KEYS = ['studio', 'background', 'original', 'cropped', 'official'] as const;
-function photoKey(key: string): (typeof PHOTO_KEYS)[number] {
-  if (!(PHOTO_KEYS as readonly string[]).includes(key)) throw new AppError('No such photo.', 404);
-  return key as (typeof PHOTO_KEYS)[number];
+function photoKey(key: string): PhotoKey {
+  if (!/^(studio|background|original|cropped|official\d?)$/.test(key))
+    throw new AppError('No such photo.', 404);
+  return key as PhotoKey;
 }

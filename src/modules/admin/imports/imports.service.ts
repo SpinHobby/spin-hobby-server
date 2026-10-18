@@ -46,7 +46,10 @@ interface ImportRow {
   decided_at: string | null;
 }
 
-export type PhotoKey = 'studio' | 'background' | 'original' | 'cropped' | 'official';
+/** The draft's photos: the studio photo, the cut-out on a background, the crop, the photo as taken, and the maker's photos (`official`, `official2`...). */
+export type PhotoKey =
+  'studio' | 'background' | 'original' | 'cropped' | 'official' | `official${number}`;
+const isOfficialKey = (key: PhotoKey) => /^official\d*$/.test(key);
 export interface PhotoChoice {
   key: PhotoKey;
   square: boolean;
@@ -64,6 +67,7 @@ function draftPhotos(r: ImportRow): { key: PhotoKey; url: string; edited: boolea
     r.cropped_url && { key: 'cropped' as const, url: r.cropped_url },
     r.original_url && { key: 'original' as const, url: r.original_url },
     official && { key: 'official' as const, url: official.imageUrl },
+    ...(official?.more ?? []).map((url, i) => ({ key: `official${i + 2}` as PhotoKey, url })),
   ]
     .filter((p): p is { key: PhotoKey; url: string } => !!p)
     .map((p) => ({ ...p, url: edits[p.key] ?? p.url, edited: !!edits[p.key] }));
@@ -460,7 +464,6 @@ export class ImportsService {
     if (!row) throw notFound('Draft');
     if (row.status !== 'draft') throw new AppError(`This draft was already ${row.status}.`, 409);
     if (!row.image_url) throw new AppError('This draft has no photo any more.', 409);
-    const official = (row.details as { official?: OfficialPhoto | null }).official ?? null;
     const available = new Set(draftPhotos(row).map((p) => p.key));
     // checked before anything changes: a background deleted from the library meanwhile is refused, not quietly swapped for white
     const defaultBackground = row.cutout_url
@@ -495,8 +498,11 @@ export class ImportsService {
         else if (c.key === 'studio') urls.set(c.key, row.image_url);
         else if (c.key === 'original') urls.set(c.key, row.original_url!);
         else if (c.key === 'cropped') urls.set(c.key, row.cropped_url!);
-        else if (c.key === 'official') {
-          const copy = await this.copyOfficialPhoto(official!.imageUrl);
+        else if (isOfficialKey(c.key)) {
+          const offered = draftPhotos({ ...row, edited_photos: {} }).find(
+            (p) => p.key === c.key,
+          )!.url;
+          const copy = await this.copyOfficialPhoto(offered);
           made.push(copy);
           urls.set(c.key, copy);
         } else {
@@ -604,7 +610,7 @@ export class ImportsService {
     const url = asOffered
       ? (draftPhotos({ ...row, edited_photos: {} }).find((p) => p.key === key)?.url ?? photo.url)
       : photo.url;
-    if (key === 'official' && !editsOf(row).official) return this.fetchOfficial(url);
+    if (isOfficialKey(key) && !editsOf(row)[key]) return this.fetchOfficial(url);
     const bytes = await downloadPhoto(url);
     return {
       bytes,

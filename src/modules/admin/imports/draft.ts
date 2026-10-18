@@ -20,6 +20,8 @@ export interface OfficialPhoto {
   imageUrl: string;
   pageUrl: string;
   site: string;
+  /** More photos of the same product from the maker's page (other angles and backgrounds), for a person to choose from. */
+  more?: string[];
 }
 
 /** Makers' and their prize brands' official sites: the only places an official photo is taken from (the server downloads it when it is chosen). */
@@ -172,7 +174,20 @@ function parseOfficial(raw: unknown): OfficialPhoto | null {
   const imageUrl = text(o.imageUrl, 'official photo', 500);
   const pageUrl = text(o.pageUrl, 'official page', 500);
   if (!imageUrl || !pageUrl || !isOfficialUrl(imageUrl) || !isOfficialUrl(pageUrl)) return null;
-  return { imageUrl, pageUrl, site: new URL(pageUrl).hostname.replace(/^www\./, '') };
+  // the other photos must be on makers' sites too; at most six
+  const more = [
+    ...new Set(
+      (Array.isArray(o.more) ? o.more : [])
+        .map((u: unknown) => (typeof u === 'string' ? u.trim() : ''))
+        .filter((u: string) => u && u.length <= 500 && u !== imageUrl && isOfficialUrl(u)),
+    ),
+  ].slice(0, 6);
+  return {
+    imageUrl,
+    pageUrl,
+    site: new URL(pageUrl).hostname.replace(/^www\./, ''),
+    ...(more.length ? { more } : {}),
+  };
 }
 
 /** Reads and cleans a draft the sender made. Anything it sent beyond these fields is dropped. */

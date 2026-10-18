@@ -2,6 +2,7 @@ import { AppError } from '../../../../common/errors.js';
 import { OptionalText, Rule, Text } from '../../../../common/validation/decorators.js';
 import { backgroundChoice } from '../../products/dto/backgrounds.dto.js';
 import { QuickAddDto } from '../../products/dto/quick-add.dto.js';
+import type { PhotoKey } from '../imports.service.js';
 
 /** A Gleamshelf app trading the code shown in the admin for its token. */
 export class PairDto {
@@ -139,12 +140,12 @@ export class AddImportDto extends QuickAddDto {
    */
   @Rule((v) => {
     if (v == null) return null;
-    const keys = ['studio', 'background', 'original', 'cropped', 'official'];
+    const known = /^(studio|background|original|cropped|official\d?)$/;
     if (
       !Array.isArray(v) ||
-      v.length > 5 ||
+      v.length > 12 ||
       v.some(
-        (c) => !c || typeof c !== 'object' || !keys.includes((c as { key?: string }).key ?? ''),
+        (c) => !c || typeof c !== 'object' || !known.test((c as { key?: string }).key ?? ''),
       ) ||
       new Set(v.map((c: { key: string }) => c.key)).size !== v.length
     )
@@ -157,7 +158,7 @@ export class AddImportDto extends QuickAddDto {
   })
   photos:
     | {
-        key: 'studio' | 'background' | 'original' | 'cropped' | 'official';
+        key: PhotoKey;
         square: boolean;
         ebay: boolean;
       }[]
