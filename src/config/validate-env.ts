@@ -42,6 +42,16 @@ const FORMATS: [string, (value: string) => boolean, string][] = [
   ['PUBLIC_API_URL', isUrl, 'a URL such as https://api.spinhobby.com'],
   ['STOREFRONT_URL', isUrl, 'a URL such as https://spinhobby.com'],
   ['SQUARE_WEBHOOK_URL', isUrl, 'the full URL Square calls'],
+  ['EBAY_ENVIRONMENT', (v) => ['production', 'sandbox'].includes(v), '"production" or "sandbox"'],
+  ['EBAY_SYNC_INTERVAL_MINUTES', (v) => Number(v) >= 0, 'a number of minutes (0 = off)'],
+  ['EBAY_RECONCILE_INTERVAL_MINUTES', (v) => Number(v) >= 0, 'a number of minutes (0 = off)'],
+  ['EBAY_DELETION_ENDPOINT', isUrl, 'the full URL eBay calls, ending in /ebay/account-deletion'],
+  ['EBAY_ADMIN_RETURN_URL', isUrl, 'the admin address, such as https://spinhobby.com/admin'],
+  [
+    'EBAY_VERIFICATION_TOKEN',
+    (v) => /^[A-Za-z0-9_-]{32,80}$/.test(v),
+    '32 to 80 letters, digits, _ or -',
+  ],
 ];
 
 /**
@@ -68,6 +78,11 @@ export function checkEnvironment(): EnvProblem[] {
     add(
       'SQUARE_LOCATION_ID',
       'SQUARE_ACCESS_TOKEN is set but SQUARE_LOCATION_ID is not; checkout and sync need both.',
+    );
+  if (env('EBAY_CLIENT_ID') && !env('EBAY_TOKEN_KEY'))
+    add(
+      'EBAY_TOKEN_KEY',
+      'EBAY_CLIENT_ID is set but EBAY_TOKEN_KEY is not; eBay cannot be connected without it.',
     );
   if (env('NODE_ENV') === 'production' && env('AUTH_DEV_LOGIN') === 'true')
     add('AUTH_DEV_LOGIN', 'AUTH_DEV_LOGIN=true is ignored in production.');

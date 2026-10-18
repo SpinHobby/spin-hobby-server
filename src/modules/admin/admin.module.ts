@@ -98,5 +98,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     AdminEventsService,
     AdminSquareService,
   ],
+  // what the eBay module builds on: product photos, the photos picked for eBay, and the admin log
+  exports: [AdminLog, SquarePhotosService, ChannelPhotosService],
 })
 export class AdminModule {}

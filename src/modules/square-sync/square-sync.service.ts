@@ -1,3 +1,4 @@
+import { inventoryEvents } from '../../common/inventory-events.js';
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { AppError, errorText } from '../../common/errors.js';
 import { Db, type Queryable } from '../../database/db.service.js';
@@ -332,6 +333,7 @@ export class SquareSyncService implements OnModuleInit, OnModuleDestroy {
        on conflict (square_variation_id) do update set quantity = excluded.quantity, synced_at = excluded.synced_at`,
       [JSON.stringify(rows), readAt.toISOString()],
     );
+    inventoryEvents.changed(rows.filter((r) => r.quantity !== null).map((r) => r.id));
   }
 
   /**

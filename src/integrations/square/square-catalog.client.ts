@@ -521,4 +521,36 @@ export class SquareCatalogClient {
       ],
     });
   }
+
+  /**
+   * Changes a variation's stock by `delta` units as one Square adjustment (not an absolute count, so a sale at the till at the same moment is
+   * not overwritten): a sale elsewhere moves units from IN_STOCK to SOLD, units coming back move from NONE to IN_STOCK. `idempotencyKey`
+   * makes a retry of the same change count once (Square keeps it for 24 hours or more).
+   */
+  async adjustStock(
+    variationId: string,
+    delta: number,
+    idempotencyKey: string,
+    occurredAt = new Date().toISOString(),
+  ): Promise<void> {
+    if (!delta) return;
+    const locationId = squareLocationId();
+    await this.client.inventory.batchCreateChanges({
+      idempotencyKey: idempotencyKey.slice(0, 128),
+      changes: [
+        {
+          type: 'ADJUSTMENT' as const,
+          adjustment: {
+            catalogObjectId: variationId,
+            fromLocationId: locationId,
+            toLocationId: locationId,
+            fromState: delta < 0 ? ('IN_STOCK' as const) : ('NONE' as const),
+            toState: delta < 0 ? ('SOLD' as const) : ('IN_STOCK' as const),
+            quantity: String(Math.abs(delta)),
+            occurredAt,
+          },
+        },
+      ],
+    });
+  }
 }

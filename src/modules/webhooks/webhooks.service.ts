@@ -1,3 +1,4 @@
+import { inventoryEvents } from '../../common/inventory-events.js';
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { stringValue } from '../../common/validation/rules.js';
@@ -70,6 +71,7 @@ export class WebhooksService {
     const inStock = counts.filter(
       (c) => c.catalog_object_id && (!c.state || c.state === 'IN_STOCK'),
     );
+    inventoryEvents.changed(inStock.map((c) => String(c.catalog_object_id)));
     for (const count of inStock) {
       await this.db.exec(
         `insert into public.inventory_snapshots (square_variation_id, quantity, square_updated_at, synced_at)

@@ -1,3 +1,4 @@
+import { EbayModule } from './modules/ebay/ebay.module.js';
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { JsonErrorFilter } from './common/filters/json-error.filter.js';
@@ -42,6 +43,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     CashierModule,
     CatalogModule,
     CheckoutModule,
+    EbayModule,
     HealthModule,
     OpsModule,
     OrdersModule,
