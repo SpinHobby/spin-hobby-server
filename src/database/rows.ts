@@ -189,6 +189,8 @@ export interface StorefrontProductRow {
   description: string | null;
   jan_code: string | null;
   images: string[];
+  /** Which of `images` are transparent cut-outs (shown on the shop background). */
+  cutout_images?: string[];
   price_cents: number;
   compare_at_cents: number | null;
   currency: string;

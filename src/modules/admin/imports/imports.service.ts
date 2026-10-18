@@ -513,13 +513,9 @@ export class ImportsService {
     if (row.status !== 'draft') throw new AppError(`This draft was already ${row.status}.`, 409);
     if (!row.image_url) throw new AppError('This draft has no photo any more.', 409);
     const available = new Set(draftPhotos(row).map((p) => p.key));
-    // checked before anything changes: a background deleted from the library meanwhile is refused, not quietly swapped for white
-    const defaultBackground = row.cutout_url
-      ? await this.backgrounds.resolve(backgroundChoice)
-      : null;
-    const choices = picked?.length
-      ? picked
-      : legacyChoices(photo, !!row.cutout_url && !!defaultBackground);
+    // the cut-out is saved transparent and shows on the shop background; a background chosen by an older admin (`backgroundChoice`) is not needed
+    void backgroundChoice;
+    const choices = picked?.length ? picked : legacyChoices(photo, !!row.cutout_url);
     for (const c of choices)
       if (!available.has(c.key))
         throw new AppError(
@@ -529,7 +525,6 @@ export class ImportsService {
           409,
         );
     if (!choices.some((c) => c.square || c.ebay)) throw new AppError('Choose at least one photo.');
-    const background = choices.some((c) => c.key === 'background') ? defaultBackground : null;
     const claimed = await this.db.one<{ id: string }>(
       "update public.product_imports set status = 'added', decided_by = $2, decided_at = now() where id = $1 and status = 'draft' returning id",
       [id, adminId],
@@ -554,33 +549,42 @@ export class ImportsService {
           made.push(copy);
           urls.set(c.key, copy);
         } else {
-          const composed = (
+          // the cut-out: the product on a transparent square, shown on the shop background
+          const transparent = (
             await this.storage.uploadImage(
-              await this.backgrounds.compose(row.cutout_url!, background),
-              'image/jpeg',
+              await this.backgrounds.transparent(row.cutout_url!),
+              'image/png',
               'imports',
             )
           ).url;
-          made.push(composed);
-          urls.set(c.key, composed);
+          made.push(transparent);
+          urls.set(c.key, transparent);
         }
       }
-      // eBay keeps its own copies (Square's are deleted from our storage once Square has them)
-      const ebay: string[] = [];
+      // eBay keeps its own copies (Square's are deleted from our storage once Square has them). The cut-out stays a cut-out: eBay cannot show
+      // transparency, so it is given the cut-out on the shop background when it fetches the photo, and again after the background changes.
+      const ebay: { url: string; cutout: boolean }[] = [];
       for (const c of choices.filter((x) => x.ebay)) {
+        const cutout = c.key === 'background';
         const copy = (
-          await this.storage.uploadImage(
-            await sharp(await downloadPhoto(urls.get(c.key)!))
-              .rotate()
-              .flatten({ background: '#ffffff' })
-              .jpeg({ quality: 92 })
-              .toBuffer(),
-            'image/jpeg',
-            'channels',
-          )
+          cutout
+            ? await this.storage.uploadImage(
+                await downloadPhoto(row.cutout_url!),
+                'image/png',
+                'channels',
+              )
+            : await this.storage.uploadImage(
+                await sharp(await downloadPhoto(urls.get(c.key)!))
+                  .rotate()
+                  .flatten({ background: '#ffffff' })
+                  .jpeg({ quality: 92 })
+                  .toBuffer(),
+                'image/jpeg',
+                'channels',
+              )
         ).url;
         made.push(copy);
-        ebay.push(copy);
+        ebay.push({ url: copy, cutout });
       }
       const square = choices.filter((c) => c.square);
       dto.imageUrls = square.map((c) => urls.get(c.key)!);
@@ -589,10 +593,10 @@ export class ImportsService {
         "update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null, edited_photos = '{}'::jsonb where id = $1",
         [id, product.id],
       );
-      for (const [i, url] of ebay.entries())
+      for (const [i, e] of ebay.entries())
         await this.db.exec(
-          'insert into public.channel_photos (square_item_id, channel, image_url, position) values ($1, $2, $3, $4) on conflict do nothing',
-          [product.id, 'ebay', url, i],
+          'insert into public.channel_photos (square_item_id, channel, image_url, position, cutout) values ($1, $2, $3, $4, $5) on conflict do nothing',
+          [product.id, 'ebay', e.url, i, e.cutout],
         );
       // the files Square did not take (the quick add deletes the ones it sent) are not needed any more
       const sent = new Set(dto.imageUrls);
@@ -601,10 +605,11 @@ export class ImportsService {
         row.original_url,
         row.cropped_url,
         ...Object.values(editsOf(row)),
-        ...made.filter((u) => !ebay.includes(u)),
+        ...made.filter((u) => !ebay.some((e) => e.url === u)),
       ].filter((u): u is string => !!u && !sent.has(u));
       await this.storage.deleteImages(unused).catch(() => undefined);
-      // the cut-out stays with the product, behind the Square photo made from it, so its background can be changed later
+      // the cut-out stays with the product, behind the Square photo made from it: eBay and link previews are made from it, and a white square can
+      // be made transparent later
       if (row.cutout_url) {
         const at = square.findIndex((c) => c.key === 'background' || c.key === 'studio');
         const kept = at >= 0 ? await this.photoIdAt(product.id, at) : null;
@@ -613,7 +618,7 @@ export class ImportsService {
             product.id,
             kept,
             row.cutout_url,
-            square[at].key === 'background' ? (background?.id ?? null) : null,
+            square[at].key === 'background',
           );
         else await this.storage.deleteImages([row.cutout_url]).catch(() => undefined);
       }
@@ -621,9 +626,7 @@ export class ImportsService {
         productId: product.id,
         square: square.map((c) => c.key),
         ebay: choices.filter((c) => c.ebay).map((c) => c.key),
-        background: choices.some((c) => c.key === 'background')
-          ? (background?.name ?? 'white')
-          : null,
+        transparent: choices.some((c) => c.key === 'background'),
       });
       return product;
     } catch (error) {

@@ -2,7 +2,7 @@ import sharp from 'sharp';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { QuickAddService } from '../../src/modules/admin/products/quick-add.service.js';
 import { SquarePhotosService } from '../../src/modules/admin/products/square-photos.service.js';
-import { mockFetch } from '../support/harness.js';
+import { mockFetch, seedProduct } from '../support/harness.js';
 import { startShop } from '../support/shop.js';
 
 const shop = await startShop();
@@ -61,6 +61,11 @@ const pixel = async (jpeg: Buffer, x: number, y: number) => {
   return [data[i], data[i + 1], data[i + 2]];
 };
 const near = (got: number[], want: number[]) => got.every((v, i) => Math.abs(v - want[i]) < 24);
+/** How see-through a picture is at a point (0: fully transparent, 255: solid). */
+const alphaAt = async (png: Buffer, x: number, y: number) => {
+  const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  return data[(y * info.width + x) * info.channels + 3];
+};
 
 /** Uploads a plain-coloured background; resolves to the response once it has the status wanted. */
 const addBackground = async (
@@ -149,8 +154,8 @@ describe('the background library', () => {
   });
 });
 
-describe('a photo from the photo computer, on a background', () => {
-  it('puts the cut-out on the chosen background, keeps it with the product, and changes the background later', async () => {
+describe('a photo from the photo computer, on the shop background', () => {
+  it('is saved to Square transparent, shown on the shop background, and the background changes for every product at once', async () => {
     const as = await worker();
     await pglite.query(
       "insert into public.catalog_products (square_item_id, name, source) values ('BG1', 'Rem Figure', 'square') on conflict do nothing",
@@ -204,73 +209,109 @@ describe('a photo from the photo computer, on a background', () => {
       .jobs[0];
     expect(ready.cutout).toMatch(/\/imports\//);
 
-    const green = (await addBackground('Green', [20, 160, 60])).body.background;
     const add = vi
       .spyOn(photos, 'add')
-      .mockResolvedValue({ created: 'IMG_GREEN', shown: [], hidden: [] });
+      .mockResolvedValue({ created: 'IMG_CLEAR', shown: [], hidden: [] });
     await http
       .post(`/admin/photo-batches/photos/${job.id}/apply`)
       .set(asStaff)
-      .send({ backgroundId: green.id })
+      .send({})
       .expect(200);
-    expect(add).toHaveBeenCalledOnce();
     const [, item, sent, replaces] = add.mock.calls[0];
     expect([item, replaces]).toEqual(['BG1', 'IMG_OLD']);
-    // the corner is the background, the middle is the product (its pixels unchanged)
-    expect(near(await pixel(sent, 5, 5), [20, 160, 60])).toBe(true);
+    // Square gets the product alone: see-through in the corner, the product (its pixels unchanged) in the middle
+    expect(await alphaAt(sent, 5, 5)).toBe(0);
+    expect(await alphaAt(sent, 800, 800)).toBe(255);
     expect(near(await pixel(sent, 800, 800), [220, 20, 20])).toBe(true);
-
-    // the cut-out stays with the product, behind the new photo
     vi.spyOn(photos, 'list').mockResolvedValue({
-      shown: [{ id: 'IMG_GREEN', url: 'https://sq.example/g.jpg' }],
+      shown: [{ id: 'IMG_CLEAR', url: 'https://sq.example/c.png' }],
       hidden: [],
     });
-    const listed = (await http.get('/admin/products/BG1/photos').set(asStaff).expect(200)).body;
-    expect(listed.cutouts).toEqual([
-      { imageId: 'IMG_GREEN', cutoutUrl: ready.cutout, backgroundId: green.id },
-    ]);
-
-    // later: white instead; the photo made here from the cut-out is replaced and deleted, not kept hidden
-    add.mockResolvedValue({ created: 'IMG_WHITE', shown: [], hidden: [] });
-    const remove = vi.spyOn(photos, 'remove').mockResolvedValue({
-      shown: [{ id: 'IMG_WHITE', url: 'https://sq.example/w.jpg' }],
-      hidden: [],
-    });
-    const changed = (
-      await http
-        .put('/admin/products/BG1/photos/IMG_GREEN/background')
-        .set(asStaff)
-        .send({ backgroundId: null })
-        .expect(200)
-    ).body;
-    expect(changed.created).toBe('IMG_WHITE');
-    expect(add.mock.calls[1][3]).toBe('IMG_GREEN');
-    expect(near(await pixel(add.mock.calls[1][2], 5, 5), [255, 255, 255])).toBe(true);
-    expect(remove).toHaveBeenCalledWith(expect.any(String), 'BG1', 'IMG_GREEN');
-    expect(changed.cutouts).toEqual([
-      { imageId: 'IMG_WHITE', cutoutUrl: ready.cutout, backgroundId: null },
-    ]);
-
-    // a photo with no cut-out cannot be changed
     expect(
+      (await http.get('/admin/products/BG1/photos').set(asStaff).expect(200)).body.cutouts,
+    ).toEqual([{ imageId: 'IMG_CLEAR', cutoutUrl: ready.cutout, transparent: true }]);
+
+    // the shop background is public (the website puts transparent photos on it); none means plain white
+    const config = async () =>
+      (await http.get('/checkout/config').expect(200)).body.productBackground;
+    expect(await config()).toBeNull();
+    const pumpkin = (await addBackground('Halloween', [230, 110, 20])).body.background;
+    await http
+      .put('/admin/photo-backgrounds/default')
+      .set(asStaff)
+      .send({ id: pumpkin.id })
+      .expect(200);
+    expect(await config()).toEqual({ id: pumpkin.id, url: pumpkin.imageUrl });
+
+    // places that cannot show transparency (eBay, link previews) get it on the shop background, and the new one after a change
+    const onBackground = async (q: string) =>
       (
         await http
-          .put('/admin/products/BG1/photos/IMG_OTHER/background')
-          .set(asStaff)
-          .send({ backgroundId: green.id })
-          .expect(409)
-      ).body.error,
-    ).toMatch(/no cut-out/);
-    // nor put on a background that is no longer in the library
-    await http.delete(`/admin/photo-backgrounds/${green.id}`).set(asStaff).expect(200);
+          .get(`/product-photos/on-background?${q}`)
+          .buffer(true)
+          .parse((res, done) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (c: Buffer) => chunks.push(c));
+            res.on('end', () => done(null, Buffer.concat(chunks)));
+          })
+          .expect(200)
+      ).body as Buffer;
+    expect(near(await pixel(await onBackground('image=IMG_CLEAR'), 5, 5), [230, 110, 20])).toBe(
+      true,
+    );
+    const snow = (await addBackground('Winter', [200, 220, 250])).body.background;
     await http
-      .put('/admin/products/BG1/photos/IMG_WHITE/background')
+      .put('/admin/photo-backgrounds/default')
       .set(asStaff)
-      .send({ backgroundId: green.id })
-      .expect(404);
+      .send({ id: snow.id })
+      .expect(200);
+    const winter = await onBackground('image=IMG_CLEAR');
+    expect(near(await pixel(winter, 5, 5), [200, 220, 250])).toBe(true);
+    expect(near(await pixel(winter, 800, 800), [220, 20, 20])).toBe(true);
+    // only the shop's own transparent photos
+    await http.get('/product-photos/on-background?image=IMG_NOPE').expect(404);
+    await http.get('/product-photos/on-background?src=https://elsewhere.example/x.png').expect(404);
+    await http.get('/product-photos/on-background').expect(404);
+
+    // the storefront is told which of a product's photos are transparent
+    await seedProduct(pglite, {
+      id: 'BG_SHOP',
+      name: 'Ram Figure',
+      category: 'Figures',
+      priceCents: 3000,
+      stock: 1,
+    });
+    await pglite.query(
+      "insert into public.product_images (square_item_id, square_image_id, image_url, sort_order) values ('BG_SHOP', 'IMG_SHOP_1', 'https://sq.example/shop1.png', 0), ('BG_SHOP', 'IMG_SHOP_2', 'https://sq.example/shop2.jpg', 1)",
+    );
+    await pglite.query(
+      "insert into public.product_cutouts (square_item_id, image_id, cutout_url, transparent) values ('BG_SHOP', 'IMG_SHOP_1', $1, true)",
+      [ready.cutout],
+    );
+    const product = (await http.get('/square/catalog/BG_SHOP').expect(200)).body.item;
+    expect(product.images).toEqual([
+      'https://sq.example/shop1.png',
+      'https://sq.example/shop2.jpg',
+    ]);
+    expect(product.cutouts).toEqual(['https://sq.example/shop1.png']);
+    expect(
+      near(
+        await pixel(
+          await onBackground(`src=${encodeURIComponent('https://sq.example/shop1.png')}`),
+          5,
+          5,
+        ),
+        [200, 220, 250],
+      ),
+    ).toBe(true);
+
+    await http.put('/admin/photo-backgrounds/default').set(asStaff).send({ id: null }).expect(200);
+    expect(near(await pixel(await onBackground('image=IMG_CLEAR'), 5, 5), [255, 255, 255])).toBe(
+      true,
+    );
   });
 
-  it("uses the default background when none is chosen, and the photo computer's white photo when the shop has none", async () => {
+  it("uses the photo computer's white square when asked, and an older photo can be made transparent later", async () => {
     const as = await worker();
     await pglite.query(
       "insert into public.catalog_products (square_item_id, name, source) values ('BG2', 'Luffy Figure', 'square') on conflict do nothing",
@@ -281,63 +322,78 @@ describe('a photo from the photo computer, on a background', () => {
     });
     const add = vi
       .spyOn(photos, 'add')
-      .mockResolvedValue({ created: 'IMG_NEW2', shown: [], hidden: [] });
-    const submitOne = async () => {
-      await http
-        .post('/admin/photo-batches')
-        .set(asStaff)
-        .send({ productIds: ['BG2'] })
-        .expect(200);
-      const job = (
-        await http
-          .post('/gleamshelf/jobs/claim')
-          .set(as)
-          .send({ features: ['photo'] })
-          .expect(200)
-      ).body.job;
-      await http
-        .post(`/gleamshelf/jobs/${job.id}/result`)
-        .set(as)
-        .field('details', '{}')
-        .attach('photo', await solid(500, 500, [250, 250, 250]), {
-          filename: 'p.jpg',
-          contentType: 'image/jpeg',
-        })
-        .attach('cutout', await cutoutPng(), { filename: 'c.png', contentType: 'image/png' })
-        .expect(200);
-      return job.id as string;
-    };
-    // no default: the photo computer's own white square, untouched
-    const first = await submitOne();
-    await http.post(`/admin/photo-batches/photos/${first}/apply`).set(asStaff).expect(200);
-    expect(near(await pixel(add.mock.calls[0][2], 250, 250), [250, 250, 250])).toBe(true);
-    // with a default: on it
-    await pglite.query(
-      "update public.product_cutouts set image_id = 'IMG_DONE' where image_id = 'IMG_NEW2'",
-    );
-    const purple = (await addBackground('Purple', [120, 40, 160])).body.background;
+      .mockResolvedValue({ created: 'IMG_WHITE2', shown: [], hidden: [] });
     await http
-      .put('/admin/photo-backgrounds/default')
+      .post('/admin/photo-batches')
       .set(asStaff)
-      .send({ id: purple.id })
+      .send({ productIds: ['BG2'] })
       .expect(200);
-    vi.spyOn(photos, 'list').mockResolvedValue({
-      shown: [{ id: 'IMG_NEW2', url: 'https://sq.example/2.jpg' }],
+    const job = (
+      await http
+        .post('/gleamshelf/jobs/claim')
+        .set(as)
+        .send({ features: ['photo'] })
+        .expect(200)
+    ).body.job;
+    await http
+      .post(`/gleamshelf/jobs/${job.id}/result`)
+      .set(as)
+      .field('details', '{}')
+      .attach('photo', await solid(500, 500, [250, 250, 250]), {
+        filename: 'p.jpg',
+        contentType: 'image/jpeg',
+      })
+      .attach('cutout', await cutoutPng(), { filename: 'c.png', contentType: 'image/png' })
+      .expect(200);
+    // null: the photo computer's own white square, untouched
+    await http
+      .post(`/admin/photo-batches/photos/${job.id}/apply`)
+      .set(asStaff)
+      .send({ backgroundId: null })
+      .expect(200);
+    expect(near(await pixel(add.mock.calls[0][2], 250, 250), [250, 250, 250])).toBe(true);
+    const counts = async () =>
+      (await http.get('/admin/photo-backgrounds').set(asStaff).expect(200)).body.photos;
+    const before = await counts();
+    expect(before.older).toBeGreaterThanOrEqual(1);
+
+    // made transparent later: the cut-out takes the white square's place, which is deleted (it was made from the same cut-out)
+    add.mockResolvedValue({ created: 'IMG_CLEAR2', shown: [], hidden: [] });
+    const remove = vi.spyOn(photos, 'remove').mockResolvedValue({
+      shown: [{ id: 'IMG_CLEAR2', url: 'https://sq.example/c2.png' }],
       hidden: [],
     });
-    const second = await submitOne();
-    await http
-      .post(`/admin/photo-batches/photos/${second}/apply`)
-      .set(asStaff)
-      .send({})
-      .expect(200);
-    expect(near(await pixel(add.mock.calls[1][2], 5, 5), [120, 40, 160])).toBe(true);
-    await http.put('/admin/photo-backgrounds/default').set(asStaff).send({ id: null }).expect(200);
+    const changed = (
+      await http.post('/admin/products/BG2/photos/IMG_WHITE2/transparent').set(asStaff).expect(200)
+    ).body;
+    expect(changed.created).toBe('IMG_CLEAR2');
+    expect(add.mock.calls[1][3]).toBe('IMG_WHITE2');
+    expect(await alphaAt(add.mock.calls[1][2], 5, 5)).toBe(0);
+    expect(remove).toHaveBeenCalledWith(expect.any(String), 'BG2', 'IMG_WHITE2');
+    expect(changed.cutouts).toEqual([
+      { imageId: 'IMG_CLEAR2', cutoutUrl: expect.stringMatching(/\/imports\//), transparent: true },
+    ]);
+    expect((await counts()).older).toBe(before.older - 1);
+    // a photo with no cut-out cannot be
+    expect(
+      (await http.post('/admin/products/BG2/photos/IMG_OTHER/transparent').set(asStaff).expect(409))
+        .body.error,
+    ).toMatch(/no cut-out/);
+
+    // every older one at once
+    await pglite.query(
+      "insert into public.product_cutouts (square_item_id, image_id, cutout_url, transparent) values ('BG2', 'IMG_BAKED', (select cutout_url from public.product_cutouts where image_id = 'IMG_CLEAR2'), false)",
+    );
+    add.mockResolvedValue({ created: 'IMG_BAKED_CLEAR', shown: [], hidden: [] });
+    const all = (
+      await http.post('/admin/photo-backgrounds/make-transparent').set(asStaff).expect(200)
+    ).body;
+    expect(all).toMatchObject({ done: 1, failed: 0, older: 0 });
   });
 });
 
-describe('a draft from Gleamshelf, on a background', () => {
-  it('adds the product with its own photo on the chosen background, and keeps the cut-out behind it', async () => {
+describe('a draft from Gleamshelf, on the shop background', () => {
+  it('adds the product with its cut-out transparent, and keeps an eBay copy as a cut-out', async () => {
     const as = await worker();
     const draft = {
       sourceKey: 'background-draft-1',
@@ -363,14 +419,13 @@ describe('a draft from Gleamshelf, on a background', () => {
     const got = (await http.get(`/admin/imports/${sent.body.id}`).set(asStaff)).body.draft;
     expect(got.cutoutUrl).toMatch(/\/imports\//);
 
-    const sand = (await addBackground('Sand', [210, 190, 140])).body.background;
     let firstPhoto: Buffer | null = null;
     vi.spyOn(quickAdd, 'add').mockImplementation(async (_admin, dto) => {
       firstPhoto = stored.get(dto.imageUrls[0].split('/public/product-images/')[1]) ?? null;
       return { id: 'SQ_BG', name: dto.name, photos: 1 };
     });
     vi.spyOn(photos, 'list').mockResolvedValue({
-      shown: [{ id: 'IMG_SAND', url: 'https://sq.example/s.jpg' }],
+      shown: [{ id: 'IMG_NAMI', url: 'https://sq.example/n.png' }],
       hidden: [],
     });
     await http
@@ -381,15 +436,23 @@ describe('a draft from Gleamshelf, on a background', () => {
         priceCents: 3000,
         stockCount: 1,
         hidden: true,
-        backgroundId: sand.id,
+        photos: [{ key: 'background', square: true, ebay: true }],
       })
       .expect(200);
     expect(firstPhoto).not.toBeNull();
-    expect(near(await pixel(firstPhoto!, 5, 5), [210, 190, 140])).toBe(true);
+    expect(await alphaAt(firstPhoto!, 5, 5)).toBe(0);
     expect(near(await pixel(firstPhoto!, 800, 800), [220, 20, 20])).toBe(true);
-    const kept = await pglite.query<{ square_item_id: string; background_id: string }>(
-      "select square_item_id, background_id from public.product_cutouts where image_id = 'IMG_SAND'",
+    const kept = await pglite.query<{ square_item_id: string; transparent: boolean }>(
+      "select square_item_id, transparent from public.product_cutouts where image_id = 'IMG_NAMI'",
     );
-    expect(kept.rows).toEqual([{ square_item_id: 'SQ_BG', background_id: sand.id }]);
+    expect(kept.rows).toEqual([{ square_item_id: 'SQ_BG', transparent: true }]);
+    const ebay = await pglite.query<{ cutout: boolean; image_url: string }>(
+      "select cutout, image_url from public.channel_photos where square_item_id = 'SQ_BG' and channel = 'ebay'",
+    );
+    expect(ebay.rows).toHaveLength(1);
+    expect(ebay.rows[0].cutout).toBe(true);
+    expect(
+      await alphaAt(stored.get(ebay.rows[0].image_url.split('/public/product-images/')[1])!, 5, 5),
+    ).toBe(0);
   });
 });

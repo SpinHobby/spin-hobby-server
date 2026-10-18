@@ -11,6 +11,8 @@ export function publicProduct(p: StorefrontProductRow) {
     category: p.category,
     categoryId: p.category_id ?? null,
     images: p.images ?? [],
+    // the photos that are transparent cut-outs: the storefront shows them on the shop background
+    cutouts: p.cutout_images ?? [],
     priceCents: p.price_cents,
     compareAtCents: p.compare_at_cents,
     currency: p.currency,

@@ -16,6 +16,23 @@ export async function composeOnBackground(
   background: Buffer | null,
   size = PHOTO_SIZE,
 ): Promise<Buffer> {
+  return placeCutout(cutout, background, size, false);
+}
+
+/**
+ * The product photo as the shop keeps it: the cut-out placed the same way (scaled into the padding, centred, with its soft shadow) on a transparent
+ * square, as a PNG. Wherever it is shown, the shop's background shows through, so one setting changes the background of every such photo.
+ */
+export async function transparentPhoto(cutout: Buffer, size = PHOTO_SIZE): Promise<Buffer> {
+  return placeCutout(cutout, null, size, true);
+}
+
+async function placeCutout(
+  cutout: Buffer,
+  background: Buffer | null,
+  size: number,
+  transparent: boolean,
+): Promise<Buffer> {
   const inner = Math.round(size * (1 - 2 * PHOTO_PADDING));
   let product: { data: Buffer; info: OutputInfo };
   try {
@@ -59,7 +76,16 @@ export async function composeOnBackground(
     .toBuffer();
 
   let base: Sharp;
-  if (background) {
+  if (transparent) {
+    base = sharp({
+      create: {
+        width: size,
+        height: size,
+        channels: 4,
+        background: { r: 0, g: 0, b: 0, alpha: 0 },
+      },
+    });
+  } else if (background) {
     try {
       base = sharp(
         await sharp(background)
@@ -74,13 +100,11 @@ export async function composeOnBackground(
   } else {
     base = sharp({ create: { width: size, height: size, channels: 3, background: '#ffffff' } });
   }
-  return base
-    .composite([
-      { input: shadow, left: left - pad, top: top - pad + offset },
-      { input: product.data, left, top },
-    ])
-    .jpeg({ quality: 92 })
-    .toBuffer();
+  const placed = base.composite([
+    { input: shadow, left: left - pad, top: top - pad + offset },
+    { input: product.data, left, top },
+  ]);
+  return transparent ? placed.png().toBuffer() : placed.jpeg({ quality: 92 }).toBuffer();
 }
 
 /** Whether a picture has see-through pixels: a cut-out must (a photo on its white square is not one). */

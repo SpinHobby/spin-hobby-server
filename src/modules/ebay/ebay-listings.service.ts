@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { photoEvents } from '../../common/photo-events.js';
 import { AppError, notFound } from '../../common/errors.js';
 import { ebayCurrency, ebayItemUrl, ebayMarketplaceId } from '../../config/ebay.config.js';
 import { Db } from '../../database/db.service.js';
@@ -7,6 +8,8 @@ import { SquareCatalogClient } from '../../integrations/square/square-catalog.cl
 import { AdminLog } from '../admin/admin-log.service.js';
 import { ChannelPhotosService } from '../admin/products/channel-photos.service.js';
 import { SquarePhotosService } from '../admin/products/square-photos.service.js';
+import { PhotoBackgroundsService } from '../admin/products/photo-backgrounds.service.js';
+import { port, publicApiUrl, renderExternalUrl } from '../../config/app.config.js';
 import { EbayConnectionService } from './ebay-connection.service.js';
 
 /** eBay's conditions a figure shop uses (eBay's own ids). */
@@ -80,7 +83,11 @@ export function ebayTitle(name: string): string {
  * listing, tied to it by its SKU.
  */
 @Injectable()
-export class EbayListingsService {
+export class EbayListingsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger('EbayListings');
+  private unsubscribe: (() => void) | null = null;
+  private refreshTimer: NodeJS.Timeout | null = null;
+
   constructor(
     private readonly db: Db,
     private readonly ebay: EbayClient,
@@ -88,8 +95,35 @@ export class EbayListingsService {
     private readonly connection: EbayConnectionService,
     private readonly channels: ChannelPhotosService,
     private readonly photos: SquarePhotosService,
+    private readonly backgrounds: PhotoBackgroundsService,
     private readonly log: AdminLog,
   ) {}
+
+  /** A new shop background: the listings with transparent photos get them again, shortly after (several quick changes make one update). */
+  onModuleInit() {
+    this.unsubscribe = photoEvents.on(() => {
+      if (this.refreshTimer) clearTimeout(this.refreshTimer);
+      this.refreshTimer = setTimeout(() => {
+        this.refreshTimer = null;
+        this.refreshPhotos()
+          .then((r) => {
+            if (r.updated || r.failed)
+              this.logger.log(
+                `New shop background: ${r.updated} listing(s) updated, ${r.failed} failed`,
+              );
+          })
+          .catch((e) =>
+            this.logger.warn(`Updating eBay photos failed: ${e instanceof Error ? e.message : e}`),
+          );
+      }, 5000);
+      this.refreshTimer.unref?.();
+    });
+  }
+
+  onModuleDestroy() {
+    this.unsubscribe?.();
+    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+  }
 
   private product(itemId: string) {
     return this.db.one<ProductRow>(
@@ -110,13 +144,85 @@ export class EbayListingsService {
     ]);
   }
 
-  /** The photos eBay gets: the ones picked for eBay, else the product's photos in Square. eBay fetches them itself, so only https ones. */
+  /**
+   * The photos eBay gets: the ones picked for eBay, else the product's photos in Square. eBay fetches them itself, so only https ones. eBay
+   * cannot show transparency: a transparent photo is given as the address of the cut-out on the shop background (made by us when eBay fetches
+   * it), which names the background, so after the background changes eBay fetches the new one.
+   */
   private async imageUrls(itemId: string): Promise<string[]> {
-    const picked = await this.channels.list(itemId, 'ebay');
+    const picked = await this.db.many<{ image_url: string; cutout: boolean }>(
+      'select image_url, cutout from public.channel_photos where square_item_id = $1 and channel = $2 order by position, created_at',
+      [itemId, 'ebay'],
+    );
+    const shown = picked.length
+      ? []
+      : (await this.photos.list(itemId).catch(() => ({ shown: [] }))).shown;
+    const transparent = new Set(
+      (
+        await this.db.many<{ image_id: string }>(
+          'select image_id from public.product_cutouts where square_item_id = $1 and transparent',
+          [itemId],
+        )
+      ).map((r) => r.image_id),
+    );
+    const background = (await this.backgrounds.shopBackground())?.id ?? 'white';
+    // our own address as eBay reaches it (Render sets RENDER_EXTERNAL_URL); eBay only fetches https, so a local one is left out below
+    const server = (publicApiUrl() ?? renderExternalUrl() ?? `http://localhost:${port()}`).replace(
+      /\/$/,
+      '',
+    );
+    const onBackground = (q: Record<string, string>) =>
+      `${server}/product-photos/on-background?${new URLSearchParams({ ...q, b: background })}`;
     const urls = picked.length
-      ? picked
-      : (await this.photos.list(itemId).catch(() => ({ shown: [] }))).shown.map((p) => p.url);
+      ? picked.map((p) => (p.cutout ? onBackground({ src: p.image_url }) : p.image_url))
+      : shown.map((p) => (transparent.has(p.id) ? onBackground({ image: p.id }) : p.url));
     return urls.filter((u) => u.startsWith('https://')).slice(0, 12);
+  }
+
+  /** Whether any of the product's eBay photos is a transparent one (shown there on the shop background). */
+  private async hasTransparentPhotos(itemId: string): Promise<boolean> {
+    return !!(await this.db.one(
+      `select 1 from public.product_cutouts where square_item_id = $1 and transparent
+       union all select 1 from public.channel_photos where square_item_id = $1 and cutout limit 1`,
+      [itemId],
+    ));
+  }
+
+  /**
+   * After the shop background changes: every live listing with a transparent photo gets its photos again (on the new background). The inventory
+   * item is read back from eBay and written with only its photos changed. Returns how many listings were updated and how many failed.
+   */
+  async refreshPhotos(): Promise<{ updated: number; failed: number }> {
+    if (!(await this.connection.status()).connected) return { updated: 0, failed: 0 };
+    const live = await this.db.many<{ square_item_id: string; sku: string }>(
+      "select square_item_id, sku from public.ebay_listings where status in ('active', 'out_of_stock')",
+    );
+    let updated = 0;
+    let failed = 0;
+    for (const l of live) {
+      if (!(await this.hasTransparentPhotos(l.square_item_id))) continue;
+      try {
+        const item = await this.ebay.getInventoryItem(l.sku);
+        const { sku: _sku, ...rest } = item;
+        void _sku;
+        const product = (rest.product ?? {}) as Record<string, unknown>;
+        await this.ebay.putInventoryItem(l.sku, {
+          ...rest,
+          product: { ...product, imageUrls: await this.imageUrls(l.square_item_id) },
+        });
+        updated++;
+      } catch (error) {
+        failed++;
+        await this.db.exec(
+          'update public.ebay_listings set last_error = $2 where square_item_id = $1',
+          [
+            l.square_item_id,
+            `The photos could not be updated for the new background: ${(error instanceof Error ? error.message : String(error)).slice(0, 400)}`,
+          ],
+        );
+      }
+    }
+    return { updated, failed };
   }
 
   /** What the product drawer shows: the listing (if any), and what a new listing starts from. */

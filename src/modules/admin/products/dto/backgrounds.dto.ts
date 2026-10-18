@@ -37,14 +37,8 @@ export class RenameBackgroundDto {
   name!: string;
 }
 
-/** The background picked first when a photo is used; null for plain white. */
+/** The shop background; null for plain white. */
 export class DefaultBackgroundDto {
   @Rule((v) => backgroundChoice(v ?? null) ?? null)
   id: string | null = null;
-}
-
-/** The background to put one product photo on (null: white). */
-export class ChangeBackgroundDto {
-  @Rule((v) => backgroundChoice(v ?? null) ?? null)
-  backgroundId: string | null = null;
 }

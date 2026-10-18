@@ -20,6 +20,7 @@ describe('storefront catalog', () => {
       category: 'Scale Figures',
       categoryId: null,
       images: ['https://img/fig1.jpg'],
+      cutouts: [],
       priceCents: 22900,
       compareAtCents: null,
       currency: 'CAD',

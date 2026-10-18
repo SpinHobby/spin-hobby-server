@@ -1,6 +1,7 @@
 import { ChannelPhotosService } from './products/channel-photos.service.js';
 import { AdminPhotoBackgroundsController } from './products/admin-photo-backgrounds.controller.js';
 import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js';
+import { ProductPhotosController } from './products/product-photos.controller.js';
 import { Module } from '@nestjs/common';
 import { EmailModule } from '../../integrations/email/email.module.js';
 import { PayPalModule } from '../../integrations/paypal/paypal.module.js';
@@ -57,6 +58,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     SquareSyncModule,
   ],
   controllers: [
+    ProductPhotosController,
     AdminDashboardController,
     AdminProductsController,
     AdminOrdersController,
@@ -99,6 +101,6 @@ import { AdminSquareService } from './square/admin-square.service.js';
     AdminSquareService,
   ],
   // what the eBay module builds on: product photos, the photos picked for eBay, and the admin log
-  exports: [AdminLog, SquarePhotosService, ChannelPhotosService],
+  exports: [AdminLog, SquarePhotosService, ChannelPhotosService, PhotoBackgroundsService],
 })
 export class AdminModule {}

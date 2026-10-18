@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import sharp from 'sharp';
 import { AppError, notFound } from '../../../common/errors.js';
+import { photoEvents } from '../../../common/photo-events.js';
 import { Db } from '../../../database/db.service.js';
 import { IMAGE_TYPES, StorageService } from '../../../integrations/storage/storage.service.js';
 import { AdminLog } from '../admin-log.service.js';
-import { composeOnBackground } from './compose-photo.js';
+import { composeOnBackground, transparentPhoto } from './compose-photo.js';
 import { downloadPhoto } from './download-photo.js';
 import { SquarePhotosService } from './square-photos.service.js';
 
@@ -26,7 +27,11 @@ interface CutoutRow {
   image_id: string;
   cutout_url: string;
   background_id: string | null;
+  transparent: boolean;
 }
+
+/** Photos on a background, made for places that cannot show transparency (eBay, link previews), kept for a while. */
+const COMPOSED_CACHE = 80;
 
 const present = (r: BackgroundRow) => ({
   id: r.id,
@@ -38,8 +43,10 @@ const present = (r: BackgroundRow) => ({
 
 /**
  * The shop's own backgrounds for product photos, and the cut-outs behind its photos. A background is uploaded in the admin and kept in our image
- * storage (never Square's). A photo made from a Gleamshelf cut-out is the cut-out placed on a background (or on white), made here and sent to Square
- * like any other photo; the cut-out is kept, so the background of a product's photo can be changed again at any time.
+ * storage (never Square's). The library's default is the shop background: a photo made from a Gleamshelf cut-out is saved to Square transparent (the
+ * product alone, as a PNG), and the website shows every such photo on the shop background (white when there is none). Changing the shop background
+ * (a seasonal one) changes every product at once; nothing is re-made. Places that cannot show transparency (eBay, link previews) get the cut-out on
+ * the shop background, made here when they fetch it. Photos made before kept a background baked in; they can be switched to transparent.
  */
 @Injectable()
 export class PhotoBackgroundsService {
@@ -49,6 +56,8 @@ export class PhotoBackgroundsService {
     private readonly photos: SquarePhotosService,
     private readonly log: AdminLog,
   ) {}
+
+  private readonly composed = new Map<string, Buffer>();
 
   // ---- the library ------------------------------------------------------------------------------------------------------------------
 
@@ -96,7 +105,7 @@ export class PhotoBackgroundsService {
     return present(row);
   }
 
-  /** The default is picked first when a photo is used; null means plain white is. */
+  /** The shop background: every transparent product photo shows on it. Null is plain white. */
   async setDefault(adminId: string, id: string | null) {
     await this.db.transaction(async (tx) => {
       await this.db.exec(
@@ -113,11 +122,13 @@ export class PhotoBackgroundsService {
         if (!row) throw notFound('Background');
       }
     });
+    this.composed.clear();
+    photoEvents.backgroundChanged();
     await this.log.write(adminId, 'photos.background_default', id ?? 'white', {});
     return this.list();
   }
 
-  /** Deletes a background. Photos already made with it stay as they are (they are in Square); they just show "no longer in the library". */
+  /** Deletes a background. The shop background deleted means plain white; older photos with it baked in stay as they are (they are in Square). */
   async remove(adminId: string, id: string) {
     const row = await this.db.one<BackgroundRow>(
       'delete from public.photo_backgrounds where id = $1 returning *',
@@ -125,6 +136,10 @@ export class PhotoBackgroundsService {
     );
     if (!row) throw notFound('Background');
     await this.storage.deleteImages([row.image_url]).catch(() => undefined);
+    if (row.is_default) {
+      this.composed.clear();
+      photoEvents.backgroundChanged();
+    }
     await this.log.write(adminId, 'photos.background_deleted', id, { name: row.name });
   }
 
@@ -146,6 +161,16 @@ export class PhotoBackgroundsService {
     return row;
   }
 
+  /** The shop background (null: plain white). */
+  shopBackground(): Promise<BackgroundRow | null> {
+    return this.resolve(undefined);
+  }
+
+  /** What the shop keeps for a cut-out: the product on a transparent square, as a PNG (see `transparentPhoto`). */
+  async transparent(cutoutUrl: string): Promise<Buffer> {
+    return transparentPhoto(await downloadPhoto(cutoutUrl));
+  }
+
   /** The finished photo: the stored cut-out on this background (white when none). */
   async compose(cutoutUrl: string, background: BackgroundRow | null): Promise<Buffer> {
     const [cutout, back] = await Promise.all([
@@ -157,16 +182,19 @@ export class PhotoBackgroundsService {
 
   // ---- the cut-outs behind a product's photos ----------------------------------------------------------------------------------------
 
-  /** Remembers that this Square photo was made from this cut-out, so its background can be changed later. */
-  async remember(itemId: string, imageId: string, cutoutUrl: string, backgroundId: string | null) {
+  /**
+   * Remembers that this Square photo was made from this cut-out: transparent (it shows on the shop background), or not (the photo computer's white
+   * square), so it can be switched to transparent later.
+   */
+  async remember(itemId: string, imageId: string, cutoutUrl: string, transparent: boolean) {
     await this.db.exec(
-      `insert into public.product_cutouts (square_item_id, image_id, cutout_url, background_id) values ($1, $2, $3, $4)
-         on conflict (image_id) do update set cutout_url = excluded.cutout_url, background_id = excluded.background_id`,
-      [itemId, imageId, cutoutUrl, backgroundId],
+      `insert into public.product_cutouts (square_item_id, image_id, cutout_url, background_id, transparent) values ($1, $2, $3, null, $4)
+         on conflict (image_id) do update set cutout_url = excluded.cutout_url, background_id = null, transparent = excluded.transparent`,
+      [itemId, imageId, cutoutUrl, transparent],
     );
   }
 
-  /** The product's photos that have a cut-out, and the background each is on (null: white). */
+  /** The product's photos that have a cut-out: transparent ones show on the shop background; the others have a background of their own. */
   async cutouts(itemId: string) {
     const rows = await this.db.many<CutoutRow>(
       'select * from public.product_cutouts where square_item_id = $1',
@@ -175,40 +203,95 @@ export class PhotoBackgroundsService {
     return rows.map((r) => ({
       imageId: r.image_id,
       cutoutUrl: r.cutout_url,
-      backgroundId: r.background_id,
+      transparent: r.transparent,
     }));
   }
 
   /**
-   * Puts one of a product's photos on another background: the cut-out is placed on it here and the new photo takes the old one's place in Square.
-   * The old photo was made here from the same cut-out, so it is deleted rather than kept hidden (it can always be made again).
+   * Makes one of a product's photos transparent (one made before, with a background baked in): the cut-out on a transparent square takes the old
+   * photo's place in Square, and from then on it shows on the shop background. The old photo was made here from the same cut-out, so it is deleted.
    */
-  async changeBackground(adminId: string, itemId: string, imageId: string, choice: string | null) {
+  async makeTransparent(adminId: string, itemId: string, imageId: string) {
     const row = await this.db.one<CutoutRow>(
       'select * from public.product_cutouts where square_item_id = $1 and image_id = $2',
       [itemId, imageId],
     );
     if (!row)
       throw new AppError(
-        'This photo has no cut-out, so its background cannot be changed. Only photos made by the photo computer have one.',
+        'This photo has no cut-out, so it cannot be made transparent. Only photos made by the photo computer have one.',
         409,
       );
-    const background = await this.resolve(choice);
-    const photo = await this.compose(row.cutout_url, background);
-    const { created } = await this.photos.add(adminId, itemId, photo, imageId);
+    if (row.transparent) return { created: imageId, ...(await this.photos.list(itemId)) };
+    const { created } = await this.photos.add(
+      adminId,
+      itemId,
+      await this.transparent(row.cutout_url),
+      imageId,
+    );
     await this.db.exec(
-      'update public.product_cutouts set image_id = $2, background_id = $3 where id = $1',
-      [row.id, created, background?.id ?? null],
+      'update public.product_cutouts set image_id = $2, background_id = null, transparent = true where id = $1',
+      [row.id, created],
     );
     const lists = await this.photos
       .remove(adminId, itemId, imageId)
       .catch(() => this.photos.list(itemId));
-    await this.log.write(adminId, 'product.photo_background_changed', itemId, {
+    await this.log.write(adminId, 'product.photo_made_transparent', itemId, {
       imageId: created,
       replaced: imageId,
-      background: background?.name ?? 'white',
     });
     return { created, ...lists };
+  }
+
+  /** How many product photos are transparent, and how many older ones (made from a cut-out, with a background baked in) could be. */
+  async counts() {
+    const row = await this.db.one<{ transparent: number; older: number }>(
+      'select count(*) filter (where transparent)::int as transparent, count(*) filter (where not transparent)::int as older from public.product_cutouts',
+    );
+    return { transparent: row?.transparent ?? 0, older: row?.older ?? 0 };
+  }
+
+  /** Makes every older cut-out photo transparent, one after the other; the ones Square refuses are counted and stay as they were. */
+  async makeAllTransparent(adminId: string) {
+    const rows = await this.db.many<CutoutRow>(
+      'select * from public.product_cutouts where not transparent order by created_at',
+    );
+    let done = 0;
+    let failed = 0;
+    for (const r of rows) {
+      try {
+        await this.makeTransparent(adminId, r.square_item_id, r.image_id);
+        done++;
+      } catch {
+        failed++;
+      }
+    }
+    return { done, failed, ...(await this.counts()) };
+  }
+
+  /**
+   * A transparent product photo (by its address in Square, or an eBay copy that is a cut-out) on the shop background, as a JPEG: for eBay and link
+   * previews, which cannot show transparency. Null when the address is no such photo. Made on demand and kept for a while.
+   */
+  async onShopBackground(wanted: { src?: string; imageId?: string }): Promise<Buffer | null> {
+    const found = await this.db.one<{ cutout_url: string }>(
+      `select c.cutout_url from public.product_cutouts c
+        where c.transparent and (c.image_id = $2
+          or c.image_id in (select pi.square_image_id from public.product_images pi where pi.image_url = $1))
+       union all
+       select image_url as cutout_url from public.channel_photos where image_url = $1 and cutout
+       limit 1`,
+      [wanted.src ?? null, wanted.imageId ?? null],
+    );
+    if (!found) return null;
+    const background = await this.shopBackground();
+    const key = `${found.cutout_url}|${background?.id ?? 'white'}`;
+    const kept = this.composed.get(key);
+    if (kept) return kept;
+    const photo = await this.compose(found.cutout_url, background);
+    if (this.composed.size >= COMPOSED_CACHE)
+      this.composed.delete(this.composed.keys().next().value!);
+    this.composed.set(key, photo);
+    return photo;
   }
 
   /** Forgets cut-outs whose photo Square no longer has, and deletes their files. */

@@ -229,8 +229,8 @@ export class PhotoJobsService {
 
   /**
    * Puts the improved photo on the product in the old one's place. The job stays "done" if Square refuses, so it can be tried again. With a cut-out
-   * and a background (chosen, or the shop's default when none is chosen) the photo is the product placed on it; otherwise (null: white) it is the photo
-   * computer's own white square. The cut-out is kept with the product either way, so its background can be changed later.
+   * the photo is transparent and shows on the shop background; `null` asks for the photo computer's own white square instead. The cut-out is kept
+   * with the product either way, so a white square can be made transparent later.
    */
   async apply(adminId: string, jobId: string, backgroundChoice?: string | null) {
     const job = await this.db.one<JobRow>('select * from public.photo_jobs where id = $1', [jobId]);
@@ -242,26 +242,20 @@ export class PhotoJobsService {
           : 'This photo is not ready to use.',
         409,
       );
-    // the background is checked before anything changes: one deleted from the library meanwhile is refused, not quietly swapped for white
-    const background = job.cutout_url ? await this.backgrounds.resolve(backgroundChoice) : null;
+    // a background id from an older admin means "on the shop background", as every cut-out photo now is
+    const transparent = !!job.cutout_url && backgroundChoice !== null;
     const claimed = await this.db.one<{ id: string }>(
       "update public.photo_jobs set status = 'applied', decided_by = $2, decided_at = now() where id = $1 and status = 'done' returning id",
       [jobId, adminId],
     );
     if (!claimed) throw new AppError('Someone else just handled this photo.', 409);
     try {
-      const photo =
-        job.cutout_url && background
-          ? await this.backgrounds.compose(job.cutout_url, background)
-          : await downloadPhoto(job.result_url);
+      const photo = transparent
+        ? await this.backgrounds.transparent(job.cutout_url!)
+        : await downloadPhoto(job.result_url);
       const { created } = await this.photos.add(adminId, job.square_item_id, photo, job.image_id);
       if (job.cutout_url)
-        await this.backgrounds.remember(
-          job.square_item_id,
-          created,
-          job.cutout_url,
-          background?.id ?? null,
-        );
+        await this.backgrounds.remember(job.square_item_id, created, job.cutout_url, transparent);
     } catch (error) {
       await this.db.exec(
         "update public.photo_jobs set status = 'done', decided_by = null, decided_at = null where id = $1",
@@ -278,7 +272,7 @@ export class PhotoJobsService {
     await this.log.write(adminId, 'photos.job_applied', job.square_item_id, {
       jobId,
       imageId: job.image_id,
-      background: job.cutout_url ? (background?.name ?? 'white') : null,
+      photo: job.cutout_url ? (transparent ? 'transparent' : 'white square') : 'improved',
     });
   }
 

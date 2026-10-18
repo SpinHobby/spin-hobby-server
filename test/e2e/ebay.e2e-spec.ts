@@ -4,6 +4,8 @@ import { inventoryEvents } from '../../src/common/inventory-events.js';
 import { SquareCatalogClient } from '../../src/integrations/square/square-catalog.client.js';
 import { SquarePhotosService } from '../../src/modules/admin/products/square-photos.service.js';
 import { EbaySyncService } from '../../src/modules/ebay/ebay-sync.service.js';
+import { EbayListingsService } from '../../src/modules/ebay/ebay-listings.service.js';
+import { PhotoBackgroundsService } from '../../src/modules/admin/products/photo-backgrounds.service.js';
 import { mockFetch } from '../support/harness.js';
 import { startShop } from '../support/shop.js';
 
@@ -39,6 +41,7 @@ const body = (init: RequestInit | undefined) =>
       ? JSON.parse(init.body)
       : init.body
     : undefined;
+const inventoryItems = new Map<string, unknown>();
 const ebay = mockFetch({
   'https://api.sandbox.ebay.com/identity/v1/oauth2/token': (init) => {
     sent.push({ method: 'POST', url: 'token', body: body(init) });
@@ -77,6 +80,12 @@ const ebay = mockFetch({
     };
   },
   'https://api.sandbox.ebay.com/sell/inventory/v1/inventory_item/': (init, url) => {
+    // eBay gives back the item as it was last written
+    if ((init?.method ?? 'GET') === 'GET') {
+      const last = inventoryItems.get(url);
+      return last ? { sku: url.split('/').pop(), ...last } : new Response(null, { status: 404 });
+    }
+    inventoryItems.set(url, body(init));
     sent.push({ method: 'PUT', url, body: body(init) });
     return new Response(null, { status: 204 });
   },
@@ -481,6 +490,53 @@ describe('keeping stock in step', () => {
       quantity: 5,
       error: null,
     });
+  });
+});
+
+describe('photos on the shop background', () => {
+  it('gives eBay a transparent photo on the shop background, and the new one when the background changes', async () => {
+    const listings = shop.app.get(EbayListingsService);
+    const before = process.env.PUBLIC_API_URL;
+    process.env.PUBLIC_API_URL = 'https://api.spinhobby.example';
+    const backgrounds = shop.app.get(PhotoBackgroundsService);
+    await pglite.query(
+      "insert into public.product_cutouts (square_item_id, image_id, cutout_url, transparent) values ('SQ_E', 'IMG1', 'https://proj.supabase.co/storage/v1/object/public/product-images/imports/c.png', true)",
+    );
+    const photosOf = () =>
+      (
+        [...sent]
+          .reverse()
+          .find((s) => s.method === 'PUT' && s.url.includes('/inventory_item/SH-1001'))!
+          .body as Record<string, any>
+      ).product.imageUrls as string[];
+    expect(await listings.refreshPhotos()).toEqual({ updated: 1, failed: 0 });
+    const white = photosOf();
+    expect(white).toEqual([
+      'https://api.spinhobby.example/product-photos/on-background?image=IMG1&b=white',
+    ]);
+    // the rest of the listing is written back as it was
+    const item = [...sent]
+      .reverse()
+      .find((s) => s.method === 'PUT' && s.url.includes('/inventory_item/SH-1001'))!.body as Record<
+      string,
+      any
+    >;
+    expect(item).toMatchObject({ condition: 'NEW', product: { ean: ['4582733412345'] } });
+    expect(item.sku).toBeUndefined();
+
+    // a new shop background: the address names it, so eBay fetches the photo again
+    await pglite.query(
+      "insert into public.photo_backgrounds (id, name, image_url, is_default) values ('00000000-0000-4000-8000-0000000000aa', 'Halloween', 'https://proj.supabase.co/storage/v1/object/public/product-images/backgrounds/h.jpg', true)",
+    );
+    expect((await backgrounds.shopBackground())?.name).toBe('Halloween');
+    await listings.refreshPhotos();
+    expect(photosOf()).toEqual([
+      expect.stringMatching(/image=IMG1&b=00000000-0000-4000-8000-0000000000aa$/),
+    ]);
+    await pglite.query("delete from public.product_cutouts where image_id = 'IMG1'");
+    await pglite.query('delete from public.photo_backgrounds');
+    if (before === undefined) delete process.env.PUBLIC_API_URL;
+    else process.env.PUBLIC_API_URL = before;
   });
 });
 

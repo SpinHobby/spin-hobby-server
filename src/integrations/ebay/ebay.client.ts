@@ -365,6 +365,13 @@ export class EbayClient {
 
   // ---- listings ----------------------------------------------------------------------------------------------------------------------
 
+  getInventoryItem(sku: string) {
+    return this.request<Record<string, unknown>>(
+      'GET',
+      `/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
+    );
+  }
+
   putInventoryItem(sku: string, item: unknown) {
     return this.request(
       'PUT',
