@@ -1,4 +1,6 @@
 import {
+  StreamableFile,
+  Put,
   Body,
   Controller,
   Delete,
@@ -19,6 +21,8 @@ import {
   RestockImportDto,
 } from './dto/imports.dto.js';
 import { ImportsService } from './imports.service.js';
+import { AddPhotoDto } from '../products/dto/photos.dto.js';
+import { AppError } from '../../../common/errors.js';
 
 /** Drafts sent by Gleamshelf, waiting for a person: look at each, type the price and stock, add it or reject it. */
 @ApiTags('Admin: Gleamshelf imports')
@@ -97,4 +101,52 @@ export class AdminImportsController {
     await this.imports.reject(admin.id, id, dto.reason);
     return { success: true };
   }
+
+  /** One of the draft's photos, for the photo editor (`?asOffered=1`: the photo as offered, without the person's edit). */
+  @Get(':id/photos/:key/file')
+  async photoFile(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('key') key: string,
+    @Query('asOffered') asOffered?: string,
+  ) {
+    const file = await this.imports.photoFile(id, photoKey(key), asOffered === '1');
+    return new StreamableFile(file.bytes, { type: file.type });
+  }
+
+  /** Keeps an edit of one of the draft's photos (cropped, straightened, retouched in the photo editor). */
+  @Put(':id/photos/:key')
+  @HttpCode(200)
+  async editPhoto(
+    @CurrentUser() admin: AppUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('key') key: string,
+    @Body() dto: AddPhotoDto,
+  ) {
+    return {
+      success: true,
+      draft: await this.imports.editPhoto(
+        admin.id,
+        id,
+        photoKey(key),
+        Buffer.from(dto.data, 'base64'),
+        dto.contentType,
+      ),
+    };
+  }
+
+  /** Undoes the edit: the photo as offered is used again. */
+  @Delete(':id/photos/:key/edit')
+  async undoEdit(
+    @CurrentUser() admin: AppUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('key') key: string,
+  ) {
+    return { success: true, draft: await this.imports.undoEdit(admin.id, id, photoKey(key)) };
+  }
+}
+
+const PHOTO_KEYS = ['studio', 'background', 'original', 'cropped', 'official'] as const;
+function photoKey(key: string): (typeof PHOTO_KEYS)[number] {
+  if (!(PHOTO_KEYS as readonly string[]).includes(key)) throw new AppError('No such photo.', 404);
+  return key as (typeof PHOTO_KEYS)[number];
 }

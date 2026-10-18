@@ -223,6 +223,80 @@ describe('choosing which photos go where', () => {
   });
 });
 
+describe('editing a draft photo before it is used', () => {
+  it('keeps the edit (the photo as offered stays, so it can be undone), and sends the edit to Square', async () => {
+    const d = await draftFromUpload('choices-edit.jpg');
+    // the editor reads the photo through the server
+    const file = await http
+      .get(`/admin/imports/${d.id}/photos/cropped/file`)
+      .set(asStaff)
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect((await sharp(file.body as Buffer).metadata()).width).toBeGreaterThan(200);
+    await http.get(`/admin/imports/${d.id}/photos/background/file`).set(asStaff).expect(404);
+
+    const edit = await sharp({
+      create: { width: 300, height: 300, channels: 3, background: { r: 250, g: 10, b: 10 } },
+    })
+      .webp()
+      .toBuffer();
+    const edited = (
+      await http
+        .put(`/admin/imports/${d.id}/photos/cropped`)
+        .set(asStaff)
+        .send({ contentType: 'image/webp', data: edit.toString('base64') })
+        .expect(200)
+    ).body.draft;
+    const cropped = edited.photos.find((p: { key: string }) => p.key === 'cropped');
+    expect(cropped.edited).toBe(true);
+    expect(cropped.url).not.toBe(d.photos.find((p) => p.key === 'cropped')!.url);
+
+    // undo, then edit again
+    const undone = (
+      await http.delete(`/admin/imports/${d.id}/photos/cropped/edit`).set(asStaff).expect(200)
+    ).body.draft;
+    expect(undone.photos.find((p: { key: string }) => p.key === 'cropped')).toMatchObject({
+      edited: false,
+      url: d.photos.find((p) => p.key === 'cropped')!.url,
+    });
+    const again = (
+      await http
+        .put(`/admin/imports/${d.id}/photos/cropped`)
+        .set(asStaff)
+        .send({ contentType: 'image/webp', data: edit.toString('base64') })
+        .expect(200)
+    ).body.draft;
+    const editedUrl = again.photos.find((p: { key: string }) => p.key === 'cropped').url as string;
+
+    let sentUrls: string[] = [];
+    vi.spyOn(quickAdd, 'add').mockImplementation(async (_a, dto) => {
+      sentUrls = dto.imageUrls;
+      return { id: 'SQ_EDITED', name: dto.name, photos: 1 };
+    });
+    vi.spyOn(photos, 'list').mockResolvedValue({
+      shown: [{ id: 'IMG_E', url: 'https://sq.example/e.jpg' }],
+      hidden: [],
+    });
+    await http
+      .post(`/admin/imports/${d.id}/add`)
+      .set(asStaff)
+      .send({
+        name: 'Edited',
+        priceCents: 1000,
+        stockCount: 1,
+        hidden: true,
+        photos: [{ key: 'cropped', square: true }],
+      })
+      .expect(200);
+    expect(sentUrls).toEqual([editedUrl]);
+  });
+});
+
 describe("a product's eBay photos (eBay not connected yet)", () => {
   it("keeps the photos picked for eBay, in order, only from the product's own photos", async () => {
     await pglite.query(

@@ -39,6 +39,7 @@ interface ImportRow {
   cutout_url: string | null;
   original_url: string | null;
   cropped_url: string | null;
+  edited_photos: Record<string, string> | null;
   square_item_id: string | null;
   reject_reason: string | null;
   created_at: string;
@@ -53,16 +54,24 @@ export interface PhotoChoice {
 }
 
 /** The photos a draft offers, in the order they are shown. `background` is the cut-out, which is placed on a background chosen when it is used. */
-function draftPhotos(r: ImportRow): { key: PhotoKey; url: string }[] {
+function draftPhotos(r: ImportRow): { key: PhotoKey; url: string; edited: boolean }[] {
   const official = (r.details as { official?: OfficialPhoto | null }).official ?? null;
+  const edits = editsOf(r);
+  // a photo a person edited in the admin's photo editor is offered as edited (the cut-out is placed on a background instead, so it is not edited)
   return [
     r.image_url && { key: 'studio' as const, url: r.image_url },
     r.cutout_url && { key: 'background' as const, url: r.cutout_url },
     r.cropped_url && { key: 'cropped' as const, url: r.cropped_url },
     r.original_url && { key: 'original' as const, url: r.original_url },
     official && { key: 'official' as const, url: official.imageUrl },
-  ].filter((p): p is { key: PhotoKey; url: string } => !!p);
+  ]
+    .filter((p): p is { key: PhotoKey; url: string } => !!p)
+    .map((p) => ({ ...p, url: edits[p.key] ?? p.url, edited: !!edits[p.key] }));
 }
+
+/** The draft's edited photos, by photo. */
+const editsOf = (r: Pick<ImportRow, 'edited_photos'>): Partial<Record<PhotoKey, string>> =>
+  r.edited_photos ?? {};
 
 /** The choices the older "which photo" setting meant: the shop's own (on its background when there is one), the official one, or both. */
 function legacyChoices(photo: 'own' | 'official' | 'both', onBackground: boolean): PhotoChoice[] {
@@ -409,7 +418,7 @@ export class ImportsService {
         )
         .catch(() => undefined);
       await this.db.exec(
-        'update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null where id = $1',
+        "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, edited_photos = '{}'::jsonb where id = $1",
         [id],
       );
       await this.log.write(adminId, 'imports.restocked', id, { productId, quantity, stockCount });
@@ -479,9 +488,11 @@ export class ImportsService {
     try {
       // each chosen photo as a file in our storage
       const urls = new Map<PhotoKey, string>();
+      const edits = editsOf(row);
       for (const c of choices) {
         if (urls.has(c.key)) continue;
-        if (c.key === 'studio') urls.set(c.key, row.image_url);
+        if (edits[c.key]) urls.set(c.key, edits[c.key]!);
+        else if (c.key === 'studio') urls.set(c.key, row.image_url);
         else if (c.key === 'original') urls.set(c.key, row.original_url!);
         else if (c.key === 'cropped') urls.set(c.key, row.cropped_url!);
         else if (c.key === 'official') {
@@ -521,7 +532,7 @@ export class ImportsService {
       dto.imageUrls = square.map((c) => urls.get(c.key)!);
       const product = await this.quickAdd.add(adminId, dto);
       await this.db.exec(
-        'update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null where id = $1',
+        "update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null, edited_photos = '{}'::jsonb where id = $1",
         [id, product.id],
       );
       for (const [i, url] of ebay.entries())
@@ -535,6 +546,7 @@ export class ImportsService {
         row.image_url,
         row.original_url,
         row.cropped_url,
+        ...Object.values(editsOf(row)),
         ...made.filter((u) => !ebay.includes(u)),
       ].filter((u): u is string => !!u && !sent.has(u));
       await this.storage.deleteImages(unused).catch(() => undefined);
@@ -579,6 +591,86 @@ export class ImportsService {
     }
   }
 
+  /** A draft's photo as bytes, for the admin's photo editor (the edited one unless `asOffered`). Never any other address: only this draft's own photos. */
+  async photoFile(
+    id: string,
+    key: PhotoKey,
+    asOffered = false,
+  ): Promise<{ bytes: Buffer; type: string }> {
+    const row = await this.draftRow(id);
+    const photo = draftPhotos(row).find((p) => p.key === key);
+    if (!photo || key === 'background')
+      throw new AppError('This draft has no such photo to edit.', 404);
+    const url = asOffered
+      ? (draftPhotos({ ...row, edited_photos: {} }).find((p) => p.key === key)?.url ?? photo.url)
+      : photo.url;
+    if (key === 'official' && !editsOf(row).official) return this.fetchOfficial(url);
+    const bytes = await downloadPhoto(url);
+    return {
+      bytes,
+      type:
+        (
+          await sharp(bytes)
+            .metadata()
+            .catch(() => null)
+        )?.format === 'png'
+          ? 'image/png'
+          : 'image/jpeg',
+    };
+  }
+
+  /** Keeps a person's edit of one of the draft's photos (the photo as offered stays, so the edit can be undone). */
+  async editPhoto(adminId: string, id: string, key: PhotoKey, bytes: Buffer, contentType: string) {
+    const row = await this.draftRow(id);
+    if (row.status !== 'draft') throw new AppError(`This draft was already ${row.status}.`, 409);
+    if (key === 'background' || !draftPhotos(row).some((p) => p.key === key))
+      throw new AppError('This photo cannot be edited here.', 400);
+    const stored = (await this.storage.uploadImage(bytes, contentType, 'imports')).url;
+    const before = editsOf(row)[key];
+    await this.db.exec(
+      'update public.product_imports set edited_photos = edited_photos || jsonb_build_object($2::text, $3::text) where id = $1',
+      [id, key, stored],
+    );
+    if (before) await this.storage.deleteImages([before]).catch(() => undefined);
+    await this.log.write(adminId, 'imports.photo_edited', id, { photo: key });
+    return present(await this.draftRow(id));
+  }
+
+  /** Undoes the edit of one photo: the photo as offered is used again. */
+  async undoEdit(adminId: string, id: string, key: PhotoKey) {
+    const row = await this.draftRow(id);
+    const before = editsOf(row)[key];
+    if (!before) throw new AppError('This photo has no edit to undo.', 404);
+    await this.db.exec(
+      'update public.product_imports set edited_photos = edited_photos - $2 where id = $1',
+      [id, key],
+    );
+    await this.storage.deleteImages([before]).catch(() => undefined);
+    await this.log.write(adminId, 'imports.photo_edit_undone', id, { photo: key });
+    return present(await this.draftRow(id));
+  }
+
+  private async draftRow(id: string): Promise<ImportRow> {
+    const row = await this.db.one<ImportRow>('select * from public.product_imports where id = $1', [
+      id,
+    ]);
+    if (!row) throw notFound('Draft');
+    return row;
+  }
+
+  /** The maker's photo, read from the maker's own site only (no redirect elsewhere). */
+  private async fetchOfficial(url: string): Promise<{ bytes: Buffer; type: string }> {
+    if (!isOfficialUrl(url))
+      throw new AppError("The official photo is not on a maker's site.", 400);
+    const res = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(20_000) }).catch(
+      () => null,
+    );
+    const type = (res?.headers.get('content-type') ?? '').split(';')[0].trim().toLowerCase();
+    if (!res?.ok || !IMAGE_TYPES[type])
+      throw new AppError("The maker's photo could not be downloaded.", 502);
+    return { bytes: Buffer.from(await res.arrayBuffer()), type };
+  }
+
   /** A copy of the maker's photo in our own storage, so the quick add treats it like any other photo. Only makers' official sites, never a redirect elsewhere. */
   private async copyOfficialPhoto(url: string): Promise<string> {
     if (!isOfficialUrl(url))
@@ -611,7 +703,7 @@ export class ImportsService {
       )
       .catch(() => undefined);
     await this.db.exec(
-      'update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null where id = $1',
+      "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, edited_photos = '{}'::jsonb where id = $1",
       [id],
     );
     await this.log.write(adminId, 'imports.rejected', id, { reason });
