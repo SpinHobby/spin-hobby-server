@@ -224,4 +224,46 @@ async function connectSquare() {
     console.log(`\n  Square connection skipped: ${e.message}\n`);
   }
 }
-connectSquare();
+
+/** Whether the API answers, trying every second for up to `seconds`. */
+async function apiAnswers(base, seconds) {
+  for (let i = 0; i < seconds; i += 1) {
+    if (
+      await fetch(`${base}/health/live`)
+        .then((r) => r.ok)
+        .catch(() => false)
+    )
+      return true;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return false;
+}
+
+// ---- say clearly when it is ready (the API's own start-up lines are many, and the window then just stays open, which looks stuck)
+async function announceReady() {
+  const port = process.env.PORT ?? '8080';
+  const base = `http://localhost:${port}`;
+  if (!(await apiAnswers(base, 180))) {
+    console.log(
+      `\n  Still starting after 3 minutes. A first start on a slow computer can take longer. If you see an error above, that is\n` +
+        `  what to fix (or send it to us): for example EADDRINUSE means port ${port} or ${DB_PORT} is already used by an earlier run.\n`,
+    );
+    if (!(await apiAnswers(base, 600))) return;
+  }
+  await connectSquare();
+  const line = '  ' + '-'.repeat(72);
+  console.log(
+    [
+      '',
+      line,
+      '  Spin Hobby is running.',
+      `    API docs: ${base}/docs`,
+      '    Website:  in the spin-hobby folder run `npm run dev`, then open http://localhost:3000',
+      '    Sign in:  owner@spinhobby.test / spinhobby  (or staff@spinhobby.test)',
+      '  Leave this window open: the server runs here. Ctrl+C stops it.',
+      line,
+      '',
+    ].join('\n'),
+  );
+}
+announceReady();

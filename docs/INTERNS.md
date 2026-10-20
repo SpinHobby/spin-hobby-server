@@ -29,7 +29,9 @@ own: every product, price and order comes from this server.
    ```
    `.env.intern` holds no keys and is safe to share. It is all you need: see
    [Your own keys (only if you need them)](#your-own-keys-only-if-you-need-them).
-   Wait for a line saying the API is listening. The first start takes a minute.
+   Wait for the box saying **Spin Hobby is running** (the first start takes a minute). The
+   command then keeps running: that is the server. Leave the window open and use a second one for
+   everything else.
 4. **Open the interactive API docs:** http://localhost:8080/docs
 5. **Try a request from the docs page.**
    - Open `GET /products` → *Try it out* → *Execute*. You should see sample products.
