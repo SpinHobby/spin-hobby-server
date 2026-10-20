@@ -176,6 +176,7 @@ const EXPECTED: string[] = [
   'POST /cashier/polish [staff]',
   'POST /cashier/record [staff]',
   'POST /checkout/intent [public] limit 10/60s',
+  'POST /checkout/test-payment [public] limit 20/60s',
   'POST /ebay/account-deletion [public] no-limit',
   'POST /gleamshelf/imports [public]',
   'POST /gleamshelf/jobs/:id/fail [public]',

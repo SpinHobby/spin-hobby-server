@@ -275,7 +275,7 @@ export class PhotoBackgroundsService {
   async onShopBackground(wanted: { src?: string; imageId?: string }): Promise<Buffer | null> {
     const found = await this.db.one<{ cutout_url: string }>(
       `select c.cutout_url from public.product_cutouts c
-        where c.transparent and (c.image_id = $2
+        where c.transparent and (c.image_id = $2 or c.image_id = $1
           or c.image_id in (select pi.square_image_id from public.product_images pi where pi.image_url = $1))
        union all
        select image_url as cutout_url from public.channel_photos where image_url = $1 and cutout

@@ -112,3 +112,6 @@ export const sampleImageBase = () =>
     `http://localhost:${env('PORT') ?? '8080'}`
   ).replace(/\/$/, '');
 export const sampleDataDisabled = () => env('SAMPLE_DATA') === 'false';
+
+/** Set only by `npm run dev:local`: checkout may complete with a test payment when no payment keys are set (see payments/test-payments.ts). */
+export const devTestPaymentsRequested = () => env('DEV_TEST_PAYMENTS') === 'true';

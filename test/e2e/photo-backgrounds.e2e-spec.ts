@@ -456,3 +456,71 @@ describe('a draft from Gleamshelf, on the shop background', () => {
     ).toBe(0);
   });
 });
+
+describe('a draft added without Square (a local copy of the shop with no keys)', () => {
+  it('becomes a product kept by the shop alone, its cut-out still transparent and on the shop background', async () => {
+    const as = await worker();
+    const sent = await http
+      .post('/gleamshelf/imports')
+      .set(as)
+      .field(
+        'draft',
+        JSON.stringify({
+          sourceKey: 'no-square-draft1',
+          title: 'Robin Figure (One Piece)',
+          description: null,
+          category: null,
+          series: null,
+          flags: [],
+          sources: [],
+          lookup: null,
+          generator: 'gleamshelf 0.2.0',
+        }),
+      )
+      .attach('photo', await solid(500, 500, [255, 255, 255]), {
+        filename: 'p.jpg',
+        contentType: 'image/jpeg',
+      })
+      .attach('cutout', await cutoutPng(), { filename: 'c.png', contentType: 'image/png' })
+      .expect(200);
+    const token = process.env.SQUARE_ACCESS_TOKEN;
+    process.env.SQUARE_ACCESS_TOKEN = '';
+    const quick = vi.spyOn(quickAdd, 'add');
+    try {
+      const product = (
+        await http
+          .post(`/admin/imports/${sent.body.id}/add`)
+          .set(asStaff)
+          .send({
+            name: 'Robin Figure (One Piece)',
+            priceCents: 2500,
+            stockCount: 1,
+            photos: [{ key: 'background', square: true, ebay: false }],
+          })
+          .expect(200)
+      ).body.product;
+      expect(quick).not.toHaveBeenCalled();
+      expect(product.id).toMatch(/^manual-/);
+      const shown = (await http.get(`/square/catalog/${product.id}`).expect(200)).body.item;
+      expect(shown.images).toHaveLength(1);
+      expect(shown.cutouts).toEqual(shown.images);
+      expect(
+        await alphaAt(stored.get(shown.images[0].split('/public/product-images/')[1])!, 5, 5),
+      ).toBe(0);
+      const merged = (
+        await http
+          .get(`/product-photos/on-background?src=${encodeURIComponent(shown.images[0])}`)
+          .buffer(true)
+          .parse((res, done) => {
+            const chunks: Buffer[] = [];
+            res.on('data', (c: Buffer) => chunks.push(c));
+            res.on('end', () => done(null, Buffer.concat(chunks)));
+          })
+          .expect(200)
+      ).body as Buffer;
+      expect(near(await pixel(merged, 800, 800), [220, 20, 20])).toBe(true);
+    } finally {
+      process.env.SQUARE_ACCESS_TOKEN = token;
+    }
+  });
+});

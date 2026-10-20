@@ -24,8 +24,11 @@ own: every product, price and order comes from this server.
 3. **Run it:**
    ```sh
    npm install
+   cp .env.intern .env
    npm run dev:local
    ```
+   `.env.intern` holds no keys and is safe to share. It is all you need: see
+   [Your own keys (only if you need them)](#your-own-keys-only-if-you-need-them).
    Wait for a line saying the API is listening. The first start takes a minute.
 4. **Open the interactive API docs:** http://localhost:8080/docs
 5. **Try a request from the docs page.**
@@ -54,6 +57,41 @@ Tips for `dev:local`:
 - Test data lives in memory. Stop the command and start it again to get clean sample data.
 - You can also run the website against it: in the `spin-hobby` repo run
   `VITE_API_URL=http://localhost:8080 npm run dev`.
+
+## Your own keys (only if you need them)
+
+You never need the shop's real keys, and nobody will send you them. With just `.env.intern` the whole shop runs on
+your computer:
+
+| What | Without any keys |
+| --- | --- |
+| Database | A built-in test database, filled with sample products and orders, reset at every start |
+| Signing in | `owner@spinhobby.test` / `spinhobby` and `staff@spinhobby.test` / `spinhobby` |
+| Checkout | **Test payment**: a "Place order (test, no money)" button. The order is completed like a paid one (stock goes down, it appears in the admin) and no card is asked for |
+| Adding products | Saved in our database only ("Square isn't connected here") |
+| Gleamshelf drafts | "Add to the shop" saves the product in our database only, photos included |
+| eBay, email, the paid AI tool | Shown as off or "not set up". Nothing else breaks |
+
+Each part below turns on one more thing. Make the keys **yourself, in your own free test account**, and paste them
+into your `.env` (never into code, a commit or a chat). Leave a part empty and that feature stays off.
+
+- **Square sandbox** (a test Square shop of your own): syncs its catalog in, card checkout with Square's test cards
+  (`4111 1111 1111 1111`), and creating products in Square. Sign up free at
+  [developer.squareup.com](https://developer.squareup.com) → *Create an application* → switch to **Sandbox** at the
+  top → copy the access token and application id (*Credentials*) and a location id (*Locations*) into
+  `SQUARE_ACCESS_TOKEN`, `SQUARE_APPLICATION_ID` and `SQUARE_LOCATION_ID`.
+- **PayPal sandbox** (checkout with a PayPal test buyer): [developer.paypal.com](https://developer.paypal.com) →
+  *Apps & Credentials* → **Sandbox** → *Create App* → `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`.
+- **eBay sandbox** (connect a test seller and list from the admin): [developer.ebay.com](https://developer.ebay.com)
+  → a **Sandbox** keyset, then follow [`docs/EBAY.md`](EBAY.md). For `EBAY_TOKEN_KEY` run `openssl rand -base64 32`.
+- **Email** (order confirmations): this sends **real** email. Only with your own [Resend](https://resend.com) account,
+  and only order with your own address.
+- **The paid AI tool** (the cashier's photo-to-listing): every photo costs real money. Only with a key the shop owner
+  made for you, with its own spending limit. Locally it stops by itself at $5 a month.
+
+You can't break the real shop from your computer: `npm run dev:local` never uses a real database, and it leaves out
+live Square, live PayPal and production eBay keys even if they end up in your `.env` (it tells you when it starts).
+Test payments only exist there: the real shop never offers them.
 
 ## The mental model (read this twice)
 
@@ -122,8 +160,8 @@ These aren't suggestions. Most are checked automatically, so the checks will tel
 - **No SQL or business rules in controllers.** Put them in the service.
 - **Don't read environment variables directly** (`process.env`). Use the accessors in `src/config`.
   Lint will stop you.
-- **Never put real keys in code, commits or chat.** Real keys live only in `.env` (ignored by git)
-  and in Render's environment page. Use fake values in tests.
+- **Never put real keys in code, commits or chat.** Your own test keys live only in your `.env` (ignored by git); the
+  shop's real keys live only in Render's environment page. Use fake values in tests.
 - **Production is real money and real customers.** Never push to `main` directly. Work goes on a
   branch, then `staging`, and only then `main` (see [`CONTRIBUTING.md`](../CONTRIBUTING.md)).
 - **Don't change what an endpoint returns without a conversation.** The website depends on the

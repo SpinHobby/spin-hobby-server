@@ -18,6 +18,8 @@ import { cropToProduct } from '../products/compose-photo.js';
 import { downloadPhoto } from '../products/download-photo.js';
 import { PhotoBackgroundsService } from '../products/photo-backgrounds.service.js';
 import { QuickAddService } from '../products/quick-add.service.js';
+import { AdminMerchService } from '../merch/admin-merch.service.js';
+import { squareAccessToken, squareLocationId } from '../../../config/square.config.js';
 import { SquarePhotosService } from '../products/square-photos.service.js';
 import { checkCutout } from './photo-jobs.service.js';
 import { SeriesService } from '../series/series.service.js';
@@ -154,6 +156,7 @@ export class ImportsService {
     private readonly log: AdminLog,
     private readonly backgrounds: PhotoBackgroundsService,
     private readonly photos: SquarePhotosService,
+    private readonly merch: AdminMerchService,
   ) {}
 
   // ---- connecting an app ------------------------------------------------------------------------------------------------------------
@@ -588,7 +591,11 @@ export class ImportsService {
       }
       const square = choices.filter((c) => c.square);
       dto.imageUrls = square.map((c) => urls.get(c.key)!);
-      const product = await this.quickAdd.add(adminId, dto);
+      // without Square (a local copy of the shop with no keys) the product is kept by the shop alone, like one added by hand
+      const inSquare = !!(squareAccessToken() && squareLocationId());
+      const product = inSquare
+        ? await this.quickAdd.add(adminId, dto)
+        : await this.merch.create(adminId, dto);
       await this.db.exec(
         "update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null, edited_photos = '{}'::jsonb where id = $1",
         [id, product.id],
@@ -612,7 +619,9 @@ export class ImportsService {
       // be made transparent later
       if (row.cutout_url) {
         const at = square.findIndex((c) => c.key === 'background' || c.key === 'studio');
-        const kept = at >= 0 ? await this.photoIdAt(product.id, at) : null;
+        // a photo kept by the shop alone is known by its address (it has no Square id)
+        const kept =
+          at >= 0 ? (inSquare ? await this.photoIdAt(product.id, at) : dto.imageUrls[at]) : null;
         if (kept)
           await this.backgrounds.remember(
             product.id,

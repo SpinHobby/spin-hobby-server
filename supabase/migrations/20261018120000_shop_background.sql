@@ -49,7 +49,8 @@ left join lateral (
   select array_agg(pi.image_url order by pi.sort_order) as images,
          array_agg(pi.image_url order by pi.sort_order) filter (where c.transparent) as cutout_images
   from public.product_images pi
-  left join public.product_cutouts c on c.image_id = pi.square_image_id
+  -- a Square photo is known by its Square id; a photo the shop keeps alone (a product added by hand) by its address
+  left join public.product_cutouts c on c.image_id = coalesce(pi.square_image_id, pi.image_url)
   where pi.square_item_id = p.square_item_id
 ) images on true
 where p.is_active and p.is_visible and coalesce(m.availability, 'auto') <> 'hidden';

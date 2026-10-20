@@ -10,6 +10,7 @@ import { CheckoutIntentDto } from './dto/checkout-intent.dto.js';
 import { PayPalCaptureDto } from './dto/paypal-capture.dto.js';
 import { QuoteRequestDto } from './dto/quote-request.dto.js';
 import { SquarePaymentDto } from './dto/square-payment.dto.js';
+import { TestPaymentDto } from './dto/test-payment.dto.js';
 
 /** The shopper's checkout, in order: read the config, price the cart, create the order, then pay. */
 @ApiTags('Checkout')
@@ -57,6 +58,14 @@ export class CheckoutController {
   @HttpCode(200)
   async capturePayPal(@Body() dto: PayPalCaptureDto) {
     return { success: true, ...(await this.payments.capturePayPal(dto.paypalOrderId)) };
+  }
+
+  /** Completes an order with a test payment, on a local copy of the shop with no payment keys only (404 anywhere else). */
+  @RateLimit({ limit: 20, windowMs: 60_000 })
+  @Post('checkout/test-payment')
+  @HttpCode(200)
+  async captureTest(@Body() dto: TestPaymentDto) {
+    return { success: true, ...(await this.payments.captureTest(dto.orderId, dto.email)) };
   }
 
   /** Charges a card through Square for an order created by `checkout/intent`. */

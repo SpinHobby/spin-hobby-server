@@ -9,10 +9,12 @@ import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
 import { isManualId } from '../catalog/manual-id.js';
 import { SquareHttpClient } from '../../integrations/square/square-http.client.js';
 import { squareLocationId } from '../../config/square.config.js';
+import { testPaymentsActive } from './test-payments.js';
 
 export interface PaymentStarted {
   orderId: number;
-  provider: 'paypal' | 'square';
+  /** `test`: a local copy of the shop with no payment keys (see test-payments.ts). */
+  provider: 'paypal' | 'square' | 'test';
   paypalOrderId?: string;
   amountCents?: number;
   currency?: 'CAD';
@@ -52,6 +54,14 @@ export class PaymentsService {
       );
     }
     const { order, quote } = created;
+    // a local copy with no payment keys: the order waits for a test payment instead of PayPal or Square
+    if (testPaymentsActive(order.provider))
+      return {
+        orderId: order.id,
+        provider: 'test',
+        amountCents: quote.totalCents,
+        currency: 'CAD',
+      };
     if (order.provider === 'paypal') {
       try {
         const paypalOrderId = await this.paypal.createOrder(order.id, quote.totalCents);
@@ -139,6 +149,24 @@ export class PaymentsService {
       payment.payment.receipt_url ?? null,
       { square_order_id: squareOrderId, payment_id: payment.payment.id },
     );
+    return { orderId: order.id, status };
+  }
+
+  /**
+   * Completes an order with a test payment: as a real payment completes it (stock, status, the confirmation), with no money involved. Refused
+   * (as if there were no such route) anywhere test payments are not active.
+   */
+  async captureTest(orderId: number, billingEmail: string): Promise<PaymentResult> {
+    const order = await this.db.one<OrderRow>(
+      'select * from public.orders where id = $1 and billing_email = $2',
+      [orderId, billingEmail],
+    );
+    if (!order || !testPaymentsActive(order.provider)) throw new AppError('Route not found.', 404);
+    if (alreadyPaid(order)) return { orderId: order.id, status: order.status };
+    await this.orders.assertCapturable(order);
+    const { status } = await this.orders.markPaid(order.id, `test-${order.id}`, null, {
+      test: true,
+    });
     return { orderId: order.id, status };
   }
 

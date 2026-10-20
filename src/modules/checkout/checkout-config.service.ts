@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Db } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';
+import { testPaymentsActive } from '../payments/test-payments.js';
 import { paypalClientId, paypalIsLive } from '../../config/paypal.config.js';
 import {
   squareApplicationId,
@@ -24,7 +25,8 @@ export class CheckoutConfigService {
     );
     return {
       success: true,
-      provider: s.payment_provider,
+      // `test` on a local copy with no payment keys: checkout completes with a test payment (no money)
+      provider: testPaymentsActive(s.payment_provider) ? 'test' : s.payment_provider,
       paypalClientId: paypalClientId() ?? null,
       paypalEnv: paypalIsLive() ? 'live' : 'sandbox',
       squareApplicationId: squareApplicationId() ?? null,

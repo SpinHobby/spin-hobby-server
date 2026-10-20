@@ -17,6 +17,7 @@ import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import { execSync, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
 import { join } from 'node:path';
 
 const DB_PORT = Number(process.env.DEV_DB_PORT ?? 54329);
@@ -55,12 +56,66 @@ for (const [email, role] of [
 // ---- seed: catalog, categories and orders
 const seeded = await seedSample(db, `http://localhost:${process.env.PORT ?? '8080'}`);
 
+// ---- a local copy never touches the real shop or real money
+// Keys for the live shop (production Square, live PayPal, production eBay) are blanked for this run, whatever .env says: a local "add product" or
+// stock change must never reach the real catalog. Sandbox keys work as usual. A blank value also wins over .env (the API never re-reads it).
+const fileEnv = {};
+if (existsSync(join(root, '.env'))) {
+  try {
+    Object.assign(fileEnv, parseEnv(readFileSync(join(root, '.env'), 'utf8')));
+  } catch {
+    /* unreadable .env: carry on without it */
+  }
+}
+const setting = (name) => process.env[name] || fileEnv[name] || '';
+const blanked = {};
+const blank = (names, why) => {
+  const present = names.filter((n) => setting(n));
+  if (!present.length) return;
+  for (const n of names) blanked[n] = '';
+  console.log(
+    `\n  Left out of this local run: ${present.join(', ')} (${why}). Use sandbox keys locally.`,
+  );
+};
+if ((setting('SQUARE_ENV') || setting('SQUARE_ENVIRONMENT')) !== 'sandbox')
+  blank(
+    [
+      'SQUARE_ACCESS_TOKEN',
+      'SQUARE_APPLICATION_ID',
+      'SQUARE_LOCATION_ID',
+      'SQUARE_WEBHOOK_SIGNATURE_KEY',
+    ],
+    'Square keys that are not sandbox ones',
+  );
+if (setting('PAYPAL_ENV') === 'live')
+  blank(['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_WEBHOOK_ID'], 'live PayPal keys');
+if (setting('EBAY_ENVIRONMENT') !== 'sandbox')
+  blank(
+    ['EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET', 'EBAY_RU_NAME'],
+    'eBay keys that are not sandbox ones',
+  );
+// the paid AI tool (if its key is set) stops for the month at $5 here, not the shop's $30
+await db.query(
+  "insert into public.ai_budgets (tool, warn_threshold_usd, stop_threshold_usd) values ('anthropic_cashier', 2, 5) on conflict (tool) do update set warn_threshold_usd = 2, stop_threshold_usd = 5",
+);
+
 const server = new PGLiteSocketServer({ db, port: DB_PORT, host: '127.0.0.1' });
 await server.start();
 console.log(
   `\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories`,
 );
 console.log('  Sign in: owner@spinhobby.test / spinhobby  (or staff@spinhobby.test)\n');
+const squareReady =
+  !('SQUARE_ACCESS_TOKEN' in blanked) &&
+  setting('SQUARE_ACCESS_TOKEN') &&
+  setting('SQUARE_APPLICATION_ID') &&
+  setting('SQUARE_LOCATION_ID');
+const paypalReady =
+  !('PAYPAL_CLIENT_ID' in blanked) &&
+  setting('PAYPAL_CLIENT_ID') &&
+  setting('PAYPAL_CLIENT_SECRET');
+if (!squareReady && !paypalReady)
+  console.log('  Checkout: test payments (no payment keys set; no money is involved)\n');
 
 // Run the Nest CLI with this same Node binary rather than `npx`: on Windows `npx` is a .cmd shim that
 // spawn() can't launch without a shell, and a shell wrapper would leave the API running after Ctrl+C.
@@ -81,6 +136,9 @@ const api = spawn(process.execPath, [nestCli, 'start', '--watch'], {
     AUTH_DEV_USERS: 'owner@spinhobby.test,staff@spinhobby.test',
     AUTH_DEV_PASSWORD: 'spinhobby',
     ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:4173',
+    // checkout completes with a test payment (no money) when no payment keys are set
+    DEV_TEST_PAYMENTS: 'true',
+    ...blanked,
   },
 });
 const stop = async () => {
@@ -106,7 +164,12 @@ async function connectSquare() {
       /* unreadable .env: carry on without it */
     }
   }
-  if (!process.env.SQUARE_ACCESS_TOKEN || !process.env.SQUARE_LOCATION_ID) return;
+  if (
+    'SQUARE_ACCESS_TOKEN' in blanked ||
+    !process.env.SQUARE_ACCESS_TOKEN ||
+    !process.env.SQUARE_LOCATION_ID
+  )
+    return;
   const sandbox = (process.env.SQUARE_ENV || process.env.SQUARE_ENVIRONMENT) === 'sandbox';
   const base = `http://localhost:${process.env.PORT ?? '8080'}`;
   for (let i = 0; i < 120; i += 1) {
