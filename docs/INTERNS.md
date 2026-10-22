@@ -164,8 +164,9 @@ These aren't suggestions. Most are checked automatically, so the checks will tel
   Lint will stop you.
 - **Never put real keys in code, commits or chat.** Your own test keys live only in your `.env` (ignored by git); the
   shop's real keys live only in Render's environment page. Use fake values in tests.
-- **Production is real money and real customers.** Never push to `production` directly. Work goes on a
-  branch, then `staging`, and only then `production` (see [`CONTRIBUTING.md`](../CONTRIBUTING.md)).
+- **Production is real money and real customers.** Work goes on your own branch, then a reviewed pull request into
+  `staging`. Never push to `production` or `staging` directly, never force-push a branch that isn't yours, and don't
+  merge your own pull request: the owner merges and releases (see [`CONTRIBUTING.md`](../CONTRIBUTING.md#branches-what-you-may-and-may-not-do)).
 - **Don't change what an endpoint returns without a conversation.** The website depends on the
   exact shape. The route list test (`test/e2e/routes.e2e-spec.ts`) tells you when routes change.
 

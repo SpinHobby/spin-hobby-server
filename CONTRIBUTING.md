@@ -8,10 +8,10 @@ How we work on this repo. It's short on purpose.
 your branch ──► pull request into `staging` ──► test on the staging site ──► merge `staging` into `production`
 ```
 
-- **`production` is the live site**: real customers and real money. Nobody pushes to it directly.
-- **`staging`** auto-deploys to the staging site (fake payments, sample data) so we can test there first.
-- Anything you push to a branch is visible to the team. Anything merged into `staging` or `production`
-  is **deployed automatically**.
+- **`production` is the live site**: real customers and real money. Only the owner merges into it, and the owner
+  deploys it by hand (see [Releasing](#releasing-to-the-live-site-owner-only)).
+- **`staging`** deploys automatically to the staging site (fake payments, sample data), so merged work can be tried there.
+- Anything you push to a branch is visible to the team.
 
 ### Step by step
 
@@ -23,11 +23,37 @@ your branch ──► pull request into `staging` ──► test on the staging 
 2. **Make a small change.** One pull request should do one thing. Small changes get reviewed fast.
 3. **Check it** (see below) and try it in `npm run dev:local`.
 4. **Commit** with a message that says what the change does (see below).
-5. **Push and open a pull request into `staging`.** Fill in the template: what changed, how you
-   checked it, and the checklist.
-6. **Ask for a review.** Reply to every comment, push fixes as new commits.
-7. After it's merged, open the staging site and check your change works there.
-8. Someone with release rights merges `staging` into `production` when staging looks good.
+5. **Push your branch and open a pull request into `staging`:**
+   ```sh
+   git push -u origin your-name/short-description
+   ```
+   GitHub then shows a **Compare & pull request** button. Check the base is **`staging`** (it is by default), and fill in
+   the template: what changed, how you checked it, and the checklist.
+6. **Ask for a review.** Reply to every comment and push fixes to the same branch: the pull request updates itself.
+7. **The owner merges it** into `staging`. Don't merge your own pull request, even though GitHub shows you the button.
+8. After it's merged, open the staging site and check your change works there, then delete your branch (GitHub offers a
+   button on the pull request).
+9. The owner releases `staging` to the live site when it looks good.
+
+If `staging` moved on while you worked and GitHub reports conflicts:
+
+```sh
+git fetch origin
+git merge origin/staging     # fix the conflicts, commit
+git push                     # the pull request updates
+```
+
+## Branches: what you may and may not do
+
+You can push to this repo, so these rules are what keep everyone's work safe:
+
+- **Do** work on your own branch (`your-name/...`), push it as often as you like, and open pull requests into `staging`.
+- **Never** push, merge or open a pull request into **`production`**.
+- **Never** push directly to **`staging`**: changes reach it only through a reviewed pull request.
+- **Never** force-push (`git push --force`) to `staging`, `production` or anyone else's branch. It deletes other
+  people's work. On your own branch it is fine.
+- **Never** delete a branch that isn't yours.
+- Made a mistake on one of these? Say so straight away. It is easy to put right when we know quickly.
 
 ## Before you push
 
@@ -103,6 +129,39 @@ Ask for a second pair of eyes before changing any of these. They involve money o
   classes are `PascalCase`, functions and variables are `camelCase`.
 - Comments explain **why**, not what. A `/** comment */` above a class, method or DTO field is
   welcome: DTO comments become the descriptions on the `/docs` page.
+
+## Releasing to the live site (owner only)
+
+The live site never updates by itself: Netlify and Render are set to deploy `production` only when the owner presses
+deploy, so a mistaken push to `production` changes nothing for customers.
+
+**One-time setup:**
+
+- Netlify (website): **Deploys → Stop auto publishing**. New production builds still run but wait, unpublished.
+- Render (the live API, the service at `spin-hobby-server.onrender.com`): **Settings → Auto-Deploy → Off**. Staging keeps deploying automatically.
+- GitHub: interns get the **Write** role on both repos (Settings → Collaborators and teams).
+
+**Each release** (the server first when it changed, because the website depends on it):
+
+1. Check the change on the staging site.
+2. Move `staging` onto `production` and check GitHub has what you expect:
+   ```sh
+   git switch production && git pull
+   git merge origin/staging
+   git push origin production
+   git fetch && git log origin/production -1      # the commit you meant to release
+   ```
+3. Server: Render → the live API service → **Manual Deploy → Deploy latest commit**. When it says Live, open
+   `https://spin-hobby-server.onrender.com/health`.
+4. Website: the same steps in `spin-hobby`, then Netlify → **Deploys** → the newest production deploy → **Publish deploy**.
+5. Open the live site and try what changed.
+
+**If something is wrong:**
+
+- *Someone pushed to `production` by mistake* (nothing went live): put your good copy back,
+  `git push --force origin <good-commit>:production`, then tell them.
+- *A release broke the live site:* Netlify → **Deploys** → the previous deploy → **Publish deploy**; Render → **Events** →
+  the previous deploy → **Rollback**. Then fix it on `staging` as usual.
 
 ## Where to read more
 
