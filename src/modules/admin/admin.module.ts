@@ -19,6 +19,8 @@ import { AdminPhotoJobsController } from './imports/admin-photo-jobs.controller.
 import { PhotoJobsService } from './imports/photo-jobs.service.js';
 import { AdminListingJobsController } from './imports/admin-listing-jobs.controller.js';
 import { ListingJobsService } from './imports/listing-jobs.service.js';
+import { AdminDescribeJobsController } from './imports/admin-describe-jobs.controller.js';
+import { DescribeJobsService } from './imports/describe-jobs.service.js';
 import { AdminCategoriesController } from './categories/admin-categories.controller.js';
 import { AdminCategoriesService } from './categories/admin-categories.service.js';
 import { CategorySortingService } from './categories/category-sorting.service.js';
@@ -73,6 +75,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     AdminPhotoJobsController,
     AdminPhotoBackgroundsController,
     AdminListingJobsController,
+    AdminDescribeJobsController,
     GleamshelfController,
   ],
   providers: [
@@ -80,6 +83,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
     ImportsService,
     PhotoJobsService,
     ListingJobsService,
+    DescribeJobsService,
     GleamshelfTokenGuard,
     SeriesService,
     CatalogSearchService,

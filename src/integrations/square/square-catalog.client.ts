@@ -13,6 +13,7 @@ import {
 import type { ExternalJson } from '../../common/external-json.js';
 import { isHiddenInSquareItself } from './visibility.js';
 import { AppError, errorText } from '../../common/errors.js';
+import { escapeHtml } from '../../common/html.js';
 
 /**
  * Square catalog calls for the cashier tool: searching items, creating and editing them, and stock counts.
@@ -240,6 +241,32 @@ export class SquareCatalogClient {
     for (const o of (data.objects ?? []) as ExternalJson[])
       if (o.type === 'IMAGE' && !o.is_deleted && o.image_data?.url) urls[o.id] = o.image_data.url;
     return urls;
+  }
+
+  /**
+   * Changes an item's description and nothing else: the item is read from Square and saved back as it was, with only
+   * the description replaced (plain text, kept as paragraphs).
+   */
+  async setItemDescription(itemId: string, description: string): Promise<void> {
+    const existing = await this.retrieveObject(itemId);
+    if (!existing || existing.type !== 'ITEM' || !existing.item_data)
+      throw new AppError('This item was not found in Square.', 404);
+    const { updated_at: _updatedAt, created_at: _createdAt, ...writable } = existing; // read-only in Square
+    const {
+      description: _description,
+      description_plaintext: _plain, // read-only: Square makes it from the HTML
+      ...itemData
+    } = existing.item_data;
+    const html = description
+      .split(/\n{2,}/)
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+    await this.batchUpsert(
+      { ...writable, item_data: { ...itemData, description_html: html } },
+      'Failed to update the description in Square',
+    );
   }
 
   /**

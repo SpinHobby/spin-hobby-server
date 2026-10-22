@@ -28,6 +28,8 @@ import {
 import { AppToken, GleamshelfTokenGuard } from './gleamshelf-token.guard.js';
 import { ImportsService } from './imports.service.js';
 import { ListingJobsService } from './listing-jobs.service.js';
+import { DescribeJobsService } from './describe-jobs.service.js';
+import { DescribeResultDto } from './dto/describe.dto.js';
 import { PhotoJobsService } from './photo-jobs.service.js';
 
 /** The finished photo, and (from Gleamshelf 0.2 on) the product alone on a transparent background, so the shop can put it on its own backgrounds. */
@@ -57,6 +59,7 @@ export class GleamshelfController {
     private readonly imports: ImportsService,
     private readonly jobs: PhotoJobsService,
     private readonly listings: ListingJobsService,
+    private readonly describe: DescribeJobsService,
   ) {}
 
   /** Trades the 8-digit code from the admin for the app's token. The token is shown once. */
@@ -208,6 +211,57 @@ export class GleamshelfController {
     @Body() dto: JobProgressDto,
   ) {
     await this.listings.progress(tokenId, id, dto.percent, dto.step);
+    return { success: true };
+  }
+
+  /** The next shop product to describe, or no job. The app says what it can do ("describe" means it can read a photo, look the product up and write). */
+  @Post('describe-jobs/claim')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async claimDescribe(@AppToken() tokenId: string, @Body() dto: ClaimJobDto) {
+    return { success: true, job: await this.describe.claim(tokenId, dto.features) };
+  }
+
+  /** The proposal for a product the app holds: it waits in the admin for a person to apply or skip it. */
+  @Post('describe-jobs/:id/result')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async describeResult(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: DescribeResultDto,
+  ) {
+    await this.describe.submit(tokenId, id, dto.result);
+    return { success: true };
+  }
+
+  /** The app could not describe this product. */
+  @Post('describe-jobs/:id/fail')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async failDescribe(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: JobFailDto,
+  ) {
+    await this.describe.fail(tokenId, id, dto.error ?? '');
+    return { success: true };
+  }
+
+  /** How far the app has got with a product it is describing. */
+  @Post('describe-jobs/:id/progress')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async describeProgress(
+    @AppToken() tokenId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: JobProgressDto,
+  ) {
+    await this.describe.progress(tokenId, id, dto.percent, dto.step);
     return { success: true };
   }
 }

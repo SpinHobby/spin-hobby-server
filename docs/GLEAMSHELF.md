@@ -67,9 +67,23 @@ see-through pixels is refused, so a white photo is never taken for one.
 
 Tables: `photo_backgrounds`, `product_cutouts`, and `cutout_url` on `photo_jobs` and `product_imports` (migration `20261016120000_photo_backgrounds.sql`).
 
+## Descriptions for products already in the shop
+
+Most products came from Square with no description. The photo computer can write them, for free, on the shop's own computer.
+
+1. **Send.** Admin, **Descriptions**: "Describe every product without one" (or pick products). Each product with a photo becomes a job
+   (`POST /admin/describe-jobs`, `{ missing: true }` or `{ ids }`); a product is in the queue once.
+2. **Work.** `npm run worker` takes the jobs that need the vision model and web search (`POST /gleamshelf/describe-jobs/claim` with the feature `describe`):
+   it reads the product's main photo, looks the product up with the shop's own product name as extra search words, and sends back a proposed description,
+   series, maker and category (`/gleamshelf/describe-jobs/:id/result`, JSON). Nothing is written to the product.
+3. **Review.** Each proposal shows the photo, the current description and the proposed one (editable), with the sources and what the lookup found.
+   **Apply** writes the description to Square (only the description: the item is read and sent back as it was) and the series and maker to the product;
+   **Skip** leaves the product as it is; **Ask again** queues it once more.
+
+Table: `describe_jobs` (migration `20261022120000_describe_jobs.sql`).
+
 ## Not done yet
 
 - A badge in the sidebar with the number of drafts and of new photos waiting to be checked.
-- Photo jobs that also write a new title and description (needs the vision model on the photo computer, which today runs on a Mac only).
 - Pushing straight from the Gleamshelf editor (today it is the `push` command).
 - Other shops: the draft is shop-neutral; a connector for Shopify or WooCommerce is a second file next to `connectors/spinhobby.ts` in Gleamshelf.
