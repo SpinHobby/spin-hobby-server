@@ -48,6 +48,7 @@ describe('storefront catalog', () => {
     expect(fig).toHaveProperty('description');
     expect(fig).toHaveProperty('janCode');
     expect(fig).toHaveProperty('categoryPath');
+    expect(fig).toHaveProperty('manufacturer');
     expect(fig.createdAt).toEqual(expect.any(String));
   });
 

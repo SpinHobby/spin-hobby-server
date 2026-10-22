@@ -191,6 +191,8 @@ export interface StorefrontProductRow {
   images: string[];
   /** Which of `images` are transparent cut-outs (shown on the shop background). */
   cutout_images?: string[];
+  /** The maker (brand), for search engines. */
+  manufacturer?: string | null;
   price_cents: number;
   compare_at_cents: number | null;
   currency: string;

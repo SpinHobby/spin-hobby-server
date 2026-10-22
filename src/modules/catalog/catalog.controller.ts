@@ -29,6 +29,7 @@ export class CatalogController {
         ...publicProduct(row),
         description: row.description ?? null,
         janCode: row.jan_code ?? null,
+        manufacturer: row.manufacturer ?? null,
         categoryPath: row.category_path ?? null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -99,13 +100,14 @@ export class CatalogController {
   async squareItem(@Param('id') id: string) {
     const row = await this.catalog.product(id);
     if (!row) throw notFound('Catalog item');
-    // The product page also gets the description and JAN code (left out of list responses to keep them small).
+    // The product page also gets the description, JAN code and maker (left out of list responses to keep them small).
     return {
       success: true,
       item: {
         ...publicProduct(row),
         description: row.description ?? null,
         janCode: row.jan_code ?? null,
+        manufacturer: row.manufacturer ?? null,
       },
     };
   }
