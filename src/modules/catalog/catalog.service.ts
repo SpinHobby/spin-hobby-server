@@ -6,6 +6,7 @@ import type { HeroSlideRow, StoreEventRow, StorefrontProductRow } from '../../da
 import type { ProductQuery } from './dto/product-query.dto.js';
 import { FRONT_PAGE_SLOTS } from './front-page.js';
 import { publicProduct } from './product.mapper.js';
+import { slugify } from './slug.js';
 
 const SORTS: Record<string, string> = {
   featured: 'is_featured desc, case when is_featured then sort_order end, created_at desc, id',
@@ -126,6 +127,8 @@ export class CatalogService {
       add((n) => `price_cents >= ${n}`, Math.round(min * 100));
     if (query.max != null && query.max !== '' && Number.isFinite(max) && max >= 0)
       add((n) => `price_cents < ${n}`, Math.round(max * 100));
+    const seriesSlug = query.series?.trim().toLowerCase().slice(0, 100);
+    if (seriesSlug) add((n) => `series = any(${n}::text[])`, await this.seriesNamed(seriesSlug));
     const q = query.q?.trim();
     if (q)
       add(
@@ -276,6 +279,28 @@ export class CatalogService {
       promos: { closingSoon: promo?.closing_soon ?? 0, maxDiscountPct: promo?.max_discount ?? 0 },
       freeShippingThresholdCents: Math.round(free * 100),
     };
+  }
+
+  /** The spellings of a series whose address form is `slug` ("Re:Zero" and "Re: Zero" are both `re-zero`). */
+  private async seriesNamed(slug: string) {
+    const rows = await this.db.many<{ series: string }>(
+      'select distinct series from public.storefront_products where series is not null',
+    );
+    return rows.map((r) => r.series).filter((name) => slugify(name) === slug);
+  }
+
+  /**
+   * Every product shoppers can see, including the longer fields list responses leave out (description, JAN code) and the full category
+   * path. For search engines: the website's build turns it into the sitemap, a page per product, and the Google Shopping feed.
+   */
+  async feed() {
+    return this.db.many<StorefrontProductRow & { category_path: string | null }>(
+      `${CATEGORY_PATHS}
+      select p.*, cp.path as category_path
+      from public.storefront_products p left join cat_paths cp on cp.id = p.category_id
+      order by p.created_at desc, p.id
+      limit 10000`,
+    );
   }
 
   async product(id: string): Promise<StorefrontProductRow | null> {

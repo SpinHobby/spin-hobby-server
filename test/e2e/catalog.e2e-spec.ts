@@ -33,6 +33,34 @@ describe('storefront catalog', () => {
     });
   });
 
+  it('gives search engines every visible product with its description, JAN code and category path', async () => {
+    const res = await http.get('/products/feed').expect(200);
+    const ids = res.body.items.map((p: any) => p.id);
+    expect(ids).toHaveLength(5);
+    expect(ids).not.toContain('HID1');
+    const fig = res.body.items.find((p: any) => p.id === 'FIG1');
+    expect(fig).toMatchObject({
+      id: 'FIG1',
+      name: 'Rem 1/7 Scale Figure',
+      priceCents: 22900,
+      status: 'pre',
+    });
+    expect(fig).toHaveProperty('description');
+    expect(fig).toHaveProperty('janCode');
+    expect(fig).toHaveProperty('categoryPath');
+    expect(fig.createdAt).toEqual(expect.any(String));
+  });
+
+  it('filters by series address form, whatever the punctuation', async () => {
+    expect((await http.get('/products?series=re-zero')).body.items.map((p: any) => p.id)).toEqual([
+      'FIG1',
+    ]);
+    expect((await http.get('/products?series=RE-ZERO')).body.items.map((p: any) => p.id)).toEqual([
+      'FIG1',
+    ]);
+    expect((await http.get('/products?series=no-such-series')).body.items).toEqual([]);
+  });
+
   it('derives status from stock and pre-order dates like the storefront expects', async () => {
     const res = await http.get('/products?limit=60').expect(200);
     const status = Object.fromEntries(res.body.items.map((p: any) => [p.id, p.status]));

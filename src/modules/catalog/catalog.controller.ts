@@ -19,6 +19,23 @@ export class CatalogController {
     return this.catalog.facets();
   }
 
+  /** All visible products with their descriptions and JAN codes, for the website's sitemap, product pages and Google Shopping feed. */
+  @Get('products/feed')
+  async feed() {
+    const rows = await this.catalog.feed();
+    return {
+      success: true,
+      items: rows.map((row) => ({
+        ...publicProduct(row),
+        description: row.description ?? null,
+        janCode: row.jan_code ?? null,
+        categoryPath: row.category_path ?? null,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+      })),
+    };
+  }
+
   @Get('products/preorders')
   preorders(@Query() query: ProductQuery) {
     return this.catalog.productPage({ ...query, status: 'pre', sort: 'release' });

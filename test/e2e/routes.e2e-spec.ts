@@ -112,6 +112,7 @@ const EXPECTED: string[] = [
   'GET /product-photos/on-background [public]',
   'GET /products [public]',
   'GET /products/facets [public]',
+  'GET /products/feed [public]',
   'GET /products/new-in-stock [public]',
   'GET /products/preorders [public]',
   'GET /products/ranking [public]',

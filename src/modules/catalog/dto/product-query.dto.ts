@@ -45,6 +45,10 @@ export class ProductQuery {
   @IsOptional()
   group?: string | null;
 
+  /** A series by its address form (`re-zero` for "Re:Zero"): the storefront's /series/<slug> pages. */
+  @IsOptional()
+  series?: string | null;
+
   /** Comma-separated product ids (e.g. the shopper's wishlist). */
   @IsOptional()
   ids?: string | null;
