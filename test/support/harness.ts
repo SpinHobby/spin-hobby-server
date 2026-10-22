@@ -72,6 +72,10 @@ export async function createApp(driver: DbDriver) {
   const app = moduleRef.createNestApplication<NestExpressApplication>({ rawBody: true });
   configureApp(app);
   await app.init();
+  // Listen once, on 127.0.0.1 itself. Left to supertest, each request opens the server on "any address" with a random port and
+  // then connects to 127.0.0.1 on that port; on macOS that port can already be taken on 127.0.0.1 by another program (an editor's
+  // helper, say), which then answers instead, so a test failed now and then with a 401 that our server never sent.
+  await app.listen(0, '127.0.0.1');
   return app;
 }
 
