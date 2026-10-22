@@ -1,13 +1,13 @@
 # Render Blueprint for the Spin Hobby API (NestJS).
 # Dashboard: New > Blueprint > pick this repo. Render builds the Dockerfile, checks /health,
-# and redeploys on every push to main. Values marked `sync: false` are prompted for on first
+# and redeploys on every push to production. Values marked `sync: false` are prompted for on first
 # setup (and can be edited later under the service's Environment tab); never commit them.
 services:
   - type: web
     name: spin-hobby-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    branch: main
+    branch: production
     autoDeploy: true
     healthCheckPath: /health/live   # GET /health shows detailed diagnostics
     envVars:

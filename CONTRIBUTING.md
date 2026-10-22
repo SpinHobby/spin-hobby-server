@@ -5,12 +5,12 @@ How we work on this repo. It's short on purpose.
 ## The flow
 
 ```
-your branch ──► pull request into `staging` ──► test on the staging site ──► merge `staging` into `main`
+your branch ──► pull request into `staging` ──► test on the staging site ──► merge `staging` into `production`
 ```
 
-- **`main` is production**: real customers and real money. Nobody pushes to it directly.
+- **`production` is the live site**: real customers and real money. Nobody pushes to it directly.
 - **`staging`** auto-deploys to the staging site (fake payments, sample data) so we can test there first.
-- Anything you push to a branch is visible to the team. Anything merged into `staging` or `main`
+- Anything you push to a branch is visible to the team. Anything merged into `staging` or `production`
   is **deployed automatically**.
 
 ### Step by step
@@ -27,7 +27,7 @@ your branch ──► pull request into `staging` ──► test on the staging 
    checked it, and the checklist.
 6. **Ask for a review.** Reply to every comment, push fixes as new commits.
 7. After it's merged, open the staging site and check your change works there.
-8. Someone with release rights merges `staging` into `main` when staging looks good.
+8. Someone with release rights merges `staging` into `production` when staging looks good.
 
 ## Before you push
 

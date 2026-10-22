@@ -4,7 +4,7 @@ A full copy of the stack for testing before anything reaches spinhobby.com.
 
 | | Production | Staging |
 |---|---|---|
-| Git branch (both repos) | `main` | `staging` |
+| Git branch (both repos) | `production` | `staging` |
 | Storefront (Netlify) | https://spinhobby.com | https://spin-hobby-staging.netlify.app |
 | API (Render) | https://spin-hobby-server.onrender.com | https://spin-hobby-server-staging.onrender.com |
 | Database / auth / photos (Supabase) | project `zmlltsytckexrmybvnof` | its own project (`spin-hobby-staging`) |
@@ -18,10 +18,10 @@ staging API. The staging API allows those Netlify origins whenever `APP_ENV=stag
 ## Everyday workflow
 
 ```sh
-git checkout staging && git merge main     # or merge your feature branch into staging
+git checkout staging && git merge production     # or merge your feature branch into staging
 git push                                   # Netlify + Render deploy staging automatically
 # test on https://staging--spinhobby.netlify.app
-git checkout main && git merge staging && git push   # go live
+git checkout production && git merge staging && git push   # go live
 ```
 
 Do this in both repos when a change touches both. Push the API first when the frontend depends
