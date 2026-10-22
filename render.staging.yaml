@@ -27,11 +27,12 @@ services:
         value: "true"
 
       # Staging-only admin sign-in: type the username in the email box on the sign-in form.
-      # Ignored unless APP_ENV=staging. Change the password before putting anything sensitive here.
+      # Ignored unless APP_ENV=staging. The password is set on Render (Environment tab), never here:
+      # this file is in git, and the staging admin is a full owner account on the staging site.
       - key: STAGING_ADMIN_USERNAME
         value: SpinHobby
       - key: STAGING_ADMIN_PASSWORD
-        value: "123456"
+        sync: false
 
       # The STAGING Supabase project (not zmlltsytckexrmybvnof, which is production)
       - key: SUPABASE_URL            # https://<staging-ref>.supabase.co
