@@ -84,6 +84,7 @@ interface JobRow {
   worker_id: string | null;
   progress: number | null;
   step: string | null;
+  started_at: string | null;
   result: Partial<DescribeProposal>;
   error: string | null;
   created_at: string;
@@ -191,6 +192,7 @@ export class DescribeJobsService {
         status: r.status,
         progress: r.status === 'running' ? (r.progress ?? 0) : null,
         step: r.status === 'running' ? r.step : null,
+        startedAt: r.status === 'running' ? r.started_at : null,
         error: r.error,
         proposal:
           r.status === 'queued' || r.status === 'running' ? null : (r.result as DescribeProposal),
