@@ -157,12 +157,13 @@ The message is shown to the user as-is, so write it for a shopper or staff membe
   `many(sql, params)` returns rows, `one(sql, params)` returns one row or `null`, `exec(sql, params)`
   runs a statement, `transaction(fn)` makes several statements succeed or fail together.
   Always pass values as parameters (`$1`, `$2`, …), never paste them into the SQL text.
-- **Where a query goes.** A short query used once stays in the service, next to the code that reads its rows: you see
-  the values going in and the columns coming out in one place. A query that is long (more than about 15 lines) or used
-  in more than one place goes in a `<feature>.sql.ts` file beside the service, as an exported string with a comment
-  saying what it returns: see `admin/products/catalog-search.sql.ts` and `admin/imports/describe-jobs.sql.ts`. We don't
-  read `.sql` files at run time: the parameters (`$1`, `$2`) would sit in a different file from the values passed for
-  them, and the build would have to copy the files.
+- **Where a query goes: always in the service file**, next to the code that uses its rows, so there is one place to
+  look. A query used more than once in that service becomes a named constant at the top of the file, with a comment
+  saying what it returns (for example `JOBS_WITH_PRODUCT` in `admin/imports/describe-jobs.service.ts`). No separate
+  `.sql` files. A query another service also needs is exported from the service that owns it (for example the order
+  JSON snippets in `orders/order-history.service.ts`). Connectors in `integrations/` never query the database: when one
+  needs stored data it asks a small service through an interface (see `EbayTokenStore` in `ebay.client.ts`). The sample
+  data loader (`modules/sample/seed.ts`) is development tooling and keeps its own inserts.
 - **`database/rows.ts`** has a TypeScript type for each main table. Use them as the type argument:
   ```ts
   const order = await this.db.one<Pick<OrderRow, 'id' | 'status'>>(

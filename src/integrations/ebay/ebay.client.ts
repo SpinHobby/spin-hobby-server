@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import {
   ebayApiBase,
@@ -9,7 +9,6 @@ import {
   ebayMarketplaceId,
   ebayRuName,
 } from '../../config/ebay.config.js';
-import { Db } from '../../database/db.service.js';
 import { openToken, sealToken } from './token-crypto.js';
 
 /** What the shop's eBay app may do for the seller: listings and stock, business policies, orders, and the account's name. */
@@ -64,11 +63,29 @@ const describe = (body: unknown, status: number): EbayError => {
  * eBay's REST APIs for one seller account: signing in (the owner approves the shop's app on eBay's own page), the user token (refreshed
  * before it expires and saved encrypted), and the calls the shop makes. The token belongs to the connected account in `ebay_connection`.
  */
+/** The seller's stored tokens (sealed: see token-crypto.ts), as the eBay connection keeps them. */
+export interface StoredEbayTokens {
+  access_token: string;
+  access_expires_at: string;
+  refresh_token: string;
+  refresh_expires_at: string | null;
+}
+
+/**
+ * Where the client keeps the seller's tokens. The client only talks to eBay; the database side is EbayTokensService
+ * (src/modules/ebay), provided under this token by EbayModule.
+ */
+export interface EbayTokenStore {
+  read(): Promise<StoredEbayTokens | null>;
+  saveAccess(sealedAccessToken: string, expiresAt: string): Promise<void>;
+}
+export const EBAY_TOKEN_STORE = Symbol('EBAY_TOKEN_STORE');
+
 @Injectable()
 export class EbayClient {
   private refreshing: Promise<string> | null = null;
 
-  constructor(private readonly db: Db) {}
+  constructor(@Inject(EBAY_TOKEN_STORE) private readonly tokens: EbayTokenStore) {}
 
   configured(): boolean {
     return !!(ebayClientId() && ebayClientSecret() && ebayRuName());
@@ -130,14 +147,7 @@ export class EbayClient {
 
   /** A user token valid for at least five more minutes: the stored one, or a fresh one from the refresh token (saved encrypted). */
   async accessToken(): Promise<string> {
-    const row = await this.db.one<{
-      access_token: string;
-      access_expires_at: string;
-      refresh_token: string;
-      refresh_expires_at: string | null;
-    }>(
-      'select access_token, access_expires_at, refresh_token, refresh_expires_at from public.ebay_connection where id = 1',
-    );
+    const row = await this.tokens.read();
     if (!row)
       throw new AppError('eBay is not connected. An owner can connect it in Settings.', 409);
     if (Date.parse(row.access_expires_at) - Date.now() > 5 * 60_000)
@@ -154,12 +164,9 @@ export class EbayClient {
         refresh_token: openToken(row.refresh_token),
         scope: EBAY_SCOPES.join(' '),
       });
-      await this.db.exec(
-        'update public.ebay_connection set access_token = $1, access_expires_at = $2 where id = 1',
-        [
-          sealToken(fresh.access_token),
-          new Date(Date.now() + fresh.expires_in * 1000).toISOString(),
-        ],
+      await this.tokens.saveAccess(
+        sealToken(fresh.access_token),
+        new Date(Date.now() + fresh.expires_in * 1000).toISOString(),
       );
       return fresh.access_token;
     })().finally(() => {

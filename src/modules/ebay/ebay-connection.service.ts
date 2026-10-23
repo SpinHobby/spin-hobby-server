@@ -267,6 +267,14 @@ export class EbayConnectionService {
     return { key };
   }
 
+  /** eBay says a seller deleted their eBay account: forget their username if it is ours (their tokens stop working on their own). */
+  async forgetUsername(username: string) {
+    await this.db.exec(
+      'update public.ebay_connection set username = null where id = 1 and username = $1',
+      [username.slice(0, 100)],
+    );
+  }
+
   async requireConnected(): Promise<ConnectionRow> {
     const c = await this.row();
     if (!c) throw new AppError('eBay is not connected. An owner can connect it in Settings.', 409);

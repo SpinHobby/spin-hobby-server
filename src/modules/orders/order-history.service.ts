@@ -2,10 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { notFound } from '../../common/errors.js';
 import { Db } from '../../database/db.service.js';
 import type { AppUser } from '../auth/auth.service.js';
-import { EVENTS_AS_JSON, ITEMS_AS_JSON } from './order-sql.js';
 import type { OrderRow, OrderWithDetails, OrderWithItems } from '../../database/rows.js';
 
 /** Looking up orders as the customer who placed them (or as staff). */
+
+/**
+ * SQL fragments that attach an order's line items and history as JSON arrays. Both expect the orders
+ * table to be aliased `o`. Used here and by the admin orders screen (AdminOrdersService imports them).
+ */
+export const ITEMS_AS_JSON = `coalesce((select json_agg(i order by i.id) from public.order_items i where i.order_id = o.id), '[]') as order_items`;
+export const EVENTS_AS_JSON = `coalesce((select json_agg(e order by e.created_at) from public.order_events e where e.order_id = o.id), '[]') as order_events`;
+
 @Injectable()
 export class OrderHistoryService {
   constructor(private readonly db: Db) {}

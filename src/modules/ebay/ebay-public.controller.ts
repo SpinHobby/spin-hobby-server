@@ -5,7 +5,6 @@ import { createHash } from 'node:crypto';
 import { AppError } from '../../common/errors.js';
 import { SkipRateLimit } from '../../common/guards/rate-limit.guard.js';
 import { ebayDeletionEndpoint, ebayVerificationToken } from '../../config/ebay.config.js';
-import { Db } from '../../database/db.service.js';
 import { Access } from '../auth/access.js';
 import { EbayConnectionService } from './ebay-connection.service.js';
 
@@ -20,10 +19,7 @@ import { EbayConnectionService } from './ebay-connection.service.js';
 export class EbayPublicController {
   private readonly logger = new Logger('eBay');
 
-  constructor(
-    private readonly connection: EbayConnectionService,
-    private readonly db: Db,
-  ) {}
+  constructor(private readonly connection: EbayConnectionService) {}
 
   @Get('oauth/callback')
   async callback(
@@ -72,11 +68,7 @@ export class EbayPublicController {
     @Body() body: { notification?: { data?: { username?: string; userId?: string } } },
   ) {
     const username = body?.notification?.data?.username;
-    if (username)
-      await this.db.exec(
-        'update public.ebay_connection set username = null where id = 1 and username = $1',
-        [String(username).slice(0, 100)],
-      );
+    if (username) await this.connection.forgetUsername(String(username));
     return { success: true };
   }
 }

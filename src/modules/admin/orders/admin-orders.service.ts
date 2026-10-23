@@ -6,7 +6,7 @@ import type { OrderRow, OrderWithDetails, OrderWithItems } from '../../../databa
 import { EmailService } from '../../../integrations/email/email.service.js';
 import { PayPalClient } from '../../../integrations/paypal/paypal.client.js';
 import { SquareHttpClient } from '../../../integrations/square/square-http.client.js';
-import { EVENTS_AS_JSON, ITEMS_AS_JSON } from '../../orders/order-sql.js';
+import { EVENTS_AS_JSON, ITEMS_AS_JSON } from '../../orders/order-history.service.js';
 import { AdminLog } from '../admin-log.service.js';
 import type { RefundOrderDto, ShipOrderDto } from './dto/orders.dto.js';
 import { packingSlipHtml } from './packing-slip.js';

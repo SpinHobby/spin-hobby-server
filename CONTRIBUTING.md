@@ -96,7 +96,7 @@ The template asks for these. In short:
 - [ ] Typecheck, lint, format check, unit and e2e tests pass.
 - [ ] A new or changed endpoint has a **DTO**, a **test**, and an **`@Access(...)`** level.
 - [ ] No SQL or business rules in a controller.
-- [ ] A long (15+ lines) or reused query is in the feature's `*.sql.ts` file; short ones stay in the service.
+- [ ] SQL is in the service file (a query used twice is a named constant at the top of it), never in a separate file.
 - [ ] No `process.env` reads outside `src/config`.
 - [ ] Database changes are a **new migration file**, never an edit to an old one.
 - [ ] If you changed a route on purpose, you updated `test/e2e/routes.e2e-spec.ts`.

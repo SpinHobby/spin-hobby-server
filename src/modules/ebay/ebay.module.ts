@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { EbayClient } from '../../integrations/ebay/ebay.client.js';
+import { EBAY_TOKEN_STORE, EbayClient } from '../../integrations/ebay/ebay.client.js';
+import { EbayTokensService } from './ebay-tokens.service.js';
 import { SquareModule } from '../../integrations/square/square.module.js';
 import { AdminModule } from '../admin/admin.module.js';
 import { EbayAdminController } from './ebay-admin.controller.js';
@@ -12,7 +13,14 @@ import { EbaySyncService } from './ebay-sync.service.js';
 @Module({
   imports: [SquareModule, AdminModule],
   controllers: [EbayAdminController, EbayPublicController],
-  providers: [EbayClient, EbayConnectionService, EbayListingsService, EbaySyncService],
+  providers: [
+    EbayClient,
+    EbayTokensService,
+    { provide: EBAY_TOKEN_STORE, useExisting: EbayTokensService },
+    EbayConnectionService,
+    EbayListingsService,
+    EbaySyncService,
+  ],
   exports: [EbaySyncService],
 })
 export class EbayModule {}
