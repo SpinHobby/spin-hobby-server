@@ -5,6 +5,7 @@ import { Db } from '../../../database/db.service.js';
 import { SquareCatalogClient } from '../../../integrations/square/square-catalog.client.js';
 import { AdminLog } from '../admin-log.service.js';
 import { AdminProductsService } from '../products/admin-products.service.js';
+import { JOBS_WITH_PRODUCT } from './describe-jobs.sql.js';
 import { ListingJobsService } from './listing-jobs.service.js';
 
 const LEASE_MINUTES = 30;
@@ -170,11 +171,7 @@ export class DescribeJobsService {
           ? "j.status in ('applied', 'dismissed')"
           : "j.status in ('queued', 'running', 'done', 'failed')";
     const rows = await this.db.many<JobRow>(
-      `select j.*, p.description as current_description, m.series as current_series, m.manufacturer as current_manufacturer,
-              p.category, m.character
-         from public.describe_jobs j
-         join public.catalog_products p on p.square_item_id = j.square_item_id
-         left join public.product_metadata m on m.square_item_id = j.square_item_id
+      `${JOBS_WITH_PRODUCT}
         where ${where}
         order by case j.status when 'done' then 0 when 'running' then 1 when 'failed' then 2 else 3 end, j.created_at, j.product_name
         limit 200`,
@@ -322,10 +319,7 @@ export class DescribeJobsService {
         tx,
       );
       const next = await this.db.one<JobRow>(
-        `select j.*, p.description as current_description, m.series as current_series, m.manufacturer as current_manufacturer, p.category, m.character
-           from public.describe_jobs j
-           join public.catalog_products p on p.square_item_id = j.square_item_id
-           left join public.product_metadata m on m.square_item_id = j.square_item_id
+        `${JOBS_WITH_PRODUCT}
           where j.status = 'queued' and j.photo_url is not null
           order by j.created_at, j.product_name limit 1 for update of j skip locked`,
         [],
