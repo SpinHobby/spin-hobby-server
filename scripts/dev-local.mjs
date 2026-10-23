@@ -11,6 +11,10 @@
 // the API is up, so the Square items show next to the samples. With SQUARE_ENVIRONMENT=sandbox and SQUARE_APPLICATION_ID
 // the local checkout also uses Square sandbox payments. The database lives in memory, so this repeats on every start.
 // Set DEV_SYNC_SQUARE=false or DEV_SQUARE_PAYMENTS=false to skip either part.
+//
+// Your own database instead (data kept between runs): set DEV_DATABASE_URL in .env to a free Supabase or Neon project made for
+// development. dev:local applies the migrations it has not had yet and loads the sample shop the first time
+// (`npm run dev:local -- --reset` reloads the samples). See scripts/own-database.mjs and docs/INTERNS.md.
 import { PGlite } from '@electric-sql/pglite';
 import { pgcrypto } from '@electric-sql/pglite/contrib/pgcrypto';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
@@ -24,41 +28,6 @@ const DB_PORT = Number(process.env.DEV_DB_PORT ?? 54329);
 const root = join(import.meta.dirname, '..');
 const migrations = join(root, 'supabase', 'migrations');
 
-// The sample catalog is part of the API (src/modules/sample), so build once and load it from dist.
-execSync('npx nest build', { cwd: root, stdio: 'inherit' });
-const { seedSample } = await import(new URL('../dist/modules/sample/seed.js', import.meta.url));
-
-const db = await PGlite.create({ extensions: { pgcrypto } });
-await db.exec(`
-  create schema auth;
-  create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
-  create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
-  create schema storage;
-  create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
-  create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
-  do $$ begin create role anon; create role authenticated; create role service_role; exception when others then null; end $$;
-`);
-for (const file of readdirSync(migrations)
-  .filter((f) => f.endsWith('.sql'))
-  .sort())
-  await db.exec(readFileSync(join(migrations, file), 'utf8'));
-
-// ---- seed: accounts
-for (const [email, role] of [
-  ['owner@spinhobby.test', 'owner'],
-  ['staff@spinhobby.test', 'staff'],
-]) {
-  const id = randomUUID();
-  await db.query('insert into auth.users (id, email) values ($1, $2)', [id, email]);
-  await db.query('update public.profiles set role = $2 where id = $1', [id, role]);
-}
-
-// ---- seed: catalog, categories and orders
-const seeded = await seedSample(db, `http://localhost:${process.env.PORT ?? '8080'}`);
-
-// ---- a local copy never touches the real shop or real money
-// Keys for the live shop (production Square, live PayPal, production eBay) are blanked for this run, whatever .env says: a local "add product" or
-// stock change must never reach the real catalog. Sandbox keys work as usual. A blank value also wins over .env (the API never re-reads it).
 const fileEnv = {};
 if (existsSync(join(root, '.env'))) {
   try {
@@ -68,6 +37,63 @@ if (existsSync(join(root, '.env'))) {
   }
 }
 const setting = (name) => process.env[name] || fileEnv[name] || '';
+const ownDatabase = setting('DEV_DATABASE_URL');
+const imageBase = `http://localhost:${process.env.PORT ?? '8080'}`;
+
+// The sample catalog is part of the API (src/modules/sample), so build once and load it from dist.
+execSync('npx nest build', { cwd: root, stdio: 'inherit' });
+const sample = await import(new URL('../dist/modules/sample/seed.js', import.meta.url));
+const { seedSample } = sample;
+
+let db = null;
+let server = null;
+let seeded = null;
+if (ownDatabase) {
+  const { prepareOwnDatabase } = await import('./own-database.mjs');
+  try {
+    await prepareOwnDatabase(ownDatabase, {
+      root,
+      imageBase,
+      reset: process.argv.includes('--reset'),
+      ...sample,
+    });
+  } catch (error) {
+    console.error(`\n  Could not use your database (DEV_DATABASE_URL): ${error.message}\n`);
+    process.exit(1);
+  }
+} else {
+  db = await PGlite.create({ extensions: { pgcrypto } });
+  await db.exec(`
+  create schema auth;
+  create table auth.users (id uuid primary key, email text, raw_user_meta_data jsonb default '{}');
+  create function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+  create schema storage;
+  create table storage.buckets (id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+  create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text, owner uuid);
+  do $$ begin create role anon; create role authenticated; create role service_role; exception when others then null; end $$;
+`);
+  for (const file of readdirSync(migrations)
+    .filter((f) => f.endsWith('.sql'))
+    .sort())
+    await db.exec(readFileSync(join(migrations, file), 'utf8'));
+
+  // ---- seed: accounts
+  for (const [email, role] of [
+    ['owner@spinhobby.test', 'owner'],
+    ['staff@spinhobby.test', 'staff'],
+  ]) {
+    const id = randomUUID();
+    await db.query('insert into auth.users (id, email) values ($1, $2)', [id, email]);
+    await db.query('update public.profiles set role = $2 where id = $1', [id, role]);
+  }
+
+  // ---- seed: catalog, categories and orders
+  seeded = await seedSample(db, imageBase);
+}
+
+// ---- a local copy never touches the real shop or real money
+// Keys for the live shop (production Square, live PayPal, production eBay) are blanked for this run, whatever .env says: a local "add product" or
+// stock change must never reach the real catalog. Sandbox keys work as usual. A blank value also wins over .env (the API never re-reads it).
 const blanked = {};
 const blank = (names, why) => {
   const present = names.filter((n) => setting(n));
@@ -94,16 +120,19 @@ if (setting('EBAY_ENVIRONMENT') !== 'sandbox')
     ['EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET', 'EBAY_RU_NAME'],
     'eBay keys that are not sandbox ones',
   );
-// the paid AI tool (if its key is set) stops for the month at $5 here, not the shop's $30
-await db.query(
-  "insert into public.ai_budgets (tool, warn_threshold_usd, stop_threshold_usd) values ('anthropic_cashier', 2, 5) on conflict (tool) do update set warn_threshold_usd = 2, stop_threshold_usd = 5",
-);
-
-const server = new PGLiteSocketServer({ db, port: DB_PORT, host: '127.0.0.1' });
-await server.start();
-console.log(
-  `\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories`,
-);
+if (db) {
+  // the paid AI tool (if its key is set) stops for the month at $5 here, not the shop's $30 (own databases get the same in own-database.mjs)
+  await db.query(
+    "insert into public.ai_budgets (tool, warn_threshold_usd, stop_threshold_usd) values ('anthropic_cashier', 2, 5) on conflict (tool) do update set warn_threshold_usd = 2, stop_threshold_usd = 5",
+  );
+  server = new PGLiteSocketServer({ db, port: DB_PORT, host: '127.0.0.1' });
+  await server.start();
+  console.log(
+    `\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories (in memory: fresh on every start)`,
+  );
+}
+const ownHost = ownDatabase ? new URL(ownDatabase).hostname : '';
+const ownIsLocal = ownHost === 'localhost' || ownHost === '127.0.0.1';
 console.log('  Sign in: owner@spinhobby.test / spinhobby  (or staff@spinhobby.test)\n');
 const squareReady =
   !('SQUARE_ACCESS_TOKEN' in blanked) &&
@@ -127,9 +156,13 @@ const api = spawn(process.execPath, [nestCli, 'start', '--watch'], {
     ...process.env,
     NODE_ENV: 'development',
     PORT: process.env.PORT ?? '8080',
-    DATABASE_URL: `postgres://postgres@127.0.0.1:${DB_PORT}/postgres`,
-    DATABASE_SSL: 'false',
-    DATABASE_POOL_SIZE: '1',
+    ...(ownDatabase
+      ? { DATABASE_URL: ownDatabase, DATABASE_SSL: ownIsLocal ? 'false' : 'true' }
+      : {
+          DATABASE_URL: `postgres://postgres@127.0.0.1:${DB_PORT}/postgres`,
+          DATABASE_SSL: 'false',
+          DATABASE_POOL_SIZE: '1',
+        }),
     SUPABASE_URL: '',
     SUPABASE_JWT_SECRET: 'local-dev-secret-local-dev-secret-0000',
     AUTH_DEV_LOGIN: 'true',
@@ -143,8 +176,8 @@ const api = spawn(process.execPath, [nestCli, 'start', '--watch'], {
 });
 const stop = async () => {
   api.kill('SIGTERM');
-  await server.stop();
-  await db.close();
+  await server?.stop();
+  await db?.close();
   process.exit(0);
 };
 process.on('SIGINT', stop);

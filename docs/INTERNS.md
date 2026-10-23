@@ -56,7 +56,8 @@ own: every product, price and order comes from this server.
 Tips for `dev:local`:
 
 - When you save a file, the API restarts by itself within a few seconds.
-- Test data lives in memory. Stop the command and start it again to get clean sample data.
+- Test data lives in memory. Stop the command and start it again to get clean sample data. To keep your data between
+  runs, use [your own database](#your-own-database-optional).
 - You can also run the website against it: in the `spin-hobby` repo run
   `VITE_API_URL=http://localhost:8080 npm run dev`.
 
@@ -133,6 +134,46 @@ they all look the same.
 
 Tip: search for a word from the error message. Almost everything a user can see is spelled out
 in the source.
+
+## Your own database (optional)
+
+The built-in database starts fresh every time, which is perfect for trying things and for the tests. When you build a
+feature over several days, you'll want your data to stay. Make your own free database and `dev:local` uses it instead:
+
+1. Go to [supabase.com](https://supabase.com), sign up, and create a **new project** (any name, the region nearest you).
+   Save the **database password** it asks you to choose.
+2. In the project, click **Connect** → **Session pooler** and copy the connection string. Replace `[YOUR-PASSWORD]` in it
+   with the password from step 1.
+3. Put it in your `.env`:
+   ```sh
+   DEV_DATABASE_URL=postgresql://postgres.abcdefghijklmnop:your-password@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+   ```
+4. Run `npm run dev:local` as usual. The first time, it applies every migration and loads the sample shop; after that it
+   only applies new migrations (from teammates' work you pulled), and your data stays.
+
+Good to know:
+
+- `npm run dev:local -- --reset` puts the sample shop back (your own added products stay unless they clash).
+- Sign-in stays the test accounts, and photo uploads stay off, exactly as with the built-in database.
+- Supabase **pauses a free project after a week without use**. If `dev:local` can't connect, open the project on
+  supabase.com and press **Restore**.
+- You can look inside your data in Supabase's **Table Editor**.
+- It refuses the shop's real databases. Schema changes still go only through new migration files, so everyone's
+  database stays the same shape.
+- A Neon project ([neon.tech](https://neon.tech), free) works too: copy its connection string the same way.
+
+## Full-stack starter tasks
+
+Some of the shop still uses data written into the website's code. Moving it into the database (a table, an endpoint,
+an admin screen, the page reading from the API) is real full-stack work, and each one is a good first feature:
+
+1. **Events from the database.** The admin can already add events (`store_events`, `/admin/events`), but the shop's
+   Events page and the home page strip still read the fixed list in the website (`src/v3/events/data.ts`). Give the
+   shop a public events endpoint, make both read from it, and remove the fixed list.
+2. **Help page answers from the database.** The Support page's questions and answers are written into
+   `src/v3/support/Support.tsx`. Store them, let staff edit them in the admin, and show them in order.
+
+Ask before starting one, so two people don't pick the same.
 
 ## Your first week
 
