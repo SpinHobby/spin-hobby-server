@@ -39,6 +39,7 @@ describe('the ready-made category tree', () => {
     ).toEqual([
       'Bishoujo Figures',
       'Character Figures',
+      'Kuji Prize Figures',
       'Action Figures',
       'Chibi Figures',
       'Trading & Blind Box Figures',
@@ -82,7 +83,7 @@ describe('sorting products into categories', () => {
       reason: '"Acrylic" in the name',
       currentCategoryId: null,
     });
-    expect(by.GOJO1.suggestedCategoryId).toBe(ids['Character Figures']);
+    expect(by.GOJO1.suggestedCategoryId).toBe(ids['Kuji Prize Figures']);
     expect(by.POP1).toMatchObject({
       suggestedCategoryId: null,
       choices: [ids['Bishoujo Figures'], ids['Character Figures']],

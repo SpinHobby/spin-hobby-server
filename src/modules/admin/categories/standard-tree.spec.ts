@@ -20,8 +20,6 @@ describe('suggestCategory', () => {
     ['One Piece Card Game OP-10 Booster Box', 'Card Games'],
     ['Pokémon TCG: Scarlet & Violet Booster Pack', 'Card Games'],
     ['Dragon Shield Matte Sleeves (100)', 'Card Supplies'],
-    ['HG 1/144 Gundam Aerial', 'Gunpla'],
-    ['Figure-rise Standard Ultraman', 'Character & Mecha Kits'],
     ['Chiikawa Plush Mascot', 'Plush'],
     ['Frieren Acrylic Stand', 'Acrylic Stands & Keychains'],
     ['Jujutsu Kaisen Can Badge Set', 'Can Badges & Pins'],
@@ -33,8 +31,12 @@ describe('suggestCategory', () => {
     ['Kamen Rider DX Henshin Belt', 'Tokusatsu Toys'],
     ['Pullip Doll Alice', 'Dolls'],
     ['Studio Ghibli Mug', 'Household Goods'],
-    ['1/24 Nissan Skyline GT-R (R34)', 'Vehicles & Military Models'],
-    ['Tamiya 1/35 Tiger I Tank Kit', 'Vehicles & Military Models'],
+    ['Ichiban Kuji Frieren Last One Prize Figure', 'Kuji Prize Figures'],
+    ['一番くじ 呪術廻戦 A賞 五条悟 フィギュア', 'Kuji Prize Figures'],
+    ['Hatsune Miku Luminasta Figure', 'Kuji Prize Figures'],
+    ['Kamen Rider Prize Figure', 'Kuji Prize Figures'],
+    ['Ichiban Kuji Jujutsu Kaisen Towel', 'Household Goods'], // a kuji prize that isn't a figure
+    ['Ichiban Kuji Last One Prize Acrylic Stand', 'Acrylic Stands & Keychains'],
     ['Cars Lightning McQueen Plush', 'Plush'],
   ])('%s → %s', (name, category) => expect(where(name)).toBe(category));
 
@@ -48,7 +50,18 @@ describe('suggestCategory', () => {
   it('asks a person to choose when nothing says whether the character is a girl', () => {
     const s = suggestCategory('Pop Up Parade Makima', null);
     expect(s).toMatchObject({ category: null, choices: ['Bishoujo Figures', 'Character Figures'] });
-    expect(where('Kamen Rider Prize Figure')).toBeNull(); // a figure, not a henshin toy
+  });
+
+  it('suggests nothing for model kits and vehicle models (no longer in the tree), rather than calling them figures', () => {
+    for (const name of [
+      'HG 1/144 Gundam Aerial',
+      'Figure-rise Standard Ultraman',
+      'Tamiya 1/35 Tiger I Tank Kit',
+      '1/24 Nissan Skyline GT-R (R34)',
+      'Gundam Marker Set',
+    ])
+      expect(where(name)).toBeNull();
+    expect(where('Miku Figure', 'Prize Figures')).toBe('Kuji Prize Figures'); // the shop's own Square category
   });
 
   it('falls back to the Square category, and gives nothing when nothing points anywhere', () => {

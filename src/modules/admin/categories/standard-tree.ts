@@ -13,15 +13,12 @@ export const STANDARD_TREE: StandardCategory[] = [
     children: [
       'Bishoujo Figures',
       'Character Figures',
+      'Kuji Prize Figures',
       'Action Figures',
       'Chibi Figures',
       'Trading & Blind Box Figures',
       'Dolls',
     ],
-  },
-  {
-    name: 'Model Kits',
-    children: ['Gunpla', 'Character & Mecha Kits', 'Vehicles & Military Models', 'Tools & Paints'],
   },
   {
     name: 'Character Goods',
@@ -50,8 +47,11 @@ export const FIGURE_CHOICES = ['Bishoujo Figures', 'Character Figures'] as const
 const KIT =
   /\b(model kit|plastic model|plamo|kit|1\/(35|48|60|72|100|144|700)|hguc|entry grade|30 ?minutes|30mm|30ms|figure-?rise)\b/i;
 
-/** First match wins: the most specific kinds of item come first, plain "figure" last. */
-const RULES: [RegExp, string, ((text: string) => boolean)?][] = [
+/**
+ * First match wins: the most specific kinds of item come first, plain "figure" last. A null category means the item has no
+ * place in the tree (model kits, vehicle models): no suggestion, so it isn't filed as a figure by mistake.
+ */
+const RULES: [RegExp, string | null, ((text: string) => boolean)?][] = [
   [
     /\b(card )?sleeves?\b|\bplay ?mats?\b|\bdeck ?(box|case)\b|\bcard binder\b|\btop ?loaders?\b/i,
     'Card Supplies',
@@ -64,21 +64,28 @@ const RULES: [RegExp, string, ((text: string) => boolean)?][] = [
     /\b(trading cards?|card pack|collection cards?|metallic cards?|clear cards?)\b/i,
     'Trading Cards',
   ],
+  // model kits and their tools: not in the tree
   [
-    /\b(nippers?|airbrush|primer|top coat|panel liner|sanding|gundam marker|hobby paint|paint set|mr\.? ?hobby)\b/i,
-    'Tools & Paints',
+    /\b(nippers?|airbrush|primer|top coat|panel liner|gundam marker|hobby paint|mr\.? ?hobby)\b/i,
+    null,
   ],
-  [/\b(gunpla|gundam)\b/i, 'Gunpla', (t) => KIT.test(t) || /\b(hg|rg|mg|pg|sd|eg)\b/.test(t)],
-  [
-    /\b(tank|aircraft|warship|battleship|military|fighter jet)\b/i,
-    'Vehicles & Military Models',
-    (t) => KIT.test(t),
-  ],
-  [KIT, 'Character & Mecha Kits'],
+  [/\b(gunpla|gundam)\b/i, null, (t) => KIT.test(t) || /\b(hg|rg|mg|pg|sd|eg)\b/.test(t)],
+  [KIT, null],
   [/\b(dolls?|dollfie|obitsu|pullip|blythe|harmonia bloom)\b/i, 'Dolls'],
   [
     /\b(blind ?box|trading figures?|gashapon|gachapon|gacha|capsule toys?|mystery box|random box)\b/i,
     'Trading & Blind Box Figures',
+  ],
+  // Ichiban Kuji and crane-game prize figures. The prize lines are always figures; "kuji" or "prize" only with a figure word,
+  // so a kuji towel or acrylic stand goes on to its own kind
+  [
+    /\b(luminasta|q ?posket|noodle stopper|spm|trio-try-it|glitter ?& ?glamours|espresto|relax time|figurizma)\b/i,
+    'Kuji Prize Figures',
+  ],
+  [
+    /\b(ichiban[ -]?kuji|kuji|prize|banpresto)\b|一番くじ/i,
+    'Kuji Prize Figures',
+    (t) => /\b(figures?|figurine|statue)\b|フィギュア/i.test(t),
   ],
   [
     /\b(nendoroid|chibi|deformed|look ?up|fuwa ?puchi|puchi|petit|mini figures?|sd figures?)\b/i,
@@ -120,10 +127,10 @@ const RULES: [RegExp, string, ((text: string) => boolean)?][] = [
     /\b(mugs?|cups?|tumblers?|glass(es)?|plates?|towels?|blankets?|pillows?|cushions?|dakimakura|lamps?|clocks?|coasters?|mouse ?pads?|desk mats?|home goods)\b/i,
     'Household Goods',
   ],
-  // a car or train is a vehicle model unless something more specific matched first ("Cars" plush)
+  // a car, train or military model has no place in the tree, unless something more specific matched first ("Cars" plush)
   [
-    /\b(cars?|nissan|toyota|honda|mazda|subaru|mitsubishi|porsche|ferrari|lamborghini|skyline|gt-?r|trucks?|motorcycles?|trains?|tomica|hot wheels|diecast|die-cast)\b/i,
-    'Vehicles & Military Models',
+    /\b(cars?|nissan|toyota|honda|mazda|subaru|mitsubishi|porsche|ferrari|lamborghini|skyline|gt-?r|trucks?|motorcycles?|trains?|tomica|hot wheels|diecast|die-cast|tank|aircraft|warship|battleship|military|fighter jet)\b/i,
+    null,
   ],
   [
     /\b(kamen rider|ultraman|super sentai|power rangers|henshin|dx )\b/i,
@@ -134,7 +141,7 @@ const RULES: [RegExp, string, ((text: string) => boolean)?][] = [
 ];
 
 const FIGURE =
-  /\b(figures?|figurine|statue|scale|prize|pop up parade|q ?posket|noodle stopper|luminasta|spm|precious|trio-try-it|glitter ?& ?glamours|espresto|relax time|1\/\d+)\b/i;
+  /\b(figures?|figurine|statue|scale|prize|pop up parade|q ?posket|noodle stopper|luminasta|spm|precious|trio-try-it|glitter ?& ?glamours|espresto|relax time|1\/\d+)\b|フィギュア/i;
 const GIRL = /\b(bishoujo|bishojo|girls?|female|women)\b/i;
 const OTHER_CHARACTER = /\b(bishounen|bishonen|boys?|male|men|action figures?)\b/i;
 
@@ -162,7 +169,7 @@ export function suggestCategory(name: string, squareCategory: string | null): Su
       if (where === 'Square category' && category === 'Action Figures') continue;
       const hit = text.match(pattern);
       if (hit && (!also || also(text)))
-        return { category, choices: [], reason: `"${hit[0]}" in the ${where}` };
+        return category ? { category, choices: [], reason: `"${hit[0]}" in the ${where}` } : null;
     }
   }
   const figureWord = name.match(FIGURE) ?? squareCategory?.match(FIGURE);
