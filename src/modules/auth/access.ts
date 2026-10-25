@@ -10,11 +10,13 @@ import { Reflector } from '@nestjs/core';
 import { ApiBearerAuth } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { forbidden, unauthorized } from '../../common/errors.js';
-import { AuthService, type AppUser } from './auth.service.js';
+import { AuthService, restrictionError, type AppUser } from './auth.service.js';
+import { atLeast } from './roles.js';
 
 /**
- * public: anyone (user attached if signed in) · user: any signed-in account · staff: staff or owner · auditor: owners and the staff
- * the owner allowed into Audit · owner: owner only
+ * public: anyone (user attached if signed in) · user: any signed-in account · staff: staff and every role above (roles.ts) ·
+ * auditor: owners and the staff the owner allowed into Audit · owner: owner and above. A suspended or banned account is refused
+ * everywhere but public routes, where it counts as signed out.
  */
 export type AccessLevel = 'public' | 'user' | 'staff' | 'auditor' | 'owner';
 const ACCESS_KEY = 'spinhobby:access';
@@ -38,13 +40,14 @@ export class AccessGuard implements CanActivate {
         context.getClass(),
       ]) ?? 'public';
     const req = context.switchToHttp().getRequest<AuthedRequest>();
-    req.user = await this.auth.userFromAuthorization(req.headers.authorization);
+    const user = await this.auth.userFromAuthorization(req.headers.authorization);
+    req.user = user?.restriction ? null : user;
     if (level === 'public') return true;
-    if (!req.user) throw unauthorized();
-    if (level === 'staff' && req.user.role !== 'staff' && req.user.role !== 'owner')
-      throw forbidden();
-    if (level === 'auditor' && !req.user.canAudit) throw forbidden();
-    if (level === 'owner' && req.user.role !== 'owner') throw forbidden();
+    if (user?.restriction) throw restrictionError(user.restriction);
+    if (!user) throw unauthorized();
+    if (level === 'staff' && !atLeast(user.role, 'staff')) throw forbidden();
+    if (level === 'auditor' && !user.canAudit) throw forbidden();
+    if (level === 'owner' && !atLeast(user.role, 'owner')) throw forbidden();
     return true;
   }
 }

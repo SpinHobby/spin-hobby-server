@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { AppError } from '../../common/errors.js';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import { Db } from '../../database/db.service.js';
 import { SupabaseAuthClient } from '../../integrations/supabase/supabase-auth.client.js';
@@ -6,7 +7,22 @@ import { ownerEmails, staffEmails } from '../../config/auth.config.js';
 import { supabaseJwtSecret, supabaseUrl } from '../../config/supabase.config.js';
 import { devLoginFlag } from '../../config/auth.config.js';
 
-export type AppRole = 'customer' | 'staff' | 'owner';
+import { atLeast, higherRole, isRole, type AppRole } from './roles.js';
+
+export type { AppRole } from './roles.js';
+
+/** Why an account can't be used right now: suspended until a date, or banned for good. */
+export type Restriction =
+  | {
+      kind: 'suspended';
+      /** When it ends (midnight after the last day, Toronto time). */
+      until: string;
+      /** The last day it's in force (YYYY-MM-DD, Toronto time): what people are told. */
+      lastDay: string;
+      reason: string | null;
+    }
+  | { kind: 'banned'; since: string; reason: string | null };
+
 export interface AppUser {
   id: string;
   email: string;
@@ -14,6 +30,47 @@ export interface AppUser {
   firstName: string | null;
   /** May open Audit (documents and sales records): every owner, and staff the owner has allowed. */
   canAudit: boolean;
+  /** Set when the owner suspended or banned the account; the access guard and sign-in refuse it then. */
+  restriction: Restriction | null;
+}
+
+/** The suspension or ban in force on a profile, if any (a suspension that has run out is none). */
+export function restrictionOf(p: {
+  suspended_until: string | Date | null;
+  banned_at: string | Date | null;
+  restriction_reason: string | null;
+}): Restriction | null {
+  const iso = (v: string | Date) => new Date(v).toISOString();
+  if (p.banned_at) return { kind: 'banned', since: iso(p.banned_at), reason: p.restriction_reason };
+  if (p.suspended_until && new Date(p.suspended_until).getTime() > Date.now())
+    return {
+      kind: 'suspended',
+      until: iso(p.suspended_until),
+      lastDay: torontoDay(new Date(new Date(p.suspended_until).getTime() - 1)),
+      reason: p.restriction_reason,
+    };
+  return null;
+}
+
+const torontoDay = (d: Date) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto' }).format(d);
+
+/** What a suspended or banned person is told when they try to sign in or use the account. */
+export function restrictionError(r: Restriction) {
+  const why = r.reason ? ` Reason: ${r.reason}` : '';
+  if (r.kind === 'banned')
+    return new AppError(`This account has been closed by Spin Hobby.${why}`, 403, 'account_banned');
+  const last = new Date(`${r.lastDay}T12:00:00Z`).toLocaleDateString('en-CA', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+  return new AppError(
+    `This account is suspended until the end of ${last}.${why}`,
+    403,
+    'account_suspended',
+  );
 }
 
 /**
@@ -61,7 +118,13 @@ export class AuthService {
       email: string;
       role: AppRole;
       can_audit: boolean;
-    }>('select id, email, role, can_audit from public.profiles where id = $1', [payload.sub]);
+      suspended_until: string | null;
+      banned_at: string | null;
+      restriction_reason: string | null;
+    }>(
+      'select id, email, role, can_audit, suspended_until, banned_at, restriction_reason from public.profiles where id = $1',
+      [payload.sub],
+    );
     if (!profile) return null;
     const role = bootstrapRole(profile.email, profile.role);
     if (role !== profile.role) {
@@ -73,7 +136,8 @@ export class AuthService {
       email: profile.email,
       role,
       firstName: firstNameFrom(payload),
-      canAudit: role === 'owner' || (role === 'staff' && profile.can_audit === true),
+      canAudit: atLeast(role, 'owner') || (atLeast(role, 'staff') && profile.can_audit === true),
+      restriction: restrictionOf(profile),
     };
   }
 
@@ -98,19 +162,16 @@ export function firstNameFrom(payload: JWTPayload): string | null {
 
 /** Env-listed emails get at least that role. Never demotes a role set by hand. */
 export function bootstrapRole(email: string, current: AppRole): AppRole {
+  const listed = envRoleFor(email);
+  if (!listed) return current;
+  return isRole(current) ? higherRole(current, listed) : listed;
+}
+
+/** The role an address is given by OWNER_EMAILS / STAFF_EMAILS, if any (owner wins). */
+export function envRoleFor(email: string): AppRole | null {
   const address = email.toLowerCase();
-  if (
-    ownerEmails()
-      .map((e) => e.toLowerCase())
-      .includes(address)
-  )
-    return 'owner';
-  if (
-    current === 'customer' &&
-    staffEmails()
-      .map((e) => e.toLowerCase())
-      .includes(address)
-  )
-    return 'staff';
-  return current;
+  const has = (list: string[]) => list.some((e) => e.toLowerCase() === address);
+  if (has(ownerEmails())) return 'owner';
+  if (has(staffEmails())) return 'staff';
+  return null;
 }

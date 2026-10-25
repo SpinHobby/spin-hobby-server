@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import { forbidden } from '../../common/errors.js';
 import type { AuthedRequest } from '../auth/access.js';
+import { atLeast } from '../auth/roles.js';
 import { squareSyncTriggerSecret } from '../../config/square.config.js';
 
 const sameSecret = (a: string, b: string) =>
@@ -19,7 +20,7 @@ export class OwnerOrSyncSecretGuard implements CanActivate {
     const expected = squareSyncTriggerSecret();
     const given = req.headers['x-square-sync-secret'];
     const bySecret = Boolean(expected && typeof given === 'string' && sameSecret(given, expected));
-    if (!bySecret && req.user?.role !== 'owner') throw forbidden('start a Square sync');
+    if (!bySecret && !atLeast(req.user?.role, 'owner')) throw forbidden('start a Square sync');
     return true;
   }
 }

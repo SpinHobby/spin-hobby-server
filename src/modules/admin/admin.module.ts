@@ -4,6 +4,8 @@ import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js
 import { ProductPhotosController } from './products/product-photos.controller.js';
 import { Module } from '@nestjs/common';
 import { GoogleDriveModule } from '../../integrations/google-drive/google-drive.module.js';
+import { AdminAccountsController } from './accounts/admin-accounts.controller.js';
+import { AdminAccountsService } from './accounts/admin-accounts.service.js';
 import { AdminAuditController } from './audit/admin-audit.controller.js';
 import { AdminAuditService } from './audit/admin-audit.service.js';
 import { EmailModule } from '../../integrations/email/email.module.js';
@@ -66,6 +68,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
   controllers: [
     ProductPhotosController,
     AdminAuditController,
+    AdminAccountsController,
     AdminDashboardController,
     AdminProductsController,
     AdminOrdersController,
@@ -86,6 +89,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
   providers: [
     AdminLog,
     AdminAuditService,
+    AdminAccountsService,
     ImportsService,
     PhotoJobsService,
     ListingJobsService,

@@ -12,7 +12,8 @@ export type OrderStatus =
   'pending' | 'paid' | 'preorder_reserved' | 'fulfilled' | 'shipped' | 'cancelled' | 'refunded';
 export type PaymentProvider = 'paypal' | 'square';
 export type ShippingMethod = 'standard' | 'express';
-export type AppRole = 'customer' | 'staff' | 'owner';
+import type { AppRole } from '../modules/auth/roles.js';
+export type { AppRole };
 export type ProductAvailability = 'auto' | 'preorder' | 'backorder' | 'hidden';
 
 /**
