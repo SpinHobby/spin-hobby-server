@@ -140,6 +140,7 @@ describe('storefront catalog', () => {
       handlingDaysMin: 2,
       handlingDaysMax: 3,
       fxCadUsd: 0.73,
+      fxSource: 'settings',
     });
   });
 });
