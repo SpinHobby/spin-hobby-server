@@ -6,6 +6,7 @@ import { Module } from '@nestjs/common';
 import { GoogleDriveModule } from '../../integrations/google-drive/google-drive.module.js';
 import { AdminAuditController } from './audit/admin-audit.controller.js';
 import { AdminAuditService } from './audit/admin-audit.service.js';
+import { FxModule } from '../../integrations/fx/fx.module.js';
 import { EmailModule } from '../../integrations/email/email.module.js';
 import { PayPalModule } from '../../integrations/paypal/paypal.module.js';
 import { SquareModule } from '../../integrations/square/square.module.js';
@@ -56,6 +57,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
   imports: [
     CatalogModule,
     GoogleDriveModule,
+    FxModule,
     EmailModule,
     PayPalModule,
     SquareModule,

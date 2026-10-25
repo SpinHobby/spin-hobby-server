@@ -56,7 +56,7 @@ export class UpdateSettingsDto {
   @Rule(wholeNumber('handling_days_max'))
   handling_days_max?: number;
 
-  /** CAD to USD exchange rate used for the USD display price. Above 0. */
+  /** CAD to USD rate for the USD display price when the Bank of Canada's live rate can't be reached. Above 0. */
   @Provided()
   @Rule((value) => {
     if (!(Number(value) > 0)) throw new AppError('Invalid fx_cad_usd.');

@@ -3,6 +3,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
 import { AdminSettingsService } from './admin-settings.service.js';
+import { ExchangeRateService } from '../../../integrations/fx/exchange-rate.service.js';
 import { TaxRateDto } from './dto/tax-rate.dto.js';
 import { UpdateSettingsDto } from './dto/update-settings.dto.js';
 
@@ -11,11 +12,16 @@ import { UpdateSettingsDto } from './dto/update-settings.dto.js';
 @Controller('admin')
 @Access('staff')
 export class AdminSettingsController {
-  constructor(private readonly settings: AdminSettingsService) {}
+  constructor(
+    private readonly settings: AdminSettingsService,
+    private readonly fx: ExchangeRateService,
+  ) {}
 
+  /** `liveFx`: the Bank of Canada rate the shop is using for US dollar estimates (null: unreachable, so `fx_cad_usd` is used). */
   @Get('settings')
   async get() {
-    return { success: true, settings: await this.settings.get() };
+    const [settings, liveFx] = await Promise.all([this.settings.get(), this.fx.cadToUsd()]);
+    return { success: true, settings, liveFx };
   }
 
   /** Changes any subset of the settings. */
