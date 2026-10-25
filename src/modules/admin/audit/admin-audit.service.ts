@@ -8,7 +8,10 @@ import {
   type DriveFile,
 } from '../../../integrations/google-drive/google-drive.client.js';
 import { AdminLog } from '../admin-log.service.js';
+import { atLeast, rolesFrom } from '../../auth/roles.js';
 
+/** Roles that need the owner's say-so for Audit (staff and up, below owner, who always has it). */
+const STAFF_BELOW_OWNER = rolesFrom('staff').filter((r) => !atLeast(r, 'owner'));
 /** The shop's time zone: a "day" in the sales report starts and ends at midnight here. */
 const SHOP_TIME_ZONE = 'America/Toronto';
 /** The longest period one report covers. */
@@ -154,17 +157,18 @@ export class AdminAuditService {
   /** Staff and owners, and who may open Audit (owners always can). */
   async access() {
     return this.db.many<{ id: string; email: string; role: string; can_audit: boolean }>(
-      `select id, email, role, (role = 'owner' or can_audit) as can_audit
-         from public.profiles where role in ('staff', 'owner') order by role desc, email`,
+      `select id, email, role, (role::text = any($2::text[]) or can_audit) as can_audit
+         from public.profiles where role::text = any($1::text[]) order by array_position($1::text[], role::text) desc, email`,
+      [rolesFrom('staff'), rolesFrom('owner')],
     );
   }
 
   /** Lets a staff account into Audit, or takes it away (owners always have it). */
   async setAccess(ownerId: string, profileId: string, canAudit: boolean) {
     const row = await this.db.one<{ id: string; email: string; role: string; can_audit: boolean }>(
-      `update public.profiles set can_audit = $2 where id = $1 and role = 'staff'
+      `update public.profiles set can_audit = $2 where id = $1 and role::text = any($3::text[])
        returning id, email, role, can_audit`,
-      [profileId, canAudit],
+      [profileId, canAudit, STAFF_BELOW_OWNER],
     );
     if (!row) throw notFound('Staff account');
     await this.log.write(
