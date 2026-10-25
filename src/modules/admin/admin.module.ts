@@ -3,6 +3,7 @@ import { AdminPhotoBackgroundsController } from './products/admin-photo-backgrou
 import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js';
 import { ProductPhotosController } from './products/product-photos.controller.js';
 import { Module } from '@nestjs/common';
+import { FxModule } from '../../integrations/fx/fx.module.js';
 import { EmailModule } from '../../integrations/email/email.module.js';
 import { PayPalModule } from '../../integrations/paypal/paypal.module.js';
 import { SquareModule } from '../../integrations/square/square.module.js';
@@ -52,6 +53,7 @@ import { AdminSquareService } from './square/admin-square.service.js';
 @Module({
   imports: [
     CatalogModule,
+    FxModule,
     EmailModule,
     PayPalModule,
     SquareModule,

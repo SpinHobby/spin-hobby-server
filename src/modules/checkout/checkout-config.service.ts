@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Db } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';
+import { ExchangeRateService } from '../../integrations/fx/exchange-rate.service.js';
 import { testPaymentsActive } from '../payments/test-payments.js';
 import { paypalClientId, paypalIsLive } from '../../config/paypal.config.js';
 import {
@@ -15,10 +16,11 @@ export class CheckoutConfigService {
   constructor(
     private readonly store: StoreService,
     private readonly db: Db,
+    private readonly fx: ExchangeRateService,
   ) {}
 
   async publicConfig() {
-    const s = await this.store.settings();
+    const [s, live] = await Promise.all([this.store.settings(), this.fx.cadToUsd()]);
     // the shop background: every transparent product photo is shown on it (null: plain white)
     const background = await this.db.one<{ id: string; image_url: string }>(
       'select id, image_url from public.photo_backgrounds where is_default limit 1',
@@ -37,7 +39,10 @@ export class CheckoutConfigService {
       freeShippingThresholdCents: s.free_shipping_threshold_cents,
       handlingDaysMin: s.handling_days_min,
       handlingDaysMax: s.handling_days_max,
-      fxCadUsd: Number(s.fx_cad_usd),
+      // the US dollar estimate: the Bank of Canada's latest rate, or the rate set in Settings when the bank can't be reached
+      fxCadUsd: live?.cadUsd ?? Number(s.fx_cad_usd),
+      fxSource: live ? 'bank-of-canada' : 'settings',
+      fxDate: live?.date ?? null,
       maintenanceMode: s.maintenance_mode,
       maintenanceMessage: s.maintenance_message,
       productBackground: background ? { id: background.id, url: background.image_url } : null,
