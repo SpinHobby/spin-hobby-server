@@ -161,8 +161,10 @@ export async function seedSample(db: SampleDb, imageBase: string) {
     const email = `${first}.${last}@example.com`.toLowerCase();
     const shipped = status === 'shipped' || status === 'fulfilled';
     const { rows } = await db.query(
-      `insert into public.orders (status, provider, provider_payment_id, subtotal_cents, shipping_cents, tax_cents, total_cents, shipping_method, billing_email, billing_address, shipping_address, tracking_number, carrier, shipped_at, created_at, updated_at)
-       values ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $9, $10, $11, case when $12 then now() - ($13 || ' hours')::interval else null end, now() - ($14 || ' hours')::interval, now() - ($13 || ' hours')::interval) returning id`,
+      // paid_at as a real payment sets it (when the order was paid), so sales records and stock holds see these orders too
+      `insert into public.orders (status, provider, provider_payment_id, subtotal_cents, shipping_cents, tax_cents, total_cents, shipping_method, billing_email, billing_address, shipping_address, tracking_number, carrier, shipped_at, created_at, updated_at, paid_at)
+       values ($1, $2, $3, $4, $5, 0, $6, $7, $8, $9, $9, $10, $11, case when $12 then now() - ($13 || ' hours')::interval else null end, now() - ($14 || ' hours')::interval, now() - ($13 || ' hours')::interval,
+               case when $1::public.order_status in ('pending', 'cancelled') then null else now() - ($14 || ' hours')::interval end) returning id`,
       [
         status,
         i % 3 === 2 ? 'square' : 'paypal',
