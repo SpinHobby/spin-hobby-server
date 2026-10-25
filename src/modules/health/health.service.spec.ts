@@ -98,6 +98,7 @@ describe('HealthService', () => {
       square: 'configured',
       email: 'not_configured',
       cashierAi: 'not_configured',
+      auditDrive: 'not_configured',
     });
   });
 

@@ -26,6 +26,7 @@ const OPTIONAL: Record<string, string[]> = {
   square: ['SQUARE_ACCESS_TOKEN', 'SQUARE_APPLICATION_ID', 'SQUARE_LOCATION_ID'],
   email: ['RESEND_API_KEY', 'FROM_EMAIL'],
   cashierAi: ['ANTHROPIC_API_KEY'],
+  auditDrive: ['GOOGLE_SERVICE_ACCOUNT_JSON', 'AUDIT_DRIVE_FOLDER_ID'],
 };
 /** Tables the current code relies on (one per migration, newest last). */
 const TABLES = [

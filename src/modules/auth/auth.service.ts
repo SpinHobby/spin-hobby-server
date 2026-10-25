@@ -12,6 +12,8 @@ export interface AppUser {
   email: string;
   role: AppRole;
   firstName: string | null;
+  /** May open Audit (documents and sales records): every owner, and staff the owner has allowed. */
+  canAudit: boolean;
 }
 
 /**
@@ -54,17 +56,25 @@ export class AuthService {
     if (!header?.startsWith('Bearer ')) return null;
     const payload = await this.verify(header.slice('Bearer '.length));
     if (!payload?.sub) return null;
-    const profile = await this.db.one<{ id: string; email: string; role: AppRole }>(
-      'select id, email, role from public.profiles where id = $1',
-      [payload.sub],
-    );
+    const profile = await this.db.one<{
+      id: string;
+      email: string;
+      role: AppRole;
+      can_audit: boolean;
+    }>('select id, email, role, can_audit from public.profiles where id = $1', [payload.sub]);
     if (!profile) return null;
     const role = bootstrapRole(profile.email, profile.role);
     if (role !== profile.role) {
       await this.db.exec('update public.profiles set role = $2 where id = $1', [profile.id, role]);
       this.logger.log(`Promoted ${profile.email} to ${role} from OWNER_EMAILS/STAFF_EMAILS.`);
     }
-    return { id: profile.id, email: profile.email, role, firstName: firstNameFrom(payload) };
+    return {
+      id: profile.id,
+      email: profile.email,
+      role,
+      firstName: firstNameFrom(payload),
+      canAudit: role === 'owner' || (role === 'staff' && profile.can_audit === true),
+    };
   }
 
   /**
