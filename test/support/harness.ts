@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { AppModule } from '../../src/app.module.js';
 import { DB_DRIVER, type DbDriver } from '../../src/database/db.service.js';
 import { configureApp } from '../../src/app.setup.js';
+import { ExchangeRateService } from '../../src/integrations/fx/exchange-rate.service.js';
 
 export const JWT_SECRET = 'test-secret-at-least-32-characters-long!!';
 const MIGRATIONS = join(import.meta.dirname, '..', '..', 'supabase', 'migrations');
@@ -68,6 +69,9 @@ export async function createApp(driver: DbDriver) {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(DB_DRIVER)
     .useValue(driver)
+    // no network in tests: the Bank of Canada counts as unreachable, so the rate in Settings is used (the live path has unit tests)
+    .overrideProvider(ExchangeRateService)
+    .useValue({ cadToUsd: async () => null })
     .compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ rawBody: true });
   configureApp(app);
