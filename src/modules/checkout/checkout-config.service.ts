@@ -45,6 +45,8 @@ export class CheckoutConfigService {
       fxDate: live?.date ?? null,
       maintenanceMode: s.maintenance_mode,
       maintenanceMessage: s.maintenance_message,
+      // the Shop playlist button (a YouTube playlist id); null hides it
+      musicPlaylistId: s.music_playlist_id ?? null,
       productBackground: background ? { id: background.id, url: background.image_url } : null,
     };
   }

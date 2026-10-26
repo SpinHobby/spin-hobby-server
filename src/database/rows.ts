@@ -256,5 +256,7 @@ export interface StoreSettingsRow {
   handling_days_max: number;
   maintenance_mode: boolean;
   maintenance_message: string | null;
+  /** The storefront's Shop playlist (a YouTube playlist id); null hides it. */
+  music_playlist_id: string | null;
   updated_at: string;
 }

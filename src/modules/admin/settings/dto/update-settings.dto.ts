@@ -1,5 +1,6 @@
 import { AppError } from '../../../../common/errors.js';
 import { Flag, OptionalText, Provided, Rule } from '../../../../common/validation/decorators.js';
+import { playlistId } from '../playlist.js';
 
 const wholeNumber = (field: string) => (value: unknown) => {
   if (!Number.isInteger(Number(value)) || Number(value) < 0)
@@ -30,6 +31,11 @@ export class UpdateSettingsDto {
   @Provided()
   @OptionalText(1000)
   maintenance_message?: string | null;
+
+  /** The storefront's Shop playlist: a YouTube playlist address or id (blank hides it). Stored as the id. */
+  @Provided()
+  @Rule(playlistId)
+  music_playlist_id?: string | null;
 
   @Provided()
   @Rule(wholeNumber('shipping_standard_cents'))
