@@ -17,6 +17,9 @@ browser ──► this API ──► Postgres (Supabase)   products, orders, acc
 **New here? Read [`docs/INTERNS.md`](docs/INTERNS.md) first.** It is a friendly, step-by-step
 guide for your first day and first week.
 
+Setting up the website and the editor too: [`SETUP.md` in spin-hobby](https://github.com/SpinHobby/spin-hobby/blob/staging/SETUP.md)
+covers all three repos.
+
 ## Run it on your computer (5 minutes)
 
 You need [Node.js 22 or newer](https://nodejs.org). No Docker, no accounts, no passwords.
