@@ -8,6 +8,8 @@ describe('playlistId', () => {
     expect(playlistId(`https://www.youtube.com/playlist?list=${ID}`)).toBe(ID);
     expect(playlistId(`https://youtube.com/watch?v=dQw4w9WgXcQ&list=${ID}&index=3`)).toBe(ID);
     expect(playlistId(`https://music.youtube.com/playlist?list=${ID}`)).toBe(ID);
+    // what YouTube's Share button copies: no www, plus an `si=` tracking parameter
+    expect(playlistId(`https://youtube.com/playlist?list=${ID}&si=MQF8mRe8q6A23glY`)).toBe(ID);
     expect(playlistId(`  ${ID} `)).toBe(ID);
   });
 
