@@ -25,6 +25,8 @@ import { parseEnv } from 'node:util';
 import { join } from 'node:path';
 
 const DB_PORT = Number(process.env.DEV_DB_PORT ?? 54329);
+/** The Shop playlist a fresh local shop starts with (a YouTube playlist id; change it in Admin > Settings). */
+const SAMPLE_PLAYLIST = 'PL_2lkrucjEN8iaGjOLqy88cFsXFUpE6ey';
 const root = join(import.meta.dirname, '..');
 const migrations = join(root, 'supabase', 'migrations');
 
@@ -89,6 +91,11 @@ if (ownDatabase) {
 
   // ---- seed: catalog, categories and orders
   seeded = await seedSample(db, imageBase);
+
+  // ---- seed: the storefront's Shop playlist (Admin > Settings), so its player shows from the first start
+  await db.query('update public.store_settings set music_playlist_id = $1 where id = true', [
+    SAMPLE_PLAYLIST,
+  ]);
 }
 
 // ---- a local copy never touches the real shop or real money
