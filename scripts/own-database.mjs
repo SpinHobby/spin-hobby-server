@@ -31,7 +31,16 @@ const quiet = (url) => url.replace(/\/\/([^:@/]+)(:[^@]*)?@/, '//$1:***@');
 
 export async function prepareOwnDatabase(
   url,
-  { root, imageBase, reset = false, seedSample, clearSample, countProducts },
+  {
+    root,
+    imageBase,
+    reset = false,
+    seedSample,
+    clearSample,
+    countProducts,
+    seedSampleAccounts,
+    clearSampleAccounts,
+  },
 ) {
   const reason = refuseReason(url);
   if (reason)
@@ -105,7 +114,10 @@ export async function prepareOwnDatabase(
     }
 
     // ---- the sample shop and test accounts: once, while the catalog is empty (or again with --reset)
-    if (reset) await clearSample(db);
+    if (reset) {
+      await clearSample(db);
+      await clearSampleAccounts(db).catch(() => {});
+    }
     let seeded = null;
     if (reset || (await countProducts(db)) === 0) {
       for (const [email, role] of [
@@ -124,6 +136,12 @@ export async function prepareOwnDatabase(
         await db.query('update public.profiles set role = $2 where id = $1', [id, role]);
       }
       seeded = await seedSample(db, imageBase);
+      // sample shoppers too, unless this database has real (Supabase) sign-in: then it stays real people only
+      try {
+        seeded.people = await seedSampleAccounts(db, imageBase);
+      } catch (error) {
+        console.log(`  Sample accounts skipped: ${error.message}`);
+      }
     }
     await db.query(
       "insert into public.ai_budgets (tool, warn_threshold_usd, stop_threshold_usd) values ('anthropic_cashier', 2, 5) on conflict (tool) do update set warn_threshold_usd = 2, stop_threshold_usd = 5",
@@ -132,7 +150,7 @@ export async function prepareOwnDatabase(
     console.log(
       `\n  Your database (${quiet(url).replace(/^postgres(ql)?:\/\/[^@]*@/, '')}): ${applied ? `applied ${applied} migration${applied === 1 ? '' : 's'}; ` : 'schema up to date; '}` +
         (seeded
-          ? `loaded the sample shop (${seeded.products} products)`
+          ? `loaded the sample shop (${seeded.products} products${seeded.people ? `, ${seeded.people.accounts} sample accounts with ${seeded.people.orders} orders` : ''})`
           : `${products} products kept from last time (--reset reloads the samples)`),
     );
     return { applied, products };
