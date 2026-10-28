@@ -41,6 +41,18 @@ export class CatalogSearchQuery {
   @IsOptional()
   changedWithin?: string | null;
 
+  /** Only products added on or after this day (YYYY-MM-DD, shop time). */
+  @IsOptional()
+  addedFrom?: string | null;
+
+  /** Only products added on or before this day (YYYY-MM-DD, shop time). */
+  @IsOptional()
+  addedTo?: string | null;
+
+  /** Which added date `addedFrom`/`addedTo` use: `square` (Square's, else ours; the default) or `here` (ours). */
+  @IsOptional()
+  addedBy?: string | null;
+
   /** Lowest price in dollars. */
   @IsOptional()
   min?: string | null;

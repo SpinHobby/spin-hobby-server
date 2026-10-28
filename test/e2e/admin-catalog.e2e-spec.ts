@@ -379,6 +379,55 @@ describe('GET /admin/catalog', () => {
     });
   });
 
+  describe('added dates', () => {
+    // A1 was added in Square long ago and synced today; A3 was entered here (no Square date) in May 2024.
+    const ids = (res: request.Response) => res.body.items.map((i: any) => i.id);
+    beforeAll(async () => {
+      await pglite.query(
+        "update public.catalog_products set square_created_at = '2024-03-10 12:00Z' where square_item_id = 'A1'",
+      );
+      await pglite.query(
+        "update public.catalog_products set created_at = '2024-05-01 12:00Z' where square_item_id = 'A3'",
+      );
+    });
+    afterAll(async () => {
+      await pglite.query(
+        "update public.catalog_products set square_created_at = null, created_at = now() where square_item_id in ('A1', 'A3')",
+      );
+    });
+
+    it("lists both dates, and shows Square's as the added date when it has one", async () => {
+      const a1 = (await list('q=A1&limit=100')).body.items.find((i: any) => i.id === 'A1');
+      expect(a1.squareCreatedAt).toMatch(/^2024-03-10/);
+      expect(a1.createdAt).toBe(a1.squareCreatedAt);
+      expect(new Date(a1.addedHereAt).getFullYear()).toBeGreaterThan(2024);
+    });
+
+    it("sorts by Square's added date or by ours", async () => {
+      expect(ids(await list('sort=created&dir=asc&limit=2'))).toEqual(['A1', 'A3']);
+      expect(ids(await list('sort=added_here&dir=asc&limit=1'))).toEqual(['A3']);
+    });
+
+    it('filters between two days, both included, by either date', async () => {
+      expect(ids(await list('addedFrom=2024-03-10&addedTo=2024-03-10&limit=100'))).toEqual(['A1']);
+      expect(
+        ids(await list('addedFrom=2024-03-10&addedTo=2024-03-10&addedBy=here&limit=100')),
+      ).toEqual([]);
+      expect(
+        ids(await list('addedFrom=2024-01-01&addedTo=2024-12-31&sort=created&dir=asc&limit=100')),
+      ).toEqual(['A1', 'A3']);
+      expect(ids(await list('addedTo=2024-12-31&addedBy=here&limit=100'))).toEqual(['A3']);
+      expect((await list('addedFrom=2024-06-01&limit=100')).body.total).toBe(
+        (await list('limit=100')).body.total - 2,
+      );
+    });
+
+    it('refuses a date it cannot read', async () => {
+      await list('addedFrom=yesterday').expect(400);
+      await list('addedFrom=2024-03-10&addedBy=ebay').expect(400);
+    });
+  });
+
   describe('paging', () => {
     it('pages with a cursor and reports the total', async () => {
       const first = (await list('sort=name&limit=4')).body;
