@@ -41,6 +41,8 @@ if (existsSync(join(root, '.env'))) {
 const setting = (name) => process.env[name] || fileEnv[name] || '';
 const ownDatabase = setting('DEV_DATABASE_URL');
 const imageBase = `http://localhost:${process.env.PORT ?? '8080'}`;
+/** Extra editions of the sample products, so lists (Admin > Products at 500 per page) run past a page. */
+const MORE_PRODUCTS = 520;
 
 // The sample catalog is part of the API (src/modules/sample), so build once and load it from dist.
 execSync('npx nest build', { cwd: root, stdio: 'inherit' });
@@ -57,6 +59,7 @@ if (ownDatabase) {
       root,
       imageBase,
       reset: process.argv.includes('--reset'),
+      moreProducts: MORE_PRODUCTS,
       ...sample,
     });
   } catch (error) {
@@ -90,7 +93,7 @@ if (ownDatabase) {
   }
 
   // ---- seed: catalog, categories and orders
-  seeded = await seedSample(db, imageBase);
+  seeded = await seedSample(db, imageBase, { more: MORE_PRODUCTS });
 
   // ---- seed: the storefront's Shop playlist (Admin > Settings), so its player shows from the first start
   await db.query('update public.store_settings set music_playlist_id = $1 where id = true', [

@@ -31,7 +31,7 @@ const quiet = (url) => url.replace(/\/\/([^:@/]+)(:[^@]*)?@/, '//$1:***@');
 
 export async function prepareOwnDatabase(
   url,
-  { root, imageBase, reset = false, seedSample, clearSample, countProducts },
+  { root, imageBase, reset = false, moreProducts = 0, seedSample, clearSample, countProducts },
 ) {
   const reason = refuseReason(url);
   if (reason)
@@ -123,7 +123,7 @@ export async function prepareOwnDatabase(
           ).rows[0].id;
         await db.query('update public.profiles set role = $2 where id = $1', [id, role]);
       }
-      seeded = await seedSample(db, imageBase);
+      seeded = await seedSample(db, imageBase, { more: moreProducts });
     }
     await db.query(
       "insert into public.ai_budgets (tool, warn_threshold_usd, stop_threshold_usd) values ('anthropic_cashier', 2, 5) on conflict (tool) do update set warn_threshold_usd = 2, stop_threshold_usd = 5",

@@ -9,6 +9,7 @@ import {
   SAMPLE_PREFIX,
   SAMPLE_PRODUCTS,
   SAMPLE_SLIDES,
+  moreSampleProducts,
 } from './catalog.js';
 
 /** Anything with a pg-style query(sql, params) returning { rows }: pg.Client, PGlite, or the API's driver. */
@@ -56,8 +57,11 @@ async function category(
   return made.rows[0].id;
 }
 
-/** Inserts everything. `imageBase` is where the API serves /sample-images (e.g. https://host or http://localhost:8080). */
-export async function seedSample(db: SampleDb, imageBase: string) {
+/**
+ * Inserts everything. `imageBase` is where the API serves /sample-images (e.g. https://host or http://localhost:8080).
+ * `more` adds that many extra editions of the products (moreSampleProducts), for long lists locally.
+ */
+export async function seedSample(db: SampleDb, imageBase: string, { more = 0 } = {}) {
   const base = imageBase.replace(/\/$/, '');
   const picture = (file: string) => `${base}/sample-images/${file}.svg`;
 
@@ -69,10 +73,12 @@ export async function seedSample(db: SampleDb, imageBase: string) {
       categoryIds.set(child, await category(db, child, parentId, j));
   }
 
-  for (const [i, p] of SAMPLE_PRODUCTS.entries()) {
+  // The extra editions first, so they're older than the hand-written products and those stay the newest.
+  const products = [...moreSampleProducts(more), ...SAMPLE_PRODUCTS];
+  for (const [i, p] of products.entries()) {
     const variation = `${p.id}-v`;
     // Spread creation over the last few weeks so "new in stock" and the admin list have an order to them.
-    const hoursAgo = (SAMPLE_PRODUCTS.length - i) * 5;
+    const hoursAgo = (products.length - i) * 5;
     await db.query(
       `insert into public.catalog_products (square_item_id, name, description, category, source, created_at, updated_at)
        values ($1, $2, $3, $4, 'manual', now() - ($5 || ' hours')::interval, now() - ($5 || ' hours')::interval)`,
@@ -108,7 +114,8 @@ export async function seedSample(db: SampleDb, imageBase: string) {
         i,
       ],
     );
-    const pictures = p.photo ? [p.photo, picture(p.slug)] : [picture(p.slug)];
+    const drawing = picture(p.drawing ?? p.slug);
+    const pictures = p.photo ? [p.photo, drawing] : [drawing];
     for (const [n, url] of pictures.entries()) {
       await db.query(
         'insert into public.product_images (square_item_id, image_url, alt_text, sort_order) values ($1, $2, $3, $4)',
@@ -199,7 +206,7 @@ export async function seedSample(db: SampleDb, imageBase: string) {
   }
 
   return {
-    products: SAMPLE_PRODUCTS.length,
+    products: products.length,
     categories: categoryIds.size,
     orders: SAMPLE_PEOPLE.length,
     slides,

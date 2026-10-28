@@ -113,6 +113,8 @@ export interface SampleProduct {
   kind: Kind;
   description: string;
   jan: string;
+  /** The drawn picture's slug when it isn't this product's own (the extra editions reuse their original's). */
+  drawing?: string;
 }
 
 // name, category, series, character ('' for none), maker, price in CAD, status, popularity rank, picture kind, flags...
@@ -1395,6 +1397,55 @@ const slugs = new Set<string>();
 export const SAMPLE_PRODUCTS: SampleProduct[] = ROWS.map((row, i) => parse(row, i, slugs));
 const BY_SLUG = new Map(SAMPLE_PRODUCTS.map((p) => [p.slug, p]));
 export const sampleProductBySlug = (slug: string) => BY_SLUG.get(slug);
+
+/** The editions that turn each hand-written product into another one, in order (see moreSampleProducts). */
+const EDITIONS = [
+  'Reissue',
+  'Ver. B',
+  'Limited Edition',
+  'Japan Ver.',
+  'Deluxe Ver.',
+  'Special Color',
+  'Event Exclusive',
+];
+
+/**
+ * `count` more products, for trying long lists locally (`npm run dev:local` loads 520, so Admin > Products has more than
+ * 500): each hand-written product again as another edition, e.g. "Frieren 1/7 Scale Figure (Reissue)", with its own id,
+ * price, stock and JAN code and the same pictures. A mix of in stock, low, sold out, pre-order, hidden and on sale.
+ * Staging doesn't load them.
+ */
+export function moreSampleProducts(count: number): SampleProduct[] {
+  const max = SAMPLE_PRODUCTS.length * EDITIONS.length;
+  if (count > max) throw new Error(`moreSampleProducts: at most ${max}`);
+  return Array.from({ length: count }, (_, n) => {
+    const base = SAMPLE_PRODUCTS[n % SAMPLE_PRODUCTS.length];
+    const edition = EDITIONS[Math.floor(n / SAMPLE_PRODUCTS.length)];
+    const regular = Math.max(
+      300,
+      Math.round(((base.compareAtCents ?? base.priceCents) * (0.8 + ((n * 37) % 50) / 100)) / 100) *
+        100,
+    );
+    const onSale = n % 11 === 0;
+    const kind = n % 10; // 0 sold out, 1 low stock, 2 pre-order, 3 hidden, else in stock
+    return {
+      ...base,
+      id: `${SAMPLE_PREFIX}x${n + 1}`,
+      slug: `x${n + 1}-${base.slug}`,
+      drawing: base.drawing ?? base.slug,
+      name: `${base.name} (${edition})`,
+      priceCents: onSale ? Math.round(regular * 0.85) : regular,
+      compareAtCents: onSale ? regular : null,
+      availability: kind === 2 ? 'preorder' : kind === 3 ? 'hidden' : 'auto',
+      stock: kind === 0 ? 0 : kind === 1 ? 2 : kind === 2 ? null : 3 + ((n * 13) % 28),
+      release: kind === 2 ? `2027-${String((n % 9) + 1).padStart(2, '0')}-01` : null,
+      orderByDays: kind === 2 ? 10 + (n % 40) : null,
+      rank: base.rank + 100 + n,
+      featured: false,
+      jan: `4590${String(100000000 + n * 7919).slice(-9)}`,
+    };
+  });
+}
 
 /** Homepage banners. A slide without an image shows the mascot instead. */
 export const SAMPLE_SLIDES: { headline: string; subheading: string; banner: number | null }[] = [
