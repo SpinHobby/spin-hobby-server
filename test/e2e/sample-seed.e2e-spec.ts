@@ -58,7 +58,7 @@ describe('sample accounts', () => {
       await pglite.query<any>(
         `select o.status, o.paid_at is not null as paid, o.tracking_number, o.total_cents, o.subtotal_cents + o.shipping_cents + o.tax_cents as sum,
            (select sum(unit_price_cents * quantity)::int from public.order_items i where i.order_id = o.id) as items,
-           o.subtotal_cents, (select array_agg(event_type order by created_at) from public.order_events e where e.order_id = o.id) as events
+           o.subtotal_cents, extract(epoch from now() - o.created_at) / 86400 as age_days, (select array_agg(event_type order by created_at) from public.order_events e where e.order_id = o.id) as events
          from public.orders o where o.user_id is not null`,
       )
     ).rows;
@@ -67,7 +67,9 @@ describe('sample accounts', () => {
       expect(o.total_cents).toBe(o.sum);
       expect(o.items).toBe(o.subtotal_cents);
       expect(o.events[0]).toBe('created');
-      if (['shipped', 'fulfilled'].includes(o.status)) expect(o.tracking_number).toBeTruthy();
+      if (o.status === 'shipped') expect(o.tracking_number).toBeTruthy();
+      // only the last few days still wait to ship ('paid' / 'fulfilled' = paid, not shipped yet)
+      if (['paid', 'fulfilled'].includes(o.status)) expect(o.age_days).toBeLessThan(7);
     }
     expect(new Set(orders.map((o) => o.status)).size).toBeGreaterThanOrEqual(5);
 

@@ -242,6 +242,10 @@ function random(seed: number) {
   };
 }
 
+/** The first status whose upper bound is above `roll` (0 to 1). */
+const pickStatus = (roll: number, bands: [number, string][]) =>
+  bands.find(([upTo]) => roll < upTo)?.[1] ?? bands[bands.length - 1][1];
+
 /** Throws unless auth.users is the local scripts' stub (Supabase's has encrypted_password): real databases get no fake people. */
 async function assertLocalDatabase(db: SampleDb) {
   const { rows } = await db.query(
@@ -364,25 +368,30 @@ export async function seedSampleAccounts(db: SampleDb, imageBase: string) {
         3 * HOUR,
         Math.floor(joinedHours * (1 - (k + 0.3 + rand() * 0.6) / Math.max(a.orders, 1))),
       );
+      // `fulfilled` is "paid and packed, still to ship" here, so only the last few days have orders waiting to ship; a pre-order
+      // stays reserved until its release (the last two months); everything older has shipped, or was refunded or cancelled.
       const recent = ageHours < 6 * DAY;
       const roll = rand();
       const status: string = recent
-        ? roll < 0.35
-          ? 'paid'
-          : roll < 0.6
-            ? 'shipped'
-            : roll < 0.75
-              ? 'pending'
-              : 'preorder_reserved'
-        : roll < 0.62
-          ? 'fulfilled'
-          : roll < 0.74
-            ? 'shipped'
-            : roll < 0.84
-              ? 'preorder_reserved'
-              : roll < 0.93
-                ? 'refunded'
-                : 'cancelled';
+        ? pickStatus(roll, [
+            [0.3, 'paid'],
+            [0.4, 'fulfilled'],
+            [0.65, 'shipped'],
+            [0.8, 'pending'],
+            [1, 'preorder_reserved'],
+          ])
+        : ageHours < 60 * DAY
+          ? pickStatus(roll, [
+              [0.6, 'shipped'],
+              [0.85, 'preorder_reserved'],
+              [0.93, 'refunded'],
+              [1, 'cancelled'],
+            ])
+          : pickStatus(roll, [
+              [0.85, 'shipped'],
+              [0.94, 'refunded'],
+              [1, 'cancelled'],
+            ]);
       const pool = status === 'preorder_reserved' ? preorders : inStock;
       const items = new Map<SampleProduct, number>();
       const lines = 1 + Math.floor(rand() * 3);
@@ -405,7 +414,7 @@ export async function seedSampleAccounts(db: SampleDb, imageBase: string) {
         country: 'CA',
       });
       const paid = status !== 'pending' && status !== 'cancelled';
-      const shipped = status === 'shipped' || status === 'fulfilled' || status === 'refunded';
+      const shipped = status === 'shipped' || status === 'refunded';
       const paidAge = ageHours - Math.min(ageHours - 1, Math.floor(rand() * 20) + 1) / 60;
       const shippedAge = Math.max(1, ageHours - (1 + Math.floor(rand() * 3)) * DAY);
       orderNumber++;
