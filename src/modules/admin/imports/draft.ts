@@ -15,7 +15,23 @@ export interface DraftDetails {
   official: OfficialPhoto | null;
   /** When the product fits none of the shop's categories: the new category the app suggests, and the existing one it would go under (null: top level). */
   suggestedCategory: { name: string; under: string | null } | null;
+  /** How sure the app's cut-out is (0-1, with its reasons), and the share of the product still as photographed (0-1). */
+  quality: DraftQuality | null;
+  /** The app's listing health: a 0-100 score and the top fixes. */
+  health: DraftHealth | null;
   generator: string | null;
+}
+
+export interface DraftQuality {
+  cutout: number;
+  cutoutReasons: string[];
+  original: number;
+}
+
+export interface DraftHealth {
+  score: number;
+  level: 'good' | 'fair' | 'poor';
+  fixes: string[];
 }
 
 export interface OfficialPhoto {
@@ -178,6 +194,42 @@ function parseMarket(raw: unknown): MarketPrice | null {
   };
 }
 
+const share = (v: unknown): number | null => {
+  const n = Number(v);
+  return v != null && Number.isFinite(n) && n >= 0 && n <= 1 ? Math.round(n * 100) / 100 : null;
+};
+
+function parseQuality(raw: unknown): DraftQuality | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const q = raw as Record<string, unknown>;
+  const cutout =
+    q.cutout && typeof q.cutout === 'object' ? (q.cutout as Record<string, unknown>) : null;
+  const score = share(cutout?.score);
+  const original = share(q.original);
+  if (score === null || original === null) return null;
+  return {
+    cutout: score,
+    cutoutReasons: list(cutout?.reasons, 'cut-out reasons', 5, 200),
+    original,
+  };
+}
+
+function parseHealth(raw: unknown): DraftHealth | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const h = raw as Record<string, unknown>;
+  const score = Number(h.score);
+  if (!Number.isFinite(score) || score < 0 || score > 100) return null;
+  const level =
+    h.level === 'good' || h.level === 'fair' || h.level === 'poor'
+      ? h.level
+      : score >= 85
+        ? 'good'
+        : score >= 60
+          ? 'fair'
+          : 'poor';
+  return { score: Math.round(score), level, fixes: list(h.fixes, 'fixes', 3, 300) };
+}
+
 function parseOfficial(raw: unknown): OfficialPhoto | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const o = raw as Record<string, unknown>;
@@ -232,6 +284,8 @@ export function parseDraft(raw: unknown): DraftInput {
       market: parseMarket(d.market),
       official: parseOfficial(d.official),
       suggestedCategory: parseSuggestedCategory(d.newCategory),
+      quality: parseQuality(d.quality),
+      health: parseHealth(d.health),
       generator: text(d.generator, 'generator', 60),
     },
   };
