@@ -376,6 +376,35 @@ describe('market prices on a draft', () => {
     ]);
   });
 
+  it("keeps the app's cut-out confidence, how much is as photographed, and the listing health, and drops what does not read", async () => {
+    const { token } = await connectedApp();
+    const good = await stored(token, 'quality-key-0001', {
+      quality: {
+        cutout: { score: 0.94, reasons: ['the edge is unsure in places'] },
+        original: 0.97,
+      },
+      health: {
+        score: 91,
+        level: 'good',
+        fixes: ['Add key facts as a list.', 'Add by hand: size.', 'Third.', 'Fourth is dropped.'],
+      },
+    });
+    const details = good.details as unknown as { quality: unknown; health: { fixes: string[] } };
+    expect(details.quality).toEqual({
+      cutout: 0.94,
+      cutoutReasons: ['the edge is unsure in places'],
+      original: 0.97,
+    });
+    expect(details.health).toMatchObject({ score: 91, level: 'good' });
+    expect(details.health.fixes).toHaveLength(3);
+    const bad = await stored(token, 'quality-key-0002', {
+      quality: { cutout: { score: 7 }, original: 'all' },
+      health: { score: 'great' },
+    });
+    expect((bad.details as unknown as { quality: unknown; health: unknown }).quality).toBeNull();
+    expect((bad.details as unknown as { quality: unknown; health: unknown }).health).toBeNull();
+  });
+
   it('keeps no market when it is missing or unreadable', async () => {
     const { token } = await connectedApp();
     expect((await stored(token, 'market-key-0002', {})).details.market).toBeNull();
