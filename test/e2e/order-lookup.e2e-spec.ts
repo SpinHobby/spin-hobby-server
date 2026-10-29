@@ -23,6 +23,8 @@ describe('guest order lookup', () => {
       items: [expect.objectContaining({ name: 'Miku Prize Figure', quantity: 1 })],
       shipTo: { city: expect.any(String), province: 'AB', country: 'CA' },
       refundedCents: 0,
+      discountCents: 0,
+      discountCode: null,
     });
     expect(res.body.order.events.map((e: any) => e.type)).toEqual(['created', 'paid']);
   });

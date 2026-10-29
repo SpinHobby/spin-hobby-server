@@ -51,6 +51,8 @@ export class OrderHistoryService {
       createdAt: order.created_at,
       shippingMethod: order.shipping_method,
       subtotalCents: Number(order.subtotal_cents),
+      discountCode: order.discount_code,
+      discountCents: Number(order.discount_cents ?? 0),
       shippingCents: Number(order.shipping_cents),
       taxCents: Number(order.tax_cents),
       totalCents: Number(order.total_cents),
