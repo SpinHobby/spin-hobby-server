@@ -6,7 +6,7 @@ import { storefrontUrl } from '../../config/app.config.js';
 import { fromEmail, resendApiKey } from '../../config/email.config.js';
 
 const money = (cents: unknown) => `$${(Number(cents) / 100).toFixed(2)}`;
-/** Transactional email through Resend: order confirmations, shipping notices and restock alerts. */
+/** Transactional email through Resend: order confirmations, shipping and refund notices, and restock alerts. */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -39,6 +39,17 @@ export class EmailService {
     return (
       `<p>Good news! Your Spin Hobby order <strong>#${orderId}</strong> is on its way.</p>` +
       `<p>${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
+      `<p>Questions? Reply to this email with your order number.</p>`
+    );
+  }
+
+  /** Sent when an order is refunded: in full (the order is cancelled) or in part. */
+  refundedHtml(orderId: number, amountCents: number, full: boolean) {
+    return (
+      (full
+        ? `<p>Your Spin Hobby order <strong>#${orderId}</strong> has been cancelled and refunded in full: <strong>${money(amountCents)}</strong>.</p>`
+        : `<p>We've refunded <strong>${money(amountCents)}</strong> of your Spin Hobby order <strong>#${orderId}</strong>.</p>`) +
+      `<p>The money goes back to the card or PayPal account you paid with. Depending on your bank it can take 5 to 10 business days to show.</p>` +
       `<p>Questions? Reply to this email with your order number.</p>`
     );
   }
