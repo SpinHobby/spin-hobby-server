@@ -36,6 +36,13 @@ export function words(text: string): string[] {
     .filter((w) => w.length > 1 && !STOP.has(w));
 }
 
+/**
+ * Tools and supplies for the hobby (Tools & Paint, markers, brushes, stands): a question about "gundam model kits" is about the kits, so these
+ * come after the products themselves unless the question asks for them ("gundam markers").
+ */
+const ACCESSORY =
+  /\b(tools?|paints?|supplies|accessor(y|ies)|markers?|brush(es)?|glue|cement|nippers?|stands?|display cases?)\b/i;
+
 /** The products a question is about, best first; only those matching the most of its words, and at least half of them. */
 export function matchProducts<P extends MatchProduct>(
   question: string,
@@ -44,6 +51,7 @@ export function matchProducts<P extends MatchProduct>(
 ): P[] {
   const asked = [...new Set(words(question))];
   if (!asked.length) return [];
+  const wantsAccessories = ACCESSORY.test(question);
   const scored = products.map((p) => {
     const fields: [string[], number][] = [
       [words(p.name), 3],
@@ -71,7 +79,9 @@ export function matchProducts<P extends MatchProduct>(
       score += best;
     }
     const now = p.status === 'in' || p.status === 'low' ? 0.5 : p.status === 'pre' ? 0.3 : 0;
-    return { p, score: score + (score ? now : 0), hits };
+    const accessory =
+      !wantsAccessories && ACCESSORY.test(`${p.category ?? ''} ${p.categoryPath ?? ''}`) ? 1.5 : 0;
+    return { p, score: score ? score + now - accessory : 0, hits };
   });
   const need = Math.max(1, Math.ceil(asked.length / 2), ...scored.map((s) => s.hits));
   return scored
