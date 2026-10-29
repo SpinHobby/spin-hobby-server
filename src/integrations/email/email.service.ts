@@ -5,8 +5,12 @@ import type { OrderItemRow, OrderRow } from '../../database/rows.js';
 import { storefrontUrl } from '../../config/app.config.js';
 import { fromEmail, resendApiKey } from '../../config/email.config.js';
 
-const money = (cents: unknown) => `$${(Number(cents) / 100).toFixed(2)}`;
-/** Transactional email through Resend: order confirmations, shipping notices and restock alerts. */
+const money = (cents: unknown) =>
+  `${Number(cents) < 0 ? '-' : ''}$${(Math.abs(Number(cents)) / 100).toFixed(2)}`;
+/** A link to the website's order-status page with the order number filled in (the shopper adds their email there). */
+const statusLink = (orderId: number) =>
+  `<p><a href="${escape(`${storefrontUrl().replace(/\/$/, '')}/order-status?order=${orderId}`)}">Check your order status</a></p>`;
+/** Transactional email through Resend: order confirmations, shipping and refund notices, and restock alerts. */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -39,6 +43,18 @@ export class EmailService {
     return (
       `<p>Good news! Your Spin Hobby order <strong>#${orderId}</strong> is on its way.</p>` +
       `<p>${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
+      statusLink(orderId) +
+      `<p>Questions? Reply to this email with your order number.</p>`
+    );
+  }
+
+  /** Sent when an order is refunded: in full (the order is cancelled) or in part. */
+  refundedHtml(orderId: number, amountCents: number, full: boolean) {
+    return (
+      (full
+        ? `<p>Your Spin Hobby order <strong>#${orderId}</strong> has been cancelled and refunded in full: <strong>${money(amountCents)}</strong>.</p>`
+        : `<p>We've refunded <strong>${money(amountCents)}</strong> of your Spin Hobby order <strong>#${orderId}</strong>.</p>`) +
+      `<p>The money goes back to the card or PayPal account you paid with. Depending on your bank it can take 5 to 10 business days to show.</p>` +
       `<p>Questions? Reply to this email with your order number.</p>`
     );
   }
@@ -77,13 +93,14 @@ export class EmailService {
         : `${handling.days_min}–${handling.days_max}`;
     return (
       `<p>Thanks for your order! We've received your payment for order <strong>#${escape(order.id)}</strong>.</p>` +
-      `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${total(`Shipping (${order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
+      `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${Number(order.discount_cents) ? total(`Discount${order.discount_code ? ` (${escape(order.discount_code)})` : ''}`, -Number(order.discount_cents)) : ''}${total(`Shipping (${order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
       `${total('Tax', order.tax_cents)}${total('Total (CAD)', order.total_cents, true)}</table>` +
       (address ? `<p><strong>Shipping to</strong><br>${address}</p>` : '') +
       `<p>We'll pack your order within ${handling_} business days and email you tracking once it ships.</p>` +
       (hasPreorder
         ? `<p>Your pre-order items ship when they arrive from the manufacturer; we'll let you know as soon as we have a date.</p>`
         : '') +
+      statusLink(Number(order.id)) +
       `<p>Questions? Reply to this email with your order number.</p><p><a href="${escape(site)}">Back to Spin Hobby</a></p>`
     );
   }

@@ -1,3 +1,4 @@
+import { AnalyticsModule } from './modules/analytics/analytics.module.js';
 import { EbayModule } from './modules/ebay/ebay.module.js';
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
@@ -40,6 +41,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     // Business features
     AccountModule,
     AdminModule,
+    AnalyticsModule,
     AssistantModule,
     AuthModule,
     CashierModule,

@@ -66,11 +66,13 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
         await this.db.exec('select pg_advisory_xact_lock(hashtext($1))', [`stock:${id}`], tx);
       }
       const quote = await this.quotes.quote(input, tx);
-      if (!quote.lines.length || quote.warnings.length) return { changed: quote };
+      // A code that stopped working since the shopper saw it (expired, used up) changes the price: show them first.
+      const lostCode = !!input.discountCode?.trim() && !quote.discount;
+      if (!quote.lines.length || quote.warnings.length || lostCode) return { changed: quote };
       const settings = await this.store.settings(tx);
       const order = await this.db.one<Pick<OrderRow, 'id' | 'total_cents' | 'provider'>>(
-        `insert into public.orders (user_id, provider, subtotal_cents, shipping_cents, tax_cents, total_cents, shipping_method, billing_email, billing_address, shipping_address)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id, total_cents, provider`,
+        `insert into public.orders (user_id, provider, subtotal_cents, shipping_cents, tax_cents, total_cents, shipping_method, billing_email, billing_address, shipping_address, discount_code, discount_cents)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id, total_cents, provider`,
         [
           user?.id ?? null,
           settings.payment_provider,
@@ -82,6 +84,8 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
           details.email,
           JSON.stringify(details.billing),
           JSON.stringify(details.shipping),
+          quote.discount?.code ?? null,
+          quote.discountCents,
         ],
         tx,
       );
@@ -205,6 +209,12 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
               group by 1
            ) sold
           where s.square_variation_id = sold.square_variation_id and s.quantity is not null`,
+        [orderId],
+        tx,
+      );
+      // a code's uses count paid orders only
+      await this.db.exec(
+        'update public.discount_codes set uses = uses + 1 where code = (select discount_code from public.orders where id = $1)',
         [orderId],
         tx,
       );

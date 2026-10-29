@@ -1,5 +1,6 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
+import { RateLimit } from '../../common/guards/rate-limit.guard.js';
 import { Access, CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { OrderIdParam } from './dto/order-id.dto.js';
@@ -19,10 +20,14 @@ export class OrderHistoryController {
     return { success: true, items: await this.history.list(user.id) };
   }
 
-  /** Guest order lookup from the confirmation email. Declared before `:id` so "lookup" isn't read as an id. */
+  /**
+   * Find an order without an account: its number and the email it was placed with, as on the confirmation email. Tightly
+   * rate-limited so order numbers can't be tried one after another. Declared before `:id` so "lookup" isn't read as an id.
+   */
   @Get('lookup')
+  @RateLimit({ limit: 10, windowMs: 10 * 60_000 })
   async lookup(@Query() query: OrderLookupQuery) {
-    return { success: true, order: await this.history.lookupAsGuest(query.paymentId, query.email) };
+    return { success: true, order: await this.history.lookupAsGuest(query.order, query.email) };
   }
 
   /** One order with its items and history. */

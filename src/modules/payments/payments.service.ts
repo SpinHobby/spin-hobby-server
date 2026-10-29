@@ -188,6 +188,19 @@ export class PaymentsService {
             quantity: String(l.quantity),
             base_price_money: { amount: l.unit_price_cents, currency: 'CAD' },
           })),
+          // the discount code's amount, so Square's order total matches what the shopper pays
+          ...(order.discount_cents
+            ? {
+                discounts: [
+                  {
+                    uid: 'code',
+                    name: `Code ${order.discount_code ?? ''}`.trim(),
+                    amount_money: { amount: order.discount_cents, currency: 'CAD' },
+                    scope: 'ORDER',
+                  },
+                ],
+              }
+            : {}),
           service_charges: [
             ...(order.shipping_cents
               ? [

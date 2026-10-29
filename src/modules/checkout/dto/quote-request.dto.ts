@@ -46,6 +46,14 @@ export function shipToProvince(value: unknown): string {
   return province;
 }
 
+/** An optional discount code (at most 40 characters; checked when the cart is priced). */
+export function discountCode(value: unknown): string | null {
+  if (value == null || value === '') return null;
+  if (typeof value !== 'string' || value.length > 40)
+    throw new AppError('Enter a valid discount code.');
+  return value.trim() || null;
+}
+
 /** A whole cart request as sent by the storefront (used where the cart is nested inside another request). */
 export function cartRequest(value: unknown): QuoteInput {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -56,6 +64,7 @@ export function cartRequest(value: unknown): QuoteInput {
     shippingMethod: shippingMethod(cart.shippingMethod),
     country: shipToCountry(cart.country),
     province: shipToProvince(cart.province),
+    discountCode: discountCode(cart.discountCode),
   };
 }
 
@@ -84,4 +93,8 @@ export class QuoteRequestDto implements QuoteInput {
   /** Province or state code, e.g. `AB`. */
   @Rule(shipToProvince)
   province!: string;
+
+  /** A discount code, as typed (optional). */
+  @Rule(discountCode)
+  discountCode: string | null = null;
 }
