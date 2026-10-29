@@ -5,7 +5,8 @@ import type { OrderItemRow, OrderRow } from '../../database/rows.js';
 import { storefrontUrl } from '../../config/app.config.js';
 import { fromEmail, resendApiKey } from '../../config/email.config.js';
 
-const money = (cents: unknown) => `$${(Number(cents) / 100).toFixed(2)}`;
+const money = (cents: unknown) =>
+  `${Number(cents) < 0 ? '-' : ''}$${(Math.abs(Number(cents)) / 100).toFixed(2)}`;
 /** A link to the website's order-status page with the order number filled in (the shopper adds their email there). */
 const statusLink = (orderId: number) =>
   `<p><a href="${escape(`${storefrontUrl().replace(/\/$/, '')}/order-status?order=${orderId}`)}">Check your order status</a></p>`;
@@ -92,7 +93,7 @@ export class EmailService {
         : `${handling.days_min}–${handling.days_max}`;
     return (
       `<p>Thanks for your order! We've received your payment for order <strong>#${escape(order.id)}</strong>.</p>` +
-      `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${total(`Shipping (${order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
+      `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${Number(order.discount_cents) ? total(`Discount${order.discount_code ? ` (${escape(order.discount_code)})` : ''}`, -Number(order.discount_cents)) : ''}${total(`Shipping (${order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
       `${total('Tax', order.tax_cents)}${total('Total (CAD)', order.total_cents, true)}</table>` +
       (address ? `<p><strong>Shipping to</strong><br>${address}</p>` : '') +
       `<p>We'll pack your order within ${handling_} business days and email you tracking once it ships.</p>` +

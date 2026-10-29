@@ -3,6 +3,8 @@ import { AppError } from '../../common/errors.js';
 import { orderHoldMinutes } from '../../config/orders.config.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';
+import { applyDiscount, discountLabel } from '../discounts/discount-math.js';
+import { DiscountsService } from '../discounts/discounts.service.js';
 import { cartTotals, priceCartLine, type QuoteRow } from './quote-math.js';
 
 export interface QuoteInput {
@@ -10,6 +12,8 @@ export interface QuoteInput {
   shippingMethod: 'standard' | 'express';
   country: 'CA' | 'US';
   province: string;
+  /** A discount code as the shopper typed it (optional). */
+  discountCode?: string | null;
 }
 export interface QuoteLine {
   variationId: string;
@@ -29,11 +33,17 @@ export interface QuoteWarning {
 export interface Quote {
   lines: QuoteLine[];
   subtotalCents: number;
+  /** What the discount code took off the goods (0 without one). */
+  discountCents: number;
   shippingCents: number;
   taxCents: number;
   totalCents: number;
   currency: 'CAD';
   warnings: QuoteWarning[];
+  /** The code that applied, e.g. { code: 'SPRING10', label: '10% off' }; null when none was given or it can't be used. */
+  discount: { code: string; label: string } | null;
+  /** Why the code that was typed doesn't apply ("That code has expired."), else null. Doesn't stop checkout. */
+  discountMessage: string | null;
 }
 
 /** Server-side price/stock/tax check. Never trusts prices from the browser. The rules live in quote-math.ts. */
@@ -42,6 +52,7 @@ export class QuoteService {
   constructor(
     private readonly db: Db,
     private readonly store: StoreService,
+    private readonly discounts: DiscountsService,
   ) {}
 
   /**
@@ -117,11 +128,25 @@ export class QuoteService {
       warnings.push(...priced.warnings);
       if (priced.line) lines.push(priced.line);
     }
+    const subtotal = lines.reduce((sum, l) => sum + l.lineCents, 0);
+    const typed = input.discountCode?.trim();
+    const rule = typed ? await this.discounts.find(typed, tx) : null;
+    const applied = typed ? applyDiscount(rule, subtotal) : null;
+    const discount =
+      rule && applied && !applied.message ? { code: rule.code, label: discountLabel(rule) } : null;
     return {
       lines,
-      ...cartTotals(lines, input.shippingMethod, settings, Number(tax?.rate ?? 0)),
+      ...cartTotals(
+        lines,
+        input.shippingMethod,
+        settings,
+        Number(tax?.rate ?? 0),
+        discount ? applied!.cents : 0,
+      ),
       currency: 'CAD',
       warnings,
+      discount,
+      discountMessage: applied?.message ?? null,
     };
   }
 }

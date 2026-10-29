@@ -17,6 +17,8 @@ import { CatalogModule } from '../catalog/catalog.module.js';
 import { SquareSyncModule } from '../square-sync/square-sync.module.js';
 import { StoreModule } from '../store/store.module.js';
 import { AdminLog } from './admin-log.service.js';
+import { DiscountsModule } from '../discounts/discounts.module.js';
+import { AdminDiscountsController } from './discounts/admin-discounts.controller.js';
 import { AdminImportsController } from './imports/admin-imports.controller.js';
 import { GleamshelfController } from './imports/gleamshelf.controller.js';
 import { GleamshelfTokenGuard } from './imports/gleamshelf-token.guard.js';
@@ -59,6 +61,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
 @Module({
   imports: [
     AssistantModule,
+    DiscountsModule,
     CatalogModule,
     GoogleDriveModule,
     FxModule,
@@ -70,6 +73,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     SquareSyncModule,
   ],
   controllers: [
+    AdminDiscountsController,
     ProductPhotosController,
     AdminAuditController,
     AdminAccountsController,
