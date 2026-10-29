@@ -79,7 +79,10 @@ describe('the shop assistant', () => {
     await mac
       .answer(q.id, {
         answer: 'Yes! Only two left, $64.',
-        products: [{ id: 'CHB1', name: 'Chibi Figure', price: '$64', status: 'low' }],
+        products: [
+          { id: 'CHB1', name: 'Chibi Figure', price: '$64', status: 'low' },
+          { name: 'no id' },
+        ],
         audio: wav(),
       })
       .expect(200);
@@ -97,7 +100,7 @@ describe('the shop assistant', () => {
         .toString('latin1'),
     ).toBe('RIFF');
 
-    // an answer can only be given once
+    // an answer can only be given once (and a product that is not id, name, price and status is left out, not the answer)
     expect((await mac.answer(q.id, { answer: 'again' })).status).toBe(409);
     // a waiting computer with nothing to answer gets no question
     expect((await mac.claim(1).expect(200)).body.question).toBeNull();

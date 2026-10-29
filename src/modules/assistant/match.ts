@@ -59,7 +59,11 @@ export function matchProducts<P extends MatchProduct>(
       for (const w of forms)
         for (const [ws, weight] of fields)
           if (ws.includes(w) || ws.includes(`${w}s`)) best = Math.max(best, weight);
-          else if (w.length >= 4 && ws.some((x) => x.startsWith(w)))
+          // a short form (nendo: nendoroid) or a longer one (plushies: plush) of a product's word
+          else if (
+            w.length >= 4 &&
+            ws.some((x) => x.startsWith(w) || (x.length >= 4 && w.startsWith(x)))
+          )
             best = Math.max(best, weight * 0.6);
       if (best) hits++;
       score += best;

@@ -42,21 +42,26 @@ export class AssistantAnswerDto {
   @Text('answer', 1000)
   answer!: string;
 
-  /** The products the answer is about: id, name, price text and status, at most 6. */
+  /** The products the answer is about: id, name, price text and status, at most 6. One that is not all four is left out, not the answer. */
   @Rule((v) => {
-    if (v === undefined || v === null) return [];
-    if (!Array.isArray(v) || v.length > 6) throw new AppError('products must be a short list.');
-    return v.map((p) => {
-      const { id, name, price, status } = (p ?? {}) as Record<string, unknown>;
-      if ([id, name, price, status].some((x) => typeof x !== 'string' || x.length > 200))
-        throw new AppError('products must be id, name, price and status.');
-      return { id, name, price, status } as {
-        id: string;
-        name: string;
-        price: string;
-        status: string;
-      };
-    });
+    if (!Array.isArray(v)) return [];
+    return v
+      .slice(0, 6)
+      .map((p) => (p ?? {}) as Record<string, unknown>)
+      .filter((p) =>
+        ['id', 'name', 'price', 'status'].every(
+          (k) => typeof p[k] === 'string' && p[k].length <= 200,
+        ),
+      )
+      .map(
+        ({ id, name, price, status }) =>
+          ({ id, name, price, status }) as {
+            id: string;
+            name: string;
+            price: string;
+            status: string;
+          },
+      );
   })
   products: { id: string; name: string; price: string; status: string }[] = [];
 

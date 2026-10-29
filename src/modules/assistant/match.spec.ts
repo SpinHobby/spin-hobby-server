@@ -12,6 +12,7 @@ const SHOP = [
   p('Nendoroid Hatsune Miku', { series: 'Vocaloid' }),
   p('Nendoroid Kirby', { status: 'out', priceCents: 5499 }),
   p('Chiikawa Plush', { series: 'Chiikawa', status: 'low', stockCount: 2 }),
+  p('Chiikawa Mini Figure', { series: 'Chiikawa' }),
   p('Labubu Blind Box', { status: 'pre', priceCents: 2299 }),
 ];
 
@@ -26,6 +27,8 @@ describe('the away answer', () => {
       'Nendoroid Kirby',
     ]);
     expect(matchProducts('when do you open', SHOP)).toEqual([]);
+    // "plushies" is about the plush, not every Chiikawa product
+    expect(matchProducts('chiikawa plushies', SHOP).map((x) => x.name)).toEqual(['Chiikawa Plush']);
   });
 
   it('says what it found with prices and stock, and that the talking assistant is away', () => {
