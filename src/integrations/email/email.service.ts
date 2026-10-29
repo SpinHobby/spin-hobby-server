@@ -6,6 +6,9 @@ import { storefrontUrl } from '../../config/app.config.js';
 import { fromEmail, resendApiKey } from '../../config/email.config.js';
 
 const money = (cents: unknown) => `$${(Number(cents) / 100).toFixed(2)}`;
+/** A link to the website's order-status page with the order number filled in (the shopper adds their email there). */
+const statusLink = (orderId: number) =>
+  `<p><a href="${escape(`${storefrontUrl().replace(/\/$/, '')}/order-status?order=${orderId}`)}">Check your order status</a></p>`;
 /** Transactional email through Resend: order confirmations, shipping and refund notices, and restock alerts. */
 @Injectable()
 export class EmailService {
@@ -39,6 +42,7 @@ export class EmailService {
     return (
       `<p>Good news! Your Spin Hobby order <strong>#${orderId}</strong> is on its way.</p>` +
       `<p>${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
+      statusLink(orderId) +
       `<p>Questions? Reply to this email with your order number.</p>`
     );
   }
@@ -95,6 +99,7 @@ export class EmailService {
       (hasPreorder
         ? `<p>Your pre-order items ship when they arrive from the manufacturer; we'll let you know as soon as we have a date.</p>`
         : '') +
+      statusLink(Number(order.id)) +
       `<p>Questions? Reply to this email with your order number.</p><p><a href="${escape(site)}">Back to Spin Hobby</a></p>`
     );
   }

@@ -120,7 +120,7 @@ const EXPECTED: string[] = [
   'GET /ops/database [owner]',
   'GET /orders [user]',
   'GET /orders/:id [user]',
-  'GET /orders/lookup [public]',
+  'GET /orders/lookup [public] limit 10/600s',
   'GET /product-photos/on-background [public]',
   'GET /products [public]',
   'GET /products/facets [public]',
