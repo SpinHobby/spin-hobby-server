@@ -87,3 +87,18 @@ Table: `describe_jobs` (migration `20261022120000_describe_jobs.sql`).
 - A badge in the sidebar with the number of drafts and of new photos waiting to be checked.
 - Pushing straight from the Gleamshelf editor (today it is the `push` command).
 - Other shops: the draft is shop-neutral; a connector for Shopify or WooCommerce is a second file next to `connectors/spinhobby.ts` in Gleamshelf.
+
+## The shop assistant (talking avatar on the storefront)
+
+The storefront's chat button asks `POST /assistant/ask` (public, 8 a minute per visitor). The question waits in memory for the shop's
+Gleamshelf app, which runs the models on the shop's own computer for free:
+
+- The app turns the assistant on or off with `POST /gleamshelf/assistant/profile` (its name, whether it talks, its portrait).
+- It waits for questions with `POST /gleamshelf/assistant/claim` (a long poll of up to 25 s; waiting is what counts as online) and answers
+  with `POST /gleamshelf/assistant/:id/answer` (the words, the products it is about, and the answer in its voice as a WAV).
+- A visitor waits up to 20 s. If no app is answering, or it is too slow, the shop answers with text itself (`assistant/match.ts`: the
+  products the question matches, and that the talking assistant is away).
+- `GET /assistant` says whether it is on the site (`SHOP_ASSISTANT`, on by default except in production) and answering now;
+  `GET /assistant/audio/:id` plays an answer's voice for ten minutes; `GET /assistant/portrait` is its picture.
+
+Nothing is stored: the queue lives in this one server's memory (Spin Hobby runs one), and the app sends its profile again when it reconnects.

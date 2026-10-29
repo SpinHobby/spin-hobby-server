@@ -10,6 +10,7 @@ import { SquareModule } from './integrations/square/square.module.js';
 import { StorageModule } from './integrations/storage/storage.module.js';
 import { AccountModule } from './modules/account/account.module.js';
 import { AdminModule } from './modules/admin/admin.module.js';
+import { AssistantModule } from './modules/assistant/assistant.module.js';
 import { AccessGuard } from './modules/auth/access.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CashierModule } from './modules/cashier/cashier.module.js';
@@ -39,6 +40,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     // Business features
     AccountModule,
     AdminModule,
+    AssistantModule,
     AuthModule,
     CashierModule,
     CatalogModule,

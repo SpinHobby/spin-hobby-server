@@ -53,10 +53,12 @@ import { AdminSettingsController } from './settings/admin-settings.controller.js
 import { AdminSettingsService } from './settings/admin-settings.service.js';
 import { AdminSquareController } from './square/admin-square.controller.js';
 import { AdminSquareService } from './square/admin-square.service.js';
+import { AssistantModule } from '../assistant/assistant.module.js';
 
 /** The staff/owner admin API: dashboard, products, orders, homepage, categories and merchandise. */
 @Module({
   imports: [
+    AssistantModule,
     CatalogModule,
     GoogleDriveModule,
     FxModule,

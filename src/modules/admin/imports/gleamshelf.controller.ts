@@ -31,6 +31,12 @@ import { ListingJobsService } from './listing-jobs.service.js';
 import { DescribeJobsService } from './describe-jobs.service.js';
 import { DescribeResultDto } from './dto/describe.dto.js';
 import { PhotoJobsService } from './photo-jobs.service.js';
+import { AssistantService } from '../../assistant/assistant.service.js';
+import {
+  AssistantAnswerDto,
+  AssistantClaimDto,
+  AssistantProfileDto,
+} from '../../assistant/dto/assistant.dto.js';
 
 /** The finished photo, and (from Gleamshelf 0.2 on) the product alone on a transparent background, so the shop can put it on its own backgrounds. */
 const PHOTO_AND_CUTOUT = FileFieldsInterceptor(
@@ -60,7 +66,36 @@ export class GleamshelfController {
     private readonly jobs: PhotoJobsService,
     private readonly listings: ListingJobsService,
     private readonly describe: DescribeJobsService,
+    private readonly assistant: AssistantService,
   ) {}
+
+  /** The shop assistant: the app says it is on or off, and gives the assistant's name, portrait and whether it talks. */
+  @Post('assistant/profile')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  assistantProfile(@AppToken() tokenId: string, @Body() dto: AssistantProfileDto) {
+    return { success: true, ...this.assistant.setProfile(tokenId, dto) };
+  }
+
+  /** The shop assistant: waits (up to 25 s) for a visitor's question; `question` is null when none came. Waiting keeps it online. */
+  @Post('assistant/claim')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async assistantClaim(@AppToken() tokenId: string, @Body() dto: AssistantClaimDto) {
+    return { success: true, question: await this.assistant.claim(tokenId, dto.wait) };
+  }
+
+  /** The shop assistant: the answer to a question it took, with the answer in its voice when it has one. */
+  @Post('assistant/:id/answer')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  assistantAnswer(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssistantAnswerDto) {
+    this.assistant.answer(id, dto);
+    return { success: true };
+  }
 
   /** Trades the 8-digit code from the admin for the app's token. The token is shown once. */
   @Post('pair')
