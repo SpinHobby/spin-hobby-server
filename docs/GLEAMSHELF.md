@@ -98,7 +98,7 @@ Gleamshelf app, which runs the models on the shop's own computer for free:
   with `POST /gleamshelf/assistant/:id/answer` (the words, the products it is about, and the answer in its voice as a WAV).
 - A visitor waits up to 20 s. If no app is answering, or it is too slow, the shop answers with text itself (`assistant/match.ts`: the
   products the question matches, and that the talking assistant is away).
-- `GET /assistant` says whether it is on the site (`SHOP_ASSISTANT`, on by default except in production) and answering now;
+- `GET /assistant` says whether it is on the site (`SHOP_ASSISTANT`, on by default except on the live site; staging counts as on) and answering now;
   `GET /assistant/audio/:id` plays an answer's voice for ten minutes; `GET /assistant/portrait` is its picture.
 
 Nothing is stored: the queue lives in this one server's memory (Spin Hobby runs one), and the app sends its profile again when it reconnects.
