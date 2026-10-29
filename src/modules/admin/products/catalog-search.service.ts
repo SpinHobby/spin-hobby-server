@@ -151,6 +151,8 @@ export type VariationListRow = Pick<
 
 /** The most products "select all" picks at once. */
 export const MAX_IDS = 500;
+/** The most products one page of the admin list shows (its "Per page" goes up to this). */
+export const MAX_PAGE = 500;
 
 /** Admin catalog search: every item Square (or staff) put in the catalog, with search, filters, sorting and paging. */
 @Injectable()
@@ -158,7 +160,7 @@ export class CatalogSearchService {
   constructor(private readonly db: Db) {}
 
   async search(query: CatalogSearchQuery) {
-    const limit = Math.min(Math.max(Number(query.limit ?? 50) || 50, 1), 100);
+    const limit = Math.min(Math.max(Number(query.limit ?? 50) || 50, 1), MAX_PAGE);
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
     const { filter, params, order } = this.filters(query);
 

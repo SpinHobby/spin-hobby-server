@@ -35,6 +35,7 @@ export async function prepareOwnDatabase(
     root,
     imageBase,
     reset = false,
+    moreProducts = 0,
     seedSample,
     clearSample,
     countProducts,
@@ -135,7 +136,7 @@ export async function prepareOwnDatabase(
           ).rows[0].id;
         await db.query('update public.profiles set role = $2 where id = $1', [id, role]);
       }
-      seeded = await seedSample(db, imageBase);
+      seeded = await seedSample(db, imageBase, { more: moreProducts });
       // sample shoppers too, unless this database has real (Supabase) sign-in: then it stays real people only
       try {
         seeded.people = await seedSampleAccounts(db, imageBase);
