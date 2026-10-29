@@ -60,6 +60,7 @@ const EXPECTED: string[] = [
   'DELETE /wishlist/:itemId [user]',
   'GET /admin/accounts [owner]',
   'GET /admin/accounts/:id [owner]',
+  'GET /admin/accounts/:id/activity [owner]',
   'GET /admin/accounts/roles [owner]',
   'GET /admin/audit/access [owner]',
   'GET /admin/audit/documents [auditor]',
