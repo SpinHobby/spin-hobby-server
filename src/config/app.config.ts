@@ -120,9 +120,10 @@ export const devTestPaymentsRequested = () => env('DEV_TEST_PAYMENTS') === 'true
 
 /**
  * Whether the storefront shows the talking shop assistant (answered by the shop's Gleamshelf computer, or with a text answer while it is
- * away). `SHOP_ASSISTANT=on` or `off`; on by default everywhere but the live site, where it is off until switched on.
+ * away). `SHOP_ASSISTANT=on` or `off`; on by default everywhere but the live site, where it is off until switched on. Staging runs with
+ * NODE_ENV=production too, so it is told apart by APP_ENV.
  */
 export const shopAssistantEnabled = () => {
   const v = env('SHOP_ASSISTANT');
-  return v ? v === 'on' : !isProduction();
+  return v ? v === 'on' : !isProduction() || isStaging();
 };
