@@ -135,6 +135,7 @@ export class AssistantService {
         series: r.series,
         character: r.character,
         category: r.category,
+        categoryPath: r.category_path,
         status: r.status,
         priceCents: r.price_cents,
         stockCount: r.stock_count,
