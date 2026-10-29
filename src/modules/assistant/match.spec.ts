@@ -13,6 +13,11 @@ const SHOP = [
   p('Nendoroid Kirby', { status: 'out', priceCents: 5499 }),
   p('Chiikawa Plush', { series: 'Chiikawa', status: 'low', stockCount: 2 }),
   p('Chiikawa Mini Figure', { series: 'Chiikawa' }),
+  p('Entry Grade 1/144 Strike Gundam', {
+    series: 'Gundam SEED',
+    category: 'Gunpla',
+    categoryPath: 'Model Kits › Gunpla',
+  }),
   p('Labubu Blind Box', { status: 'pre', priceCents: 2299 }),
 ];
 
@@ -27,6 +32,10 @@ describe('the away answer', () => {
       'Nendoroid Kirby',
     ]);
     expect(matchProducts('when do you open', SHOP)).toEqual([]);
+    // a question names the parent category (Model Kits) as often as the leaf (Gunpla)
+    expect(matchProducts('any gundam model kits?', SHOP).map((x) => x.name)).toEqual([
+      'Entry Grade 1/144 Strike Gundam',
+    ]);
     // "plushies" is about the plush, not every Chiikawa product
     expect(matchProducts('chiikawa plushies', SHOP).map((x) => x.name)).toEqual(['Chiikawa Plush']);
   });

@@ -10,6 +10,8 @@ export interface MatchProduct {
   series?: string | null;
   character?: string | null;
   category?: string | null;
+  /** The category with its parents, `Model Kits › Gunpla`: a question names the parent as often as the leaf. */
+  categoryPath?: string | null;
   status: string;
   priceCents: number;
   stockCount?: number | null;
@@ -46,7 +48,7 @@ export function matchProducts<P extends MatchProduct>(
     const fields: [string[], number][] = [
       [words(p.name), 3],
       [words(`${p.series ?? ''} ${p.character ?? ''}`), 2],
-      [words(p.category ?? ''), 1],
+      [words(`${p.category ?? ''} ${p.categoryPath ?? ''}`), 1],
     ];
     let score = 0,
       hits = 0;
