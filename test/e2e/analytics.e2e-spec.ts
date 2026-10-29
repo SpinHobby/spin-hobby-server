@@ -43,6 +43,12 @@ describe('site analytics', () => {
     expect(rows).toEqual([{ product_id: '' }]); // only views and carts keep a product
   });
 
+  it('counts paid orders only from the first day steps were counted', async () => {
+    await pglite.query('update public.analytics_daily set day = day + 1'); // counting "began" tomorrow
+    expect((await summary()).totals.paid).toBe(0);
+    await pglite.query('update public.analytics_daily set day = day - 1');
+  });
+
   it('keeps nothing about who sent it', async () => {
     const { rows } = await pglite.query<Record<string, unknown>>(
       'select * from public.analytics_daily limit 1',

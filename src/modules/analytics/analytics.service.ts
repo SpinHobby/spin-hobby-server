@@ -50,7 +50,10 @@ export class AnalyticsService {
     reportError(error);
   }
 
-  /** The last `days` days: totals per step with paid orders, each day's numbers, and the most viewed products. */
+  /**
+   * The last `days` days: totals per step with paid orders, each day's numbers, and the most viewed products. Paid orders count
+   * from the first day steps were counted (no earlier), so a new shop's funnel doesn't show more orders than checkouts.
+   */
   async summary(days: number) {
     if (!Number.isInteger(days) || days < 1 || days > 365)
       throw new AppError('days must be from 1 to 365.');
@@ -64,6 +67,8 @@ export class AnalyticsService {
         `select (paid_at at time zone '${SHOP_TIME_ZONE}')::date::text as day, count(*)::int as count from public.orders
           where paid_at is not null and status::text = any($1::text[])
             and (paid_at at time zone '${SHOP_TIME_ZONE}')::date >= ${since}
+            -- only from the first day steps were counted, so the funnel compares like with like
+            and (paid_at at time zone '${SHOP_TIME_ZONE}')::date >= coalesce((select min(day) from public.analytics_daily), ${since})
           group by 1 order by 1`,
         [SALE_STATUSES],
       ),
