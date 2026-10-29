@@ -115,3 +115,14 @@ export const sampleDataDisabled = () => env('SAMPLE_DATA') === 'false';
 
 /** Set only by `npm run dev:local`: checkout may complete with a test payment when no payment keys are set (see payments/test-payments.ts). */
 export const devTestPaymentsRequested = () => env('DEV_TEST_PAYMENTS') === 'true';
+
+// ---- The shop assistant ---------------------------------------------------------------------------
+
+/**
+ * Whether the storefront shows the talking shop assistant (answered by the shop's Gleamshelf computer, or with a text answer while it is
+ * away). `SHOP_ASSISTANT=on` or `off`; on by default everywhere but the live site, where it is off until switched on.
+ */
+export const shopAssistantEnabled = () => {
+  const v = env('SHOP_ASSISTANT');
+  return v ? v === 'on' : !isProduction();
+};
