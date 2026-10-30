@@ -158,6 +158,21 @@ describe('cart reminders (opt-in at checkout)', () => {
     await http.get('/reminders/stop?token=nope').expect(400);
   });
 
+  it('forgets saved carts after 7 days, reminded or not', async () => {
+    await save('old@example.com', [{ variationId: 'NIP1_V', quantity: 1 }]).expect(200);
+    await age('old@example.com', 8 * 24);
+    const mail = resend();
+    try {
+      expect((await scheduler.run()).carts).toBe(0);
+    } finally {
+      mail.restore();
+    }
+    expect(
+      (await pglite.query("select 1 from public.cart_reminders where email = 'old@example.com'"))
+        .rows,
+    ).toHaveLength(0);
+  });
+
   it('checks what it is sent', async () => {
     await save('not-an-email', [{ variationId: 'NIP1_V', quantity: 1 }]).expect(400);
     await save('a@example.com', [{ variationId: 'NIP1_V', quantity: 0 }]).expect(400);

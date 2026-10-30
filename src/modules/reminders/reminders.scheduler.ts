@@ -7,7 +7,7 @@ import { FollowService } from './follow.service.js';
 /** How often to look for cart reminders and pre-order news that are due. */
 const CHECK_MINUTES = 15;
 
-/** Sends the opt-in emails when they're due. Off in tests and without email (RESEND_API_KEY, FROM_EMAIL). */
+/** Sends the opt-in emails when they're due (none without RESEND_API_KEY and FROM_EMAIL) and forgets old saved carts. Off in tests. */
 @Injectable()
 export class RemindersScheduler implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RemindersScheduler.name);
@@ -20,10 +20,12 @@ export class RemindersScheduler implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    if (isTest() || !this.email.configured) return;
+    if (isTest()) return;
     this.timer = setInterval(() => void this.run(), CHECK_MINUTES * 60_000);
     this.timer.unref();
-    this.logger.log(`Cart reminders and pre-order news: checking every ${CHECK_MINUTES} min.`);
+    this.logger.log(
+      `Cart reminders and pre-order news: checking every ${CHECK_MINUTES} min${this.email.configured ? '' : ' (no email set up: nothing is sent)'}.`,
+    );
   }
 
   onModuleDestroy() {

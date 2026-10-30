@@ -69,6 +69,11 @@ export class CartReminderService {
 
   /** Sends the reminders that are due. Returns how many went out. */
   async sendDue(now = new Date()) {
+    // saved carts are kept FORGET_AFTER_DAYS at most (the privacy policy says so), reminded or not
+    await this.db.exec(
+      `delete from public.cart_reminders where updated_at < $1::timestamptz - make_interval(days => $2)`,
+      [now.toISOString(), FORGET_AFTER_DAYS],
+    );
     if (!this.email.configured) return 0;
     const due = await this.db.many<{ email: string; lines: SavedLine[]; token: string }>(
       `select r.email, r.lines, r.token from public.cart_reminders r
