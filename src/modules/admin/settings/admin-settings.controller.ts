@@ -1,3 +1,4 @@
+import { easypostApiKey } from '../../../config/shipping.config.js';
 import { Body, Controller, Get, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
@@ -21,14 +22,20 @@ export class AdminSettingsController {
   @Get('settings')
   async get() {
     const [settings, liveFx] = await Promise.all([this.settings.get(), this.fx.cadToUsd()]);
-    return { success: true, settings, liveFx };
+    // whether EASYPOST_API_KEY is set: live courier rates need it and the ship-from postal code (a secret, so only yes or no)
+    return {
+      success: true,
+      settings: { ...settings, easypost_configured: !!easypostApiKey() },
+      liveFx,
+    };
   }
 
   /** Changes any subset of the settings. */
   @Put('settings')
   @Access('owner')
   async update(@CurrentUser() admin: AppUser, @Body() dto: UpdateSettingsDto) {
-    return { success: true, settings: await this.settings.update(admin.id, dto) };
+    const settings = await this.settings.update(admin.id, dto);
+    return { success: true, settings: { ...settings, easypost_configured: !!easypostApiKey() } };
   }
 
   @Get('tax-rates')
