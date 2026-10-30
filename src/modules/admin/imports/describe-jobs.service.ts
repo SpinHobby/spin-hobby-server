@@ -6,6 +6,7 @@ import { SquareCatalogClient } from '../../../integrations/square/square-catalog
 import { AdminLog } from '../admin-log.service.js';
 import { AdminProductsService } from '../products/admin-products.service.js';
 import { ListingJobsService } from './listing-jobs.service.js';
+import { BarcodeFindingsService } from './barcode-findings.service.js';
 
 /**
  * Each description job with what its product has now (description, series, maker, category, character): for the admin's review
@@ -121,6 +122,7 @@ export class DescribeJobsService {
     private readonly products: AdminProductsService,
     private readonly listings: ListingJobsService,
     private readonly log: AdminLog,
+    private readonly barcodes: BarcodeFindingsService,
   ) {}
 
   /** Visible products with no real description yet: what "describe them all" would send. */
@@ -369,11 +371,15 @@ export class DescribeJobsService {
 
   async submit(tokenId: string, jobId: string, raw: Record<string, unknown>) {
     const proposal = parseProposal(raw);
-    const job = await this.db.one<{ id: string }>(
+    const job = await this.db.one<{ id: string; square_item_id: string }>(
       `update public.describe_jobs set status = 'done', result = $2, error = null, lease_until = null, progress = null, step = null
-        where id = $1 and status = 'running' and worker_id = $3 returning id`,
+        where id = $1 and status = 'running' and worker_id = $3 returning id, square_item_id`,
       [jobId, JSON.stringify(proposal), tokenId],
     );
+    // the product pages matched to the cover gave a barcode (Gleamshelf 0.7 on): offered in Admin > Barcodes when the product has none
+    const barcode = raw.barcode as { code?: unknown; source?: unknown } | null | undefined;
+    if (job && barcode && typeof barcode === 'object')
+      await this.barcodes.offer(job.square_item_id, barcode.code, barcode.source);
     if (!job) {
       if (!(await this.db.one('select 1 from public.describe_jobs where id = $1', [jobId])))
         throw notFound('Job');

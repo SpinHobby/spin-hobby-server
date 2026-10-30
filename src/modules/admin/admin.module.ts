@@ -29,6 +29,8 @@ import { AdminListingJobsController } from './imports/admin-listing-jobs.control
 import { ListingJobsService } from './imports/listing-jobs.service.js';
 import { AdminDescribeJobsController } from './imports/admin-describe-jobs.controller.js';
 import { DescribeJobsService } from './imports/describe-jobs.service.js';
+import { BarcodeFindingsService } from './imports/barcode-findings.service.js';
+import { AdminBarcodesController } from './imports/admin-barcodes.controller.js';
 import { AdminCategoriesController } from './categories/admin-categories.controller.js';
 import { AdminCategoriesService } from './categories/admin-categories.service.js';
 import { CategorySortingService } from './categories/category-sorting.service.js';
@@ -92,6 +94,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminPhotoBackgroundsController,
     AdminListingJobsController,
     AdminDescribeJobsController,
+    AdminBarcodesController,
     GleamshelfController,
   ],
   providers: [
@@ -102,6 +105,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     PhotoJobsService,
     ListingJobsService,
     DescribeJobsService,
+    BarcodeFindingsService,
     GleamshelfTokenGuard,
     SeriesService,
     CatalogSearchService,
