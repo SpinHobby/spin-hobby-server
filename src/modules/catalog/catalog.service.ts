@@ -296,8 +296,11 @@ export class CatalogService {
   async feed() {
     return this.db.many<StorefrontProductRow & { category_path: string | null }>(
       `${CATEGORY_PATHS}
-      select p.*, cp.path as category_path
-      from public.storefront_products p left join cat_paths cp on cp.id = p.category_id
+      -- the barcode: ours (product details) first, else the one Square holds on the variation (scanned or typed into Square)
+      select p.*, coalesce(nullif(p.jan_code, ''), nullif(v.upc, '')) as jan_code, cp.path as category_path
+      from public.storefront_products p
+      left join cat_paths cp on cp.id = p.category_id
+      left join public.catalog_variations v on v.square_variation_id = p.variation_id
       order by p.created_at desc, p.id
       limit 10000`,
     );

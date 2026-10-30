@@ -21,6 +21,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { OpsModule } from './modules/ops/ops.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
+import { RemindersModule } from './modules/reminders/reminders.module.js';
 import { SampleModule } from './modules/sample/sample.module.js';
 import { SquareSyncModule } from './modules/square-sync/square-sync.module.js';
 import { StoreModule } from './modules/store/store.module.js';
@@ -52,6 +53,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     OpsModule,
     OrdersModule,
     PaymentsModule,
+    RemindersModule,
     SampleModule,
     SquareSyncModule,
     StoreModule,

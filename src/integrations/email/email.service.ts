@@ -1,8 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { escapeHtml as escape } from '../../common/html.js';
-import type { OrderItemRow, OrderRow } from '../../database/rows.js';
-import { storefrontUrl } from '../../config/app.config.js';
+import type { OrderItemRow, OrderRow, StorefrontProductRow } from '../../database/rows.js';
+import { slugify } from '../../modules/catalog/slug.js';
+import { port, publicApiUrl, renderExternalUrl, storefrontUrl } from '../../config/app.config.js';
 import { fromEmail, resendApiKey } from '../../config/email.config.js';
 
 const money = (cents: unknown) =>
@@ -10,6 +11,22 @@ const money = (cents: unknown) =>
 /** A link to the website's order-status page with the order number filled in (the shopper adds their email there). */
 const statusLink = (orderId: number) =>
   `<p><a href="${escape(`${storefrontUrl().replace(/\/$/, '')}/order-status?order=${orderId}`)}">Check your order status</a></p>`;
+const site = () => storefrontUrl().replace(/\/$/, '');
+/** Where a stop link lands: a small page on the API itself (works even if the website is down). */
+const api = () =>
+  (publicApiUrl() ?? renderExternalUrl() ?? `http://localhost:${port()}`).replace(/\/$/, '');
+const productUrl = (p: StorefrontProductRow) => {
+  const slug = slugify(p.name);
+  return `${site()}/product/${encodeURIComponent(p.id)}${slug ? `/${slug}` : ''}`;
+};
+/** One product as an email row: picture, name (linked) and price. */
+const productRow = (p: StorefrontProductRow, quantity?: number) =>
+  `<tr><td style="padding:6px 12px 6px 0">${p.images?.[0] ? `<img src="${escape(p.images[0])}" alt="" width="64" height="64" style="object-fit:contain">` : ''}</td>` +
+  `<td style="padding:6px 0"><a href="${escape(productUrl(p))}">${escape(p.name)}</a>${quantity && quantity > 1 ? ` × ${quantity}` : ''}<br>${money(p.price_cents)} ${escape(p.currency || 'CAD')}</td></tr>`;
+/** Every email a shopper opted in to says who sent it and why (Canada's anti-spam law). */
+const optInFooter = (why: string, stopUrl: string, stopText: string) =>
+  `<p style="font-size:12px">${why} <a href="${escape(stopUrl)}">${stopText}</a>. Spin Hobby, Canada · ${escape(site())}</p>`;
+
 /** Transactional email through Resend: order confirmations, shipping and refund notices, and restock alerts. */
 @Injectable()
 export class EmailService {
@@ -37,6 +54,47 @@ export class EmailService {
   restockHtml(productName: string) {
     const site = storefrontUrl();
     return `<p><strong>${escape(productName)}</strong> is back in stock at Spin Hobby.</p><p><a href="${escape(site)}">Shop now</a></p>`;
+  }
+
+  /** "You left something in your cart": the items still for sale, a link that opens the same cart again, and a stop link. */
+  cartReminderHtml(items: { product: StorefrontProductRow; quantity: number }[], token: string) {
+    return (
+      `<p>You left these in your Spin Hobby cart. They're still here, but popular items and pre-orders can go fast.</p>` +
+      `<table style="border-collapse:collapse">${items.map((i) => productRow(i.product, i.quantity)).join('')}</table>` +
+      `<p><a href="${escape(`${site()}/checkout?restore=${token}`)}"><strong>Finish checking out</strong></a></p>` +
+      optInFooter(
+        "You're getting this one reminder because you asked for it at checkout.",
+        `${api()}/reminders/stop?token=${token}`,
+        'Stop cart reminders',
+      )
+    );
+  }
+
+  /** New pre-orders from the series and makers someone follows; a stop link for each follow. */
+  preorderNewsHtml(
+    products: StorefrontProductRow[],
+    follows: { kind: string; name: string; token: string }[],
+  ) {
+    const rows = products
+      .map((p) => {
+        const until = p.order_by_date
+          ? ` · order by ${new Date(p.order_by_date).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}`
+          : '';
+        return productRow(p).replace('</td></tr>', `${until}</td></tr>`);
+      })
+      .join('');
+    const stops = follows
+      .map(
+        (f) =>
+          `<a href="${escape(`${api()}/follows/stop?token=${f.token}`)}">Stop news about ${escape(f.name)}</a>`,
+      )
+      .join(' · ');
+    return (
+      `<p>New pre-order${products.length === 1 ? '' : 's'} at Spin Hobby from what you follow:</p>` +
+      `<table style="border-collapse:collapse">${rows}</table>` +
+      `<p>Pre-orders are reserved now and ship on release.</p>` +
+      `<p style="font-size:12px">You're getting this because you asked for news about ${follows.map((f) => escape(f.name)).join(', ')}. ${stops}. Spin Hobby, Canada · ${escape(site())}</p>`
+    );
   }
 
   shippedHtml(orderId: number, carrier: string | null, tracking: string) {
