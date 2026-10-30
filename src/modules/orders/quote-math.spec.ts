@@ -24,6 +24,20 @@ const row = (overrides: Partial<QuoteRow> = {}): QuoteRow => ({
 const price = (v: QuoteRow, requested: number, held = 0) => priceCartLine(v, requested, held, NOW);
 
 describe('priceCartLine: normal items', () => {
+  it('never sells an item with no price (Square variable price comes through as 0)', () => {
+    for (const price_cents of [0, -1]) {
+      const r = price(row({ price_cents }), 1);
+      expect(r.line).toBeNull();
+      expect(r.warnings).toEqual([
+        {
+          variationId: 'VAR1',
+          code: 'NO_PRICE',
+          message: 'Rem figure has no online price yet. Contact us to buy it.',
+        },
+      ]);
+    }
+  });
+
   it('prices the requested quantity from the database price, in whole cents', () => {
     expect(price(row(), 2)).toEqual({
       line: {

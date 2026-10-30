@@ -5,7 +5,7 @@ import type { StorefrontProductRow } from '../../database/rows.js';
 /** Orders that count as bought: paid, not cancelled or refunded. */
 const BOUGHT = `o.paid_at is not null and o.status in ('paid', 'preorder_reserved', 'fulfilled', 'shipped')`;
 /** What a shopper can still buy (not sold out, not a closed pre-order). */
-const BUYABLE = `p.status in ('in', 'low', 'pre')`;
+const BUYABLE = `p.status in ('in', 'low', 'pre') and p.price_cents > 0`;
 /** Add-ons are small extras: at most this much each. */
 export const ADD_ON_MAX_CENTS = 3000;
 

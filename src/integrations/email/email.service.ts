@@ -17,7 +17,7 @@ const api = () =>
   (publicApiUrl() ?? renderExternalUrl() ?? `http://localhost:${port()}`).replace(/\/$/, '');
 const productUrl = (p: StorefrontProductRow) => {
   const slug = slugify(p.name);
-  return `${site()}/product/${encodeURIComponent(p.id)}${slug ? `/${slug}` : ''}`;
+  return `${site()}/product/${encodeURIComponent(p.id.toLowerCase())}${slug ? `/${slug}` : ''}`;
 };
 /** One product as an email row: picture, name (linked) and price. */
 const productRow = (p: StorefrontProductRow, quantity?: number) =>

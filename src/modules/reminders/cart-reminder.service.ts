@@ -112,7 +112,7 @@ export class CartReminderService {
     const quantities = new Map(lines.map((l) => [l.variationId, l.quantity]));
     const rows = await this.db.many<StorefrontProductRow>(
       `select * from public.storefront_products p
-        where p.variation_id = any($1::text[]) and p.status in ('in', 'low', 'pre')`,
+        where p.variation_id = any($1::text[]) and p.status in ('in', 'low', 'pre') and p.price_cents > 0`,
       [[...quantities.keys()]],
     );
     return rows.map((product) => ({

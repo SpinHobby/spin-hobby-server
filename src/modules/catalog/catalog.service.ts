@@ -306,9 +306,10 @@ export class CatalogService {
     );
   }
 
+  /** One product by id, in any case: product links use the id in lower case (Netlify serves pages from lower-case paths). */
   async product(id: string): Promise<StorefrontProductRow | null> {
     return this.db.one<StorefrontProductRow>(
-      'select * from public.storefront_products where id = $1',
+      'select * from public.storefront_products where id = $1 or lower(id) = lower($1) order by (id = $1) desc limit 1',
       [id],
     );
   }

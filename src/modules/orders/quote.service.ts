@@ -34,7 +34,7 @@ export interface QuoteLine {
 }
 export interface QuoteWarning {
   variationId: string;
-  code: 'OUT_OF_STOCK' | 'QTY_REDUCED' | 'PREORDER_CLOSED' | 'LIMIT_EXCEEDED';
+  code: 'OUT_OF_STOCK' | 'QTY_REDUCED' | 'PREORDER_CLOSED' | 'LIMIT_EXCEEDED' | 'NO_PRICE';
   message: string;
 }
 export interface Quote {

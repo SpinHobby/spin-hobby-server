@@ -53,6 +53,15 @@ export function priceCartLine(
     });
     return { line: null, warnings };
   }
+  // No price (Square's "variable price" items come through as 0, priced at the till): never sold online for nothing
+  if (!(Number(v.price_cents) > 0)) {
+    warnings.push({
+      variationId,
+      code: 'NO_PRICE',
+      message: `${name} has no online price yet. Contact us to buy it.`,
+    });
+    return { line: null, warnings };
+  }
   if (closed) {
     warnings.push({
       variationId,
