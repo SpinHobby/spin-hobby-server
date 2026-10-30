@@ -124,12 +124,26 @@ export function cartTotals(
       : goods >= Number(settings.free_shipping_threshold_cents)
         ? 0
         : Number(settings.shipping_standard_cents);
-  const taxCents = Math.round((goods + shippingCents) * taxRate);
+  return totalsWithShipping(lines, shippingCents, taxRate, discountCents);
+}
+
+/** The same totals for a shipping price already chosen (a courier option from shipping-rates.service.ts). */
+export function totalsWithShipping(
+  lines: Pick<QuoteLine, 'lineCents'>[],
+  shippingCents: number,
+  taxRate: number,
+  discountCents = 0,
+) {
+  const subtotalCents = lines.reduce((total, l) => total + l.lineCents, 0);
+  const discount = Math.min(Math.max(0, discountCents), subtotalCents);
+  const goods = subtotalCents - discount;
+  const shipping = Math.max(0, Math.round(shippingCents));
+  const taxCents = Math.round((goods + shipping) * taxRate);
   return {
     subtotalCents,
     discountCents: discount,
-    shippingCents,
+    shippingCents: shipping,
     taxCents,
-    totalCents: goods + shippingCents + taxCents,
+    totalCents: goods + shipping + taxCents,
   };
 }

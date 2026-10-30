@@ -151,7 +151,7 @@ export class EmailService {
         : `${handling.days_min}–${handling.days_max}`;
     return (
       `<p>Thanks for your order! We've received your payment for order <strong>#${escape(order.id)}</strong>.</p>` +
-      `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${Number(order.discount_cents) ? total(`Discount${order.discount_code ? ` (${escape(order.discount_code)})` : ''}`, -Number(order.discount_cents)) : ''}${total(`Shipping (${order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
+      `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${Number(order.discount_cents) ? total(`Discount${order.discount_code ? ` (${escape(order.discount_code)})` : ''}`, -Number(order.discount_cents)) : ''}${total(`Shipping (${order.shipping_carrier ? escape(`${order.shipping_carrier} ${order.shipping_service ?? ''}`.trim()) : order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
       `${total('Tax', order.tax_cents)}${total('Total (CAD)', order.total_cents, true)}</table>` +
       (address ? `<p><strong>Shipping to</strong><br>${address}</p>` : '') +
       `<p>We'll pack your order within ${handling_} business days and email you tracking once it ships.</p>` +

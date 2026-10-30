@@ -2,6 +2,7 @@ import { AppError } from '../../../common/errors.js';
 import { Rule } from '../../../common/validation/decorators.js';
 import { positiveInteger, stringValue } from '../../../common/validation/rules.js';
 import type { QuoteInput } from '../../orders/quote.service.js';
+import { normalizePostal } from '../../shipping/shipping-math.js';
 
 export const MAX_CART_LINES = 40;
 export const MAX_LINE_QUANTITY = 99;
@@ -54,6 +55,11 @@ export function discountCode(value: unknown): string | null {
   return value.trim() || null;
 }
 
+/** An optional short text (a courier option id, a city): at most `max` characters, else null. */
+export function optionalShort(value: unknown, max: number): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null;
+}
+
 /** A whole cart request as sent by the storefront (used where the cart is nested inside another request). */
 export function cartRequest(value: unknown): QuoteInput {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -65,6 +71,17 @@ export function cartRequest(value: unknown): QuoteInput {
     country: shipToCountry(cart.country),
     province: shipToProvince(cart.province),
     discountCode: discountCode(cart.discountCode),
+    ...shippingTo(cart),
+  };
+}
+
+/** The postal code (normalized; a malformed one is treated as not given yet), city and courier option of a cart request. */
+export function shippingTo(cart: Record<string, unknown>) {
+  const country = cart.country === 'US' ? 'US' : 'CA';
+  return {
+    postalCode: normalizePostal(country, cart.postalCode),
+    city: optionalShort(cart.city, 80),
+    shippingOption: optionalShort(cart.shippingOption, 80),
   };
 }
 
@@ -97,4 +114,15 @@ export class QuoteRequestDto implements QuoteInput {
   /** A discount code, as typed (optional). */
   @Rule(discountCode)
   discountCode: string | null = null;
+
+  /** The postal or ZIP code, for live courier rates (optional; a malformed one is ignored). */
+  @Rule((v) => (typeof v === 'string' ? v.slice(0, 12) : null))
+  postalCode: string | null = null;
+
+  @Rule((v) => optionalShort(v, 80))
+  city: string | null = null;
+
+  /** The courier option picked from a quote (its id), optional. */
+  @Rule((v) => optionalShort(v, 80))
+  shippingOption: string | null = null;
 }
