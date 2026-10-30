@@ -8,8 +8,8 @@ How we work on this repo. It's short on purpose.
 your branch ──► pull request into `staging` ──► test on the staging site ──► merge `staging` into `production`
 ```
 
-- **`production` is the live site**: real customers and real money. Only the owner merges into it, and the owner
-  deploys it by hand (see [Releasing](#releasing-to-the-live-site-owner-only)).
+- **`production` is the live site**: real customers and real money. Only the owner merges into it, and **a push to it
+  goes live within a couple of minutes** (see [Releasing](#releasing-to-the-live-site-owner-only)).
 - **`staging`** deploys automatically to the staging site (fake payments, sample data), so merged work can be tried there.
 - Anything you push to a branch is visible to the team.
 
@@ -133,36 +133,48 @@ Ask for a second pair of eyes before changing any of these. They involve money o
 
 ## Releasing to the live site (owner only)
 
-The live site never updates by itself: Netlify and Render are set to deploy `production` only when the owner presses
-deploy, so a mistaken push to `production` changes nothing for customers.
+**A push to `production` is a release.** Render (the live API) and Netlify (the website) both deploy `production` as soon
+as it changes: the API is live in about 90 seconds, the website in under a minute. There is no button to press and no
+waiting room, so do the checks *before* pushing.
 
-**One-time setup:**
+**Before each release:**
 
-- Netlify (website): **Deploys → Stop auto publishing**. New production builds still run but wait, unpublished.
-- Render (the live API, the service at `spin-hobby-server.onrender.com`): **Settings → Auto-Deploy → Off**. Staging keeps deploying automatically.
-- GitHub: interns get the **Write** role on both repos (Settings → Collaborators and teams).
+1. Check the change on the staging site, and that staging's `/health` says `ok`
+   (`https://spin-hobby-server-staging.onrender.com/health`).
+2. See which database migrations the release brings, and read each one for anything that drops, deletes or rewrites data:
+   ```sh
+   git fetch && git diff --name-status origin/production origin/staging -- supabase/migrations
+   ```
+   Only added files (`A`) should be listed: never edit or delete a migration that has already run.
+3. Back up the live database (Supabase dashboard → the production project → **Database → Backups**, or with `pg_dump` and
+   the project's session-pooler address). Keep the file outside the repos: it holds customers' details.
 
 **Each release** (the server first when it changed, because the website depends on it):
 
-1. Check the change on the staging site.
-2. Move `staging` onto `production` and check GitHub has what you expect:
+1. Move `staging` onto `production`. `staging` should already contain everything on `production`, so this is a fast-forward;
+   if git says it can't fast-forward, stop and find out what is on `production` that `staging` doesn't have.
    ```sh
-   git switch production && git pull
-   git merge origin/staging
-   git push origin production
+   git fetch
+   git merge-base --is-ancestor origin/production origin/staging && git push origin origin/staging:production
    git fetch && git log origin/production -1      # the commit you meant to release
    ```
-3. Server: Render → the live API service → **Manual Deploy → Deploy latest commit**. When it says Live, open
-   `https://spin-hobby-server.onrender.com/health`.
-4. Website: the same steps in `spin-hobby`, then Netlify → **Deploys** → the newest production deploy → **Publish deploy**.
-5. Open the live site and try what changed.
+2. Server: wait until `https://spin-hobby-server.onrender.com/health` shows the new `version` (the commit), with
+   `migrations` `ok` and nothing `pending`. The API applies new migrations itself as it starts.
+3. Website: the same push in `spin-hobby`; the live site has the new build when its page loads a new `assets/index-….js`.
+4. Open the live site and try what changed (and a page or two that didn't).
 
 **If something is wrong:**
 
-- *Someone pushed to `production` by mistake* (nothing went live): put your good copy back,
-  `git push --force origin <good-commit>:production`, then tell them.
 - *A release broke the live site:* Netlify → **Deploys** → the previous deploy → **Publish deploy**; Render → **Events** →
-  the previous deploy → **Rollback**. Then fix it on `staging` as usual.
+  the previous deploy → **Rollback**. Then fix it on `staging` as usual and release again. Rolling back the code doesn't
+  undo a migration; migrations only add, so the older code keeps working with the newer database.
+- *Someone pushed to `production` by mistake:* it is already live. Push the last good commit back
+  (`git push --force origin <good-commit>:production`, which deploys it), check the live site, then tell them.
+
+To make the release a deliberate step again, turn automatic deploys off: Render → the live API → **Settings →
+Auto-Deploy → Off** (and `autoDeploy: false` in `render.yaml`), and Netlify → **Deploys → Stop auto publishing**. Then
+each release ends with Render's **Manual Deploy** and Netlify's **Publish deploy**. A GitHub rule that only the owner may
+push to `production` (Settings → Rules, where the plan allows it) stops a mistaken push before it happens.
 
 ## Where to read more
 

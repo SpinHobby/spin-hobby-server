@@ -46,7 +46,10 @@ export const SORTS: Record<string, string> = {
   category: 'lower(category)',
   status: `array_position(array['in','low','out','pre','closed','unavailable','hidden','retired'], state)`,
   updated: 'coalesce(square_updated_at, updated_at)',
+  /** Added: Square's date, or ours for a product Square doesn't know (the date the list shows). */
   created: 'created_at',
+  /** Added to our database: the first sync, or the day it was entered here. */
+  added_here: 'added_here_at',
   front: 'front_rank',
   release: 'order_by_date',
   alerts: 'alerts_waiting',
@@ -64,7 +67,7 @@ export const ITEMS = `with recursive ${CATEGORY_PATHS},
 items as (
   select
     p.square_item_id as id, p.default_variation_id as variation_id, p.name, p.description, p.source,
-    p.is_active, p.is_visible, p.replaced_by, coalesce(p.square_created_at, p.created_at) as created_at, p.updated_at, p.synced_at, p.square_updated_at,
+    p.is_active, p.is_visible, p.replaced_by, coalesce(p.square_created_at, p.created_at) as created_at, p.square_created_at, p.created_at as added_here_at, p.updated_at, p.synced_at, p.square_updated_at,
     v.price_cents, v.sku, coalesce(v.is_sellable, false) as sellable,
     coalesce(m.availability, 'auto') as availability, m.series, m.series_id, m.character, m.manufacturer, coalesce(m.jan_code, v.upc) as jan_code,
     m.compare_at_cents, m.order_by_date, m.release_month, m.max_per_customer,
@@ -110,6 +113,7 @@ export type ItemRow = Pick<
   | 'updated_at'
   | 'synced_at'
   | 'square_updated_at'
+  | 'square_created_at'
 > &
   Pick<
     ProductMetadataRow,
@@ -141,6 +145,8 @@ export type ItemRow = Pick<
     variation_count: number;
     alerts_waiting: number;
     has_photo: boolean;
+    /** When the product reached our database (`created_at` above is Square's date when known). */
+    added_here_at: string;
   };
 
 /** A variation as listed under its item (`catalog_variations` plus its stock). */
@@ -149,8 +155,13 @@ export type VariationListRow = Pick<
   'square_item_id' | 'square_variation_id' | 'name' | 'sku' | 'price_cents' | 'is_sellable'
 > & { quantity: InventorySnapshotRow['quantity'] };
 
+/** The shop's days ("added between" dates) are Toronto days. */
+const SHOP_TIME_ZONE = 'America/Toronto';
+
 /** The most products "select all" picks at once. */
 export const MAX_IDS = 500;
+/** The most products one page of the admin list shows (its "Per page" goes up to this). */
+export const MAX_PAGE = 500;
 
 /** Admin catalog search: every item Square (or staff) put in the catalog, with search, filters, sorting and paging. */
 @Injectable()
@@ -158,7 +169,7 @@ export class CatalogSearchService {
   constructor(private readonly db: Db) {}
 
   async search(query: CatalogSearchQuery) {
-    const limit = Math.min(Math.max(Number(query.limit ?? 50) || 50, 1), 100);
+    const limit = Math.min(Math.max(Number(query.limit ?? 50) || 50, 1), MAX_PAGE);
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
     const { filter, params, order } = this.filters(query);
 
@@ -257,6 +268,21 @@ export class CatalogSearchService {
           `greatest(created_at, coalesce(square_updated_at, updated_at)) >= now() - make_interval(hours => ${n}::int)`,
         hours,
       );
+    }
+    // Added between two days (YYYY-MM-DD, both included, in the shop's time zone), by Square's date or ours.
+    const addedBy = query.addedBy || 'square';
+    if (addedBy !== 'square' && addedBy !== 'here')
+      throw new AppError('addedBy must be square or here.');
+    const addedColumn = addedBy === 'square' ? 'created_at' : 'added_here_at';
+    for (const [key, op] of [
+      ['addedFrom', '>='],
+      ['addedTo', '<='],
+    ] as const) {
+      const day = query[key];
+      if (day == null || day === '') continue;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day)))
+        throw new AppError(`${key} must be a date (YYYY-MM-DD).`);
+      add((n) => `(${addedColumn} at time zone '${SHOP_TIME_ZONE}')::date ${op} ${n}::date`, day);
     }
     for (const [key, op] of [
       ['min', '>='],
@@ -361,6 +387,8 @@ export class CatalogSearchService {
       rank: r.rank,
       maxPerCustomer: r.max_per_customer,
       createdAt: r.created_at,
+      squareCreatedAt: r.square_created_at,
+      addedHereAt: r.added_here_at,
       janCode: r.jan_code,
       availability: r.availability,
       isFeatured: r.is_featured,

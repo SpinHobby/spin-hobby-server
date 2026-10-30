@@ -52,6 +52,18 @@ describe('storefront catalog', () => {
     expect(fig.createdAt).toEqual(expect.any(String));
   });
 
+  it("gives the feed Square's barcode when the product details have none (Google Shopping's GTIN)", async () => {
+    await pglite.query(
+      "update public.catalog_variations set upc = '4549660000001' where square_variation_id = 'PRZ1_V'",
+    );
+    const items = (await http.get('/products/feed').expect(200)).body.items;
+    expect(items.find((p: any) => p.id === 'PRZ1').janCode).toBe('4549660000001');
+    expect(items.find((p: any) => p.id === 'FIG1').janCode).toBe('4580000000001'); // ours wins
+    await pglite.query(
+      "update public.catalog_variations set upc = null where square_variation_id = 'PRZ1_V'",
+    );
+  });
+
   it('filters by series address form, whatever the punctuation', async () => {
     expect((await http.get('/products?series=re-zero')).body.items.map((p: any) => p.id)).toEqual([
       'FIG1',

@@ -38,6 +38,11 @@ export const renderExternalUrl = () => env('RENDER_EXTERNAL_URL');
 /** The storefront's address, for links in emails. */
 export const storefrontUrl = () => env('STOREFRONT_URL') ?? 'https://spinhobby.com';
 
+/** A Netlify build hook for the website: when set, the API asks for a rebuild once the products shoppers see have changed. */
+export const siteBuildHookUrl = () => env('SITE_BUILD_HOOK_URL');
+/** At most one website rebuild this often (hours), to stay inside Netlify's build minutes. */
+export const siteRebuildMinHours = () => envNumber('SITE_REBUILD_MIN_HOURS', 6);
+
 /** Log one line per request (default on; off in tests). */
 export const requestLoggingEnabled = () => !isTest() && env('LOG_REQUESTS') !== 'false';
 

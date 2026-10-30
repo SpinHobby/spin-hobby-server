@@ -2,6 +2,12 @@ import { AppError } from '../../../../common/errors.js';
 import { Flag, OptionalText, Provided, Rule } from '../../../../common/validation/decorators.js';
 import { playlistId } from '../playlist.js';
 
+const positiveWhole = (field: string) => (value: unknown) => {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 100_000) throw new AppError(`Invalid ${field}.`);
+  return n;
+};
+
 const wholeNumber = (field: string) => (value: unknown) => {
   if (!Number.isInteger(Number(value)) || Number(value) < 0)
     throw new AppError(`Invalid ${field}.`);
@@ -61,6 +67,54 @@ export class UpdateSettingsDto {
   @Provided()
   @Rule(wholeNumber('handling_days_max'))
   handling_days_max?: number;
+
+  /** Where parcels leave from: a Canadian postal code (live courier rates need it; blank turns them off). */
+  @Provided()
+  @Rule((value) => {
+    if (value === null || value === '') return null;
+    const raw = typeof value === 'string' ? value.toUpperCase().replace(/\s+/g, '') : '';
+    if (!/^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(raw))
+      throw new AppError('Enter a Canadian postal code, like T2P 1J9.');
+    return `${raw.slice(0, 3)} ${raw.slice(3)}`;
+  })
+  ship_from_postal?: string | null;
+
+  @Provided()
+  @OptionalText(80)
+  ship_from_city?: string | null;
+
+  /** Province code, e.g. AB. */
+  @Provided()
+  @Rule((value) => {
+    if (value === null || value === '') return null;
+    const code = typeof value === 'string' ? value.toUpperCase().trim() : '';
+    if (!/^(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)$/.test(code))
+      throw new AppError('Enter a province code, like AB.');
+    return code;
+  })
+  ship_from_province?: string | null;
+
+  /** The default packed size of one item, when neither the product nor its category gives one (grams and cm, above 0). */
+  @Provided()
+  @Rule(positiveWhole('parcel_weight_g'))
+  parcel_weight_g?: number;
+
+  @Provided()
+  @Rule(positiveWhole('parcel_length_cm'))
+  parcel_length_cm?: number;
+
+  @Provided()
+  @Rule(positiveWhole('parcel_width_cm'))
+  parcel_width_cm?: number;
+
+  @Provided()
+  @Rule(positiveWhole('parcel_height_cm'))
+  parcel_height_cm?: number;
+
+  /** What the box and padding add to every order (grams). */
+  @Provided()
+  @Rule(wholeNumber('packaging_weight_g'))
+  packaging_weight_g?: number;
 
   /** CAD to USD rate for the USD display price when the Bank of Canada's live rate can't be reached. Above 0. */
   @Provided()

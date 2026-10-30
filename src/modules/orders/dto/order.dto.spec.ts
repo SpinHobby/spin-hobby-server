@@ -24,17 +24,20 @@ describe('OrderLookupQuery', () => {
   const query = (value: unknown) =>
     pipe.transform(value, { type: 'query', metatype: OrderLookupQuery });
 
-  it('lowercases the email', async () => {
-    expect(await query({ paymentId: 'PAY-1', email: ' Fan@Example.com ' })).toMatchObject({
-      paymentId: 'PAY-1',
+  it('reads the order number and lowercases the email', async () => {
+    expect(await query({ order: '42', email: ' Fan@Example.com ' })).toMatchObject({
+      order: 42,
       email: 'fan@example.com',
     });
   });
 
-  it('asks for the payment id first, then the email', async () => {
-    await expect(query({})).rejects.toMatchObject({ message: 'paymentId is required.' });
-    await expect(query({ paymentId: 'PAY-1' })).rejects.toMatchObject({
-      message: 'email is required.',
+  it('asks for the order number first, then a real email', async () => {
+    await expect(query({})).rejects.toMatchObject({
+      message: 'order must be between 1 and 2147483647.',
+    });
+    await expect(query({ order: '42' })).rejects.toMatchObject({ message: 'email is required.' });
+    await expect(query({ order: '42', email: 'nope' })).rejects.toMatchObject({
+      message: 'Enter a valid email address.',
     });
   });
 });

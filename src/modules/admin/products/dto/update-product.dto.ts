@@ -1,3 +1,4 @@
+import { parcelField } from '../../../shipping/parcel-fields.js';
 import { AppError } from '../../../../common/errors.js';
 import { Provided, Rule } from '../../../../common/validation/decorators.js';
 import { categoryId } from '../../categories/category-id.js';
@@ -56,6 +57,23 @@ export class UpdateProductDto {
   @Provided()
   @Rule(clearable)
   jan_code?: string | null;
+
+  /** This product's packed size (grams, cm) for courier rates, when its category's is wrong for it. Null clears. */
+  @Provided()
+  @Rule(parcelField('parcel_weight_g'))
+  parcel_weight_g?: number | null;
+
+  @Provided()
+  @Rule(parcelField('parcel_length_cm'))
+  parcel_length_cm?: number | null;
+
+  @Provided()
+  @Rule(parcelField('parcel_width_cm'))
+  parcel_width_cm?: number | null;
+
+  @Provided()
+  @Rule(parcelField('parcel_height_cm'))
+  parcel_height_cm?: number | null;
 
   /** The "was" price in cents, shown struck through. */
   @Provided()

@@ -24,6 +24,20 @@ const row = (overrides: Partial<QuoteRow> = {}): QuoteRow => ({
 const price = (v: QuoteRow, requested: number, held = 0) => priceCartLine(v, requested, held, NOW);
 
 describe('priceCartLine: normal items', () => {
+  it('never sells an item with no price (Square variable price comes through as 0)', () => {
+    for (const price_cents of [0, -1]) {
+      const r = price(row({ price_cents }), 1);
+      expect(r.line).toBeNull();
+      expect(r.warnings).toEqual([
+        {
+          variationId: 'VAR1',
+          code: 'NO_PRICE',
+          message: 'Rem figure has no online price yet. Contact us to buy it.',
+        },
+      ]);
+    }
+  });
+
   it('prices the requested quantity from the database price, in whole cents', () => {
     expect(price(row(), 2)).toEqual({
       line: {
@@ -174,6 +188,7 @@ describe('cartTotals', () => {
     // 3900 + 899 = 4799; 5% tax = 239.95 -> 240
     expect(cartTotals(lines(3900), 'standard', settings, 0.05)).toEqual({
       subtotalCents: 3900,
+      discountCents: 0,
       shippingCents: 899,
       taxCents: 240,
       totalCents: 3900 + 899 + 240,
@@ -207,10 +222,28 @@ describe('cartTotals', () => {
   it('prices an empty cart as just shipping', () => {
     expect(cartTotals([], 'standard', settings, 0)).toEqual({
       subtotalCents: 0,
+      discountCents: 0,
       shippingCents: 899,
       taxCents: 0,
       totalCents: 899,
     });
+  });
+
+  it('takes a discount off the goods before tax, and judges free shipping after it', () => {
+    // 8000 - 1000 = 7000: under the 7500 threshold, so standard shipping applies; tax on 7000 + 899 at 5% = 394.95 -> 395
+    expect(cartTotals(lines(8000), 'standard', settings, 0.05, 1000)).toEqual({
+      subtotalCents: 8000,
+      discountCents: 1000,
+      shippingCents: 899,
+      taxCents: 395,
+      totalCents: 7000 + 899 + 395,
+    });
+  });
+
+  it('never discounts more than the goods', () => {
+    const t = cartTotals(lines(500), 'express', settings, 0, 9999);
+    expect(t.discountCents).toBe(500);
+    expect(t.totalCents).toBe(1999);
   });
 
   it('accepts numeric strings from the database', () => {

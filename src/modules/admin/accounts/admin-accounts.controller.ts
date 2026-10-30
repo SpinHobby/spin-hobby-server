@@ -30,6 +30,12 @@ export class AdminAccountsController {
     return { success: true, account: await this.accounts.get(id) };
   }
 
+  /** What the account has done: orders (with items and timeline), favourites, addresses, restock alerts. */
+  @Get(':id/activity')
+  async activity(@Param('id', new ParseUUIDPipe()) id: string) {
+    return { success: true, ...(await this.accounts.activity(id)) };
+  }
+
   /** Promote or demote. */
   @Put(':id/role')
   async setRole(

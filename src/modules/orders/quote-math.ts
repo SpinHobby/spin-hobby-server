@@ -53,6 +53,15 @@ export function priceCartLine(
     });
     return { line: null, warnings };
   }
+  // No price (Square's "variable price" items come through as 0, priced at the till): never sold online for nothing
+  if (!(Number(v.price_cents) > 0)) {
+    warnings.push({
+      variationId,
+      code: 'NO_PRICE',
+      message: `${name} has no online price yet. Contact us to buy it.`,
+    });
+    return { line: null, warnings };
+  }
   if (closed) {
     warnings.push({
       variationId,
@@ -100,9 +109,10 @@ export function priceCartLine(
 }
 
 /**
- * Subtotal, shipping, tax and total for the priced lines, all in whole cents.
- * Express shipping is a flat rate. Standard shipping is free from the free-shipping threshold up.
- * Tax is charged on goods plus shipping at the province's rate (e.g. 0.05 for 5%), rounded to the cent.
+ * Subtotal, discount, shipping, tax and total for the priced lines, all in whole cents.
+ * `discountCents` (a discount code's amount, worked out by applyDiscount) comes off the goods.
+ * Express shipping is a flat rate. Standard shipping is free once the goods, after the discount, reach the free-shipping threshold.
+ * Tax is charged on the discounted goods plus shipping at the province's rate (e.g. 0.05 for 5%), rounded to the cent.
  */
 export function cartTotals(
   lines: Pick<QuoteLine, 'lineCents'>[],
@@ -112,19 +122,37 @@ export function cartTotals(
     'shipping_express_cents' | 'shipping_standard_cents' | 'free_shipping_threshold_cents'
   >,
   taxRate: number,
+  discountCents = 0,
 ) {
   const subtotalCents = lines.reduce((total, l) => total + l.lineCents, 0);
+  const discount = Math.min(Math.max(0, discountCents), subtotalCents);
+  const goods = subtotalCents - discount;
   const shippingCents =
     shippingMethod === 'express'
       ? Number(settings.shipping_express_cents)
-      : subtotalCents >= Number(settings.free_shipping_threshold_cents)
+      : goods >= Number(settings.free_shipping_threshold_cents)
         ? 0
         : Number(settings.shipping_standard_cents);
-  const taxCents = Math.round((subtotalCents + shippingCents) * taxRate);
+  return totalsWithShipping(lines, shippingCents, taxRate, discountCents);
+}
+
+/** The same totals for a shipping price already chosen (a courier option from shipping-rates.service.ts). */
+export function totalsWithShipping(
+  lines: Pick<QuoteLine, 'lineCents'>[],
+  shippingCents: number,
+  taxRate: number,
+  discountCents = 0,
+) {
+  const subtotalCents = lines.reduce((total, l) => total + l.lineCents, 0);
+  const discount = Math.min(Math.max(0, discountCents), subtotalCents);
+  const goods = subtotalCents - discount;
+  const shipping = Math.max(0, Math.round(shippingCents));
+  const taxCents = Math.round((goods + shipping) * taxRate);
   return {
     subtotalCents,
-    shippingCents,
+    discountCents: discount,
+    shippingCents: shipping,
     taxCents,
-    totalCents: subtotalCents + shippingCents + taxCents,
+    totalCents: goods + shipping + taxCents,
   };
 }

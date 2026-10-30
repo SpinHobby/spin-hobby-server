@@ -56,6 +56,9 @@ export interface OrderRow {
   receipt_url: string | null;
   provider_metadata: Record<string, unknown>;
   subtotal_cents: number;
+  /** What a discount code took off the goods; total = subtotal - discount + shipping + tax. */
+  discount_code: string | null;
+  discount_cents: number;
   shipping_cents: number;
   tax_cents: number;
   total_cents: number;
@@ -71,6 +74,10 @@ export interface OrderRow {
   shipping_address: AddressJson;
   created_at: string;
   updated_at: string;
+  /** The courier option chosen at checkout (live rates); null on older orders and flat-price ones. */
+  shipping_carrier?: string | null;
+  shipping_service?: string | null;
+  shipping_days?: number | null;
 }
 
 export interface OrderItemRow {
@@ -258,5 +265,16 @@ export interface StoreSettingsRow {
   maintenance_message: string | null;
   /** The storefront's Shop playlist (a YouTube playlist id); null hides it. */
   music_playlist_id: string | null;
+  /** Where parcels leave from, for live courier rates (shipping-rates.service.ts); no postal code means flat prices. */
+  ship_from_postal: string | null;
+  ship_from_city: string | null;
+  ship_from_province: string | null;
+  /** The default packed size of one item (grams, cm), used when neither the product nor its category says. */
+  parcel_weight_g: number;
+  parcel_length_cm: number;
+  parcel_width_cm: number;
+  parcel_height_cm: number;
+  /** What the box and padding add to every order (grams). */
+  packaging_weight_g: number;
   updated_at: string;
 }

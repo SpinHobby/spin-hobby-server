@@ -29,6 +29,7 @@ import { AppToken, GleamshelfTokenGuard } from './gleamshelf-token.guard.js';
 import { ImportsService } from './imports.service.js';
 import { ListingJobsService } from './listing-jobs.service.js';
 import { DescribeJobsService } from './describe-jobs.service.js';
+import { BarcodeFindingsService } from './barcode-findings.service.js';
 import { DescribeResultDto } from './dto/describe.dto.js';
 import { PhotoJobsService } from './photo-jobs.service.js';
 import { AssistantService } from '../../assistant/assistant.service.js';
@@ -66,6 +67,7 @@ export class GleamshelfController {
     private readonly jobs: PhotoJobsService,
     private readonly listings: ListingJobsService,
     private readonly describe: DescribeJobsService,
+    private readonly barcodes: BarcodeFindingsService,
     private readonly assistant: AssistantService,
   ) {}
 
@@ -247,6 +249,33 @@ export class GleamshelfController {
   ) {
     await this.listings.progress(tokenId, id, dto.percent, dto.step);
     return { success: true };
+  }
+
+  /** Up to 20 products shoppers can see that have no barcode, with their photo addresses, for the app to read barcodes off. Empty when none are left. */
+  @Post('barcode-jobs/claim')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async claimBarcodes() {
+    return { success: true, products: await this.barcodes.claim() };
+  }
+
+  /** What the app found for the products it claimed: `{ results: [{ productId, code, source: "photo" | "page" | "both" }] }`, `code` null for none. */
+  @Post('barcode-jobs/result')
+  @HttpCode(200)
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async barcodeResults(@Body() body: unknown) {
+    const results = (body as { results?: unknown })?.results;
+    if (!Array.isArray(results) || results.length > 50)
+      throw new AppError('Send at most 50 results.');
+    const clean = results.map((r) => {
+      const { productId, code, source } = (r ?? {}) as Record<string, unknown>;
+      if (typeof productId !== 'string' || !productId || productId.length > 120)
+        throw new AppError('Each result needs a productId.');
+      return { productId, code, source };
+    });
+    return { success: true, ...(await this.barcodes.report(clean)) };
   }
 
   /** The next shop product to describe, or no job. The app says what it can do ("describe" means it can read a photo, look the product up and write). */

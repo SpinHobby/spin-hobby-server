@@ -1,12 +1,11 @@
-import { Rule, Text } from '../../../common/validation/decorators.js';
-import { stringValue } from '../../../common/validation/rules.js';
+import { EmailAddress, PositiveInt } from '../../../common/validation/decorators.js';
 
 export class OrderLookupQuery {
-  /** The payment id from the confirmation email. */
-  @Text('paymentId', 200)
-  paymentId!: string;
+  /** The order number from the confirmation email (#123). */
+  @PositiveInt('order', 2_147_483_647)
+  order!: number;
 
-  /** The billing email on the order. */
-  @Rule((v) => stringValue(v, 'email', 254).toLowerCase())
+  /** The email the order was placed with. */
+  @EmailAddress()
   email!: string;
 }
