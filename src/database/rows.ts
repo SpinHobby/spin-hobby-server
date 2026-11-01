@@ -276,5 +276,7 @@ export interface StoreSettingsRow {
   parcel_height_cm: number;
   /** What the box and padding add to every order (grams). */
   packaging_weight_g: number;
+  /** The storefront layout (Admin > Homepage > Page layout); null is the default. Read it through storefrontLayout(). */
+  storefront_layout: unknown;
   updated_at: string;
 }
