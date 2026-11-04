@@ -124,6 +124,7 @@ describe('order confirmation email', () => {
       expect(html).toContain(`#${orderId}`);
       expect(html).toContain('$50.00'); // 2 × $25.00 line
       expect(html).toContain('Total (CAD)');
+      expect(html).toContain(`/order-status?order=${orderId}"`); // the number only, never the email
       expect(html).toContain('Edmonton');
       expect(html).toContain('2–3 business days');
       expect(html).not.toContain('<script>');

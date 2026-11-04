@@ -49,6 +49,6 @@ export class AdminOrdersController {
     @Param() params: OrderIdParam,
     @Body() dto: RefundOrderDto,
   ) {
-    return { success: true, status: await this.orders.refund(admin.id, params.id, dto) };
+    return { success: true, ...(await this.orders.refund(admin.id, params.id, dto)) };
   }
 }

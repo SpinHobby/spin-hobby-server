@@ -174,6 +174,7 @@ describe('admin', () => {
     const paypal = mockFetch({
       '/v1/oauth2/token': () => ({ access_token: 'tok' }),
       '/refund': () => ({ id: 'R1', status: 'COMPLETED' }),
+      'api.resend.com': () => ({ id: 'e' }),
     });
     try {
       const refunded = await http
@@ -181,7 +182,11 @@ describe('admin', () => {
         .set('Authorization', owner.auth)
         .send({})
         .expect(200);
-      expect(refunded.body.status).toBe('refunded');
+      expect(refunded.body).toEqual({ success: true, status: 'refunded', customerEmailed: true });
+      const refundMail = paypal.calls.find((c) => c.url.includes('api.resend.com'))!.body;
+      expect(refundMail.to).toEqual(['fan@example.com']);
+      expect(refundMail.subject).toBe(`Your Spin Hobby order #${order.id} has been refunded`);
+      expect(refundMail.html).toContain('refunded in full');
       expect(
         paypal.calls.find((c) => c.url.includes('/captures/CAP-1/refund'))!.body.amount.value,
       ).toBe((order.total_cents / 100).toFixed(2));

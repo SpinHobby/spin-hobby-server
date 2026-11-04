@@ -32,7 +32,22 @@ describe('cart quote', () => {
     const express = await quote([{ variationId: 'PRZ1_V', quantity: 2 }], {
       shippingMethod: 'express',
     }).expect(200);
-    expect(express.body.shippingCents).toBe(1999);
+    // over the free-shipping threshold the cheapest option is free and express costs only what it adds ($19.99 - $8.99)
+    expect(express.body.shippingCents).toBe(1100);
+    expect(express.body.shippingLive).toBe(false); // no EasyPost key: the shop's flat prices
+    expect(express.body.shippingOptions).toEqual([
+      expect.objectContaining({ id: 'spin-hobby:standard', cents: 0, fullCents: 899, free: true }),
+      expect.objectContaining({
+        id: 'spin-hobby:express',
+        cents: 1100,
+        fullCents: 1999,
+        free: false,
+      }),
+    ]);
+    const under = await quote([{ variationId: 'PRZ1_V', quantity: 1 }], {
+      shippingMethod: 'express',
+    }).expect(200);
+    expect(under.body.shippingCents).toBe(1999);
   });
 
   it('warns about stock, limits and closed pre-orders', async () => {

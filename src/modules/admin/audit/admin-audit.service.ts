@@ -25,6 +25,7 @@ export interface SalesOrder {
   status: string;
   provider: string;
   subtotal_cents: number;
+  discount_cents: number;
   shipping_cents: number;
   tax_cents: number;
   total_cents: number;
@@ -90,7 +91,7 @@ export class AdminAuditService {
     if (days > MAX_DAYS) throw new AppError(`Choose a period of at most ${MAX_DAYS} days.`);
     const range = [from, to, SHOP_TIME_ZONE];
     const orders = await this.db.many<SalesOrder>(
-      `select o.id, o.paid_at, o.status, o.provider, o.subtotal_cents, o.shipping_cents, o.tax_cents, o.total_cents,
+      `select o.id, o.paid_at, o.status, o.provider, o.subtotal_cents, o.discount_cents, o.shipping_cents, o.tax_cents, o.total_cents,
               o.shipping_address->>'country' as country, upper(o.shipping_address->>'province') as province, o.billing_email,
               coalesce((select sum((e.data->>'amount_cents')::int) from public.order_events e
                          where e.order_id = o.id and e.event_type = 'refunded'), 0)::int as refunded_cents
@@ -119,6 +120,7 @@ export class AdminAuditService {
     const totals = {
       orders: orders.length,
       subtotalCents: sum(orders, (o) => o.subtotal_cents),
+      discountCents: sum(orders, (o) => o.discount_cents),
       shippingCents: sum(orders, (o) => o.shipping_cents),
       taxCents: sum(orders, (o) => o.tax_cents),
       grossCents: sum(orders, (o) => o.total_cents),

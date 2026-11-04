@@ -1,3 +1,4 @@
+import { parcelField } from '../../../shipping/parcel-fields.js';
 import { AppError } from '../../../../common/errors.js';
 import { Provided, Rule } from '../../../../common/validation/decorators.js';
 import { stringValue } from '../../../../common/validation/rules.js';
@@ -34,6 +35,23 @@ export class UpdateCategoryDto {
   @Provided()
   @Rule(categoryId)
   parentId?: string | null;
+
+  /** The packed size of one product in this category (grams, cm), for courier rates; subcategories inherit it. Null clears. */
+  @Provided()
+  @Rule(parcelField('parcelWeightG'))
+  parcelWeightG?: number | null;
+
+  @Provided()
+  @Rule(parcelField('parcelLengthCm'))
+  parcelLengthCm?: number | null;
+
+  @Provided()
+  @Rule(parcelField('parcelWidthCm'))
+  parcelWidthCm?: number | null;
+
+  @Provided()
+  @Rule(parcelField('parcelHeightCm'))
+  parcelHeightCm?: number | null;
 }
 
 /** Category ids in the order they should appear. */

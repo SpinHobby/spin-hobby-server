@@ -59,6 +59,14 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     details: OrderDetails,
     user: AppUser | null,
   ): Promise<CreatedOrder> {
+    // the address being paid for decides the courier rates, whatever the quote form had typed so far
+    const ship = (details.shipping ?? {}) as { postalCode?: unknown; city?: unknown };
+    input = {
+      ...input,
+      postalCode: typeof ship.postalCode === 'string' ? ship.postalCode : input.postalCode,
+      city: typeof ship.city === 'string' ? ship.city.slice(0, 80) : input.city,
+    };
+    await this.quotes.warmShipping(input);
     return this.db.transaction(async (tx) => {
       // Shoppers competing for the same variations queue up here. Locks are taken in sorted order so two
       // carts can never deadlock, and are released when this transaction commits.
@@ -66,11 +74,18 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
         await this.db.exec('select pg_advisory_xact_lock(hashtext($1))', [`stock:${id}`], tx);
       }
       const quote = await this.quotes.quote(input, tx);
-      if (!quote.lines.length || quote.warnings.length) return { changed: quote };
+      // A code that stopped working since the shopper saw it (expired, used up) changes the price: show them first.
+      const lostCode = !!input.discountCode?.trim() && !quote.discount;
+      // the courier option the shopper picked isn't offered any more (rates changed): show them the new choices first
+      const lostOption =
+        !!input.shippingOption && quote.shippingOption?.id !== input.shippingOption;
+      if (!quote.lines.length || quote.warnings.length || lostCode || lostOption)
+        return { changed: quote };
       const settings = await this.store.settings(tx);
       const order = await this.db.one<Pick<OrderRow, 'id' | 'total_cents' | 'provider'>>(
-        `insert into public.orders (user_id, provider, subtotal_cents, shipping_cents, tax_cents, total_cents, shipping_method, billing_email, billing_address, shipping_address)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) returning id, total_cents, provider`,
+        `insert into public.orders (user_id, provider, subtotal_cents, shipping_cents, tax_cents, total_cents, shipping_method, billing_email, billing_address, shipping_address, discount_code, discount_cents,
+           shipping_carrier, shipping_service, shipping_days)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) returning id, total_cents, provider`,
         [
           user?.id ?? null,
           settings.payment_provider,
@@ -78,10 +93,18 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
           quote.shippingCents,
           quote.taxCents,
           quote.totalCents,
-          input.shippingMethod,
+          // the cheapest option is "standard", anything faster "express" (the enum older reports and emails read)
+          !quote.shippingOption || quote.shippingOption.id === quote.shippingOptions[0]?.id
+            ? 'standard'
+            : 'express',
           details.email,
           JSON.stringify(details.billing),
           JSON.stringify(details.shipping),
+          quote.discount?.code ?? null,
+          quote.discountCents,
+          quote.shippingOption?.carrier ?? null,
+          quote.shippingOption?.service ?? null,
+          quote.shippingOption?.days ?? null,
         ],
         tx,
       );
@@ -205,6 +228,12 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
               group by 1
            ) sold
           where s.square_variation_id = sold.square_variation_id and s.quantity is not null`,
+        [orderId],
+        tx,
+      );
+      // a code's uses count paid orders only
+      await this.db.exec(
+        'update public.discount_codes set uses = uses + 1 where code = (select discount_code from public.orders where id = $1)',
         [orderId],
         tx,
       );

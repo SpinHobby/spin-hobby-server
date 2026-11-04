@@ -1,3 +1,4 @@
+import { AnalyticsModule } from './modules/analytics/analytics.module.js';
 import { EbayModule } from './modules/ebay/ebay.module.js';
 import { Module } from '@nestjs/common';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
@@ -20,6 +21,7 @@ import { HealthModule } from './modules/health/health.module.js';
 import { OpsModule } from './modules/ops/ops.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
+import { RemindersModule } from './modules/reminders/reminders.module.js';
 import { SampleModule } from './modules/sample/sample.module.js';
 import { SquareSyncModule } from './modules/square-sync/square-sync.module.js';
 import { StoreModule } from './modules/store/store.module.js';
@@ -40,6 +42,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     // Business features
     AccountModule,
     AdminModule,
+    AnalyticsModule,
     AssistantModule,
     AuthModule,
     CashierModule,
@@ -50,6 +53,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     OpsModule,
     OrdersModule,
     PaymentsModule,
+    RemindersModule,
     SampleModule,
     SquareSyncModule,
     StoreModule,

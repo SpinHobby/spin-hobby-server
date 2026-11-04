@@ -104,6 +104,76 @@ export class AdminAccountsService {
     return { ...this.view(row), history };
   }
 
+  /**
+   * Everything the account has done in the shop, for the account's drawer: its orders (with items and timeline), favourites,
+   * saved addresses and restock alerts. Orders and alerts made as a guest with the account's email count too: the same person,
+   * before they signed in.
+   */
+  async activity(id: string) {
+    const { email } = await this.row(id);
+    const [orders, favourites, addresses, alerts] = await Promise.all([
+      this.db.many<Record<string, unknown>>(
+        `select o.id, o.status, o.provider, o.subtotal_cents, o.shipping_cents, o.tax_cents, o.total_cents, o.shipping_method,
+                o.shipping_address, o.tracking_number, o.carrier, o.created_at, o.paid_at, o.shipped_at, o.user_id is null as guest,
+                coalesce((select json_agg(json_build_object('name', i.name, 'imageUrl', i.image_url, 'unitPriceCents', i.unit_price_cents,
+                                                            'quantity', i.quantity, 'preorder', i.is_preorder) order by i.id)
+                            from public.order_items i where i.order_id = o.id), '[]') as items,
+                coalesce((select json_agg(json_build_object('type', e.event_type, 'at', e.created_at, 'data', e.data) order by e.created_at)
+                            from public.order_events e where e.order_id = o.id), '[]') as events,
+                coalesce((select sum((e.data ->> 'amount_cents')::int) from public.order_events e
+                           where e.order_id = o.id and e.event_type = 'refunded'), 0)::int as refunded_cents
+           from public.orders o
+          where o.user_id = $1 or (o.user_id is null and o.billing_email = $2)
+          order by o.created_at desc limit 200`,
+        [id, email],
+      ),
+      this.db.many<Record<string, unknown>>(
+        `select w.square_item_id as id, w.created_at as added_at, p.name, s.price_cents, coalesce(s.status, 'hidden') as status,
+                (select pi.image_url from public.product_images pi where pi.square_item_id = w.square_item_id order by pi.sort_order limit 1) as image_url
+           from public.wishlist_items w
+           join public.catalog_products p on p.square_item_id = w.square_item_id
+           left join public.storefront_products s on s.id = w.square_item_id
+          where w.user_id = $1
+          order by w.created_at desc`,
+        [id],
+      ),
+      this.db.many<Record<string, unknown>>(
+        `select id, first_name, last_name, address1, address2, city, province, postal_code, country, phone, is_default, created_at
+           from public.customer_addresses where user_id = $1 order by is_default desc, created_at`,
+        [id],
+      ),
+      this.db.many<Record<string, unknown>>(
+        `select a.id, a.created_at, a.notified_at, p.name, p.square_item_id as product_id
+           from public.stock_alerts a
+           join public.catalog_variations v on v.square_variation_id = a.square_variation_id
+           join public.catalog_products p on p.square_item_id = v.square_item_id
+          where a.user_id = $1 or a.email = $2
+          order by a.created_at desc`,
+        [id, email],
+      ),
+    ]);
+    const paid = orders.filter((o) => o.paid_at);
+    const spent = paid.reduce((t, o) => t + Number(o.total_cents) - Number(o.refunded_cents), 0);
+    return {
+      summary: {
+        orders: orders.length,
+        paidOrders: paid.length,
+        netSpentCents: spent,
+        averageOrderCents: paid.length ? Math.round(spent / paid.length) : 0,
+        refunds: orders.filter((o) => Number(o.refunded_cents) > 0).length,
+        firstOrderAt: orders.at(-1)?.created_at ?? null,
+        lastOrderAt: orders[0]?.created_at ?? null,
+        favourites: favourites.length,
+        alertsWaiting: alerts.filter((a) => !a.notified_at).length,
+      },
+      phone: addresses.find((a) => a.phone)?.phone ?? null,
+      orders,
+      favourites,
+      addresses,
+      alerts,
+    };
+  }
+
   async setRole(ownerId: string, id: string, role: AppRole) {
     const row = await this.changeable(ownerId, id);
     if (row.role === role) return this.view(row);

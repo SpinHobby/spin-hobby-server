@@ -118,7 +118,10 @@ export class AdminOrdersService {
       });
   }
 
-  /** Refunds the whole order or part of it through the provider that took the payment. Returns the new status. */
+  /**
+   * Refunds the whole order or part of it through the provider that took the payment, then emails the customer. Returns the new
+   * status and whether the email went out (a failed email never undoes the refund).
+   */
   async refund(adminId: string, orderId: number, dto: RefundOrderDto) {
     const order = await this.db.one<OrderRow>('select * from public.orders where id = $1', [
       orderId,
@@ -158,6 +161,21 @@ export class AdminOrdersService {
       );
       await this.log.write(adminId, 'order.refunded', String(orderId), { amountCents }, tx);
     });
-    return status;
+    const customerEmailed =
+      !!order.billing_email && this.email.configured
+        ? await this.email
+            .send(
+              order.billing_email,
+              amountCents === total
+                ? `Your Spin Hobby order #${orderId} has been refunded`
+                : `A refund on your Spin Hobby order #${orderId}`,
+              this.email.refundedHtml(orderId, amountCents, amountCents === total),
+            )
+            .catch((e) => {
+              this.logger.warn(`Refund email for #${orderId} failed: ${e}`);
+              return false;
+            })
+        : false;
+    return { status, customerEmailed };
   }
 }

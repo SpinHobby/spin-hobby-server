@@ -3,13 +3,24 @@ import { AppError } from '../../common/errors.js';
 import { orderHoldMinutes } from '../../config/orders.config.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';
-import { cartTotals, priceCartLine, type QuoteRow } from './quote-math.js';
+import { applyDiscount, discountLabel } from '../discounts/discount-math.js';
+import { DiscountsService } from '../discounts/discounts.service.js';
+import { priceCartLine, totalsWithShipping, type QuoteRow } from './quote-math.js';
+import { normalizePostal, pickOption, type ShippingOption } from '../shipping/shipping-math.js';
+import { ShippingRatesService } from '../shipping/shipping-rates.service.js';
 
 export interface QuoteInput {
   items: { variationId: string; quantity: number }[];
   shippingMethod: 'standard' | 'express';
   country: 'CA' | 'US';
   province: string;
+  /** A discount code as the shopper typed it (optional). */
+  discountCode?: string | null;
+  /** Where it goes, for live courier rates ("T2P 1J9", "98101"); without it the flat prices are offered. */
+  postalCode?: string | null;
+  city?: string | null;
+  /** The courier option picked from a quote's `shippingOptions` (its id); otherwise `shippingMethod` picks the cheapest or fastest. */
+  shippingOption?: string | null;
 }
 export interface QuoteLine {
   variationId: string;
@@ -23,17 +34,29 @@ export interface QuoteLine {
 }
 export interface QuoteWarning {
   variationId: string;
-  code: 'OUT_OF_STOCK' | 'QTY_REDUCED' | 'PREORDER_CLOSED' | 'LIMIT_EXCEEDED';
+  code: 'OUT_OF_STOCK' | 'QTY_REDUCED' | 'PREORDER_CLOSED' | 'LIMIT_EXCEEDED' | 'NO_PRICE';
   message: string;
 }
 export interface Quote {
   lines: QuoteLine[];
   subtotalCents: number;
+  /** What the discount code took off the goods (0 without one). */
+  discountCents: number;
   shippingCents: number;
   taxCents: number;
   totalCents: number;
   currency: 'CAD';
   warnings: QuoteWarning[];
+  /** The code that applied, e.g. { code: 'SPRING10', label: '10% off' }; null when none was given or it can't be used. */
+  discount: { code: string; label: string } | null;
+  /** Why the code that was typed doesn't apply ("That code has expired."), else null. Doesn't stop checkout. */
+  discountMessage: string | null;
+  /** The courier options for this cart and address, cheapest first, with the free-shipping rule applied. */
+  shippingOptions: ShippingOption[];
+  /** The option this quote is priced with. */
+  shippingOption: ShippingOption | null;
+  /** True when the options are couriers' live rates, false for the shop's flat prices. */
+  shippingLive: boolean;
 }
 
 /** Server-side price/stock/tax check. Never trusts prices from the browser. The rules live in quote-math.ts. */
@@ -42,6 +65,8 @@ export class QuoteService {
   constructor(
     private readonly db: Db,
     private readonly store: StoreService,
+    private readonly discounts: DiscountsService,
+    private readonly shipping: ShippingRatesService,
   ) {}
 
   /**
@@ -75,6 +100,14 @@ export class QuoteService {
       tx,
     );
     return new Map(rows.map((r) => [r.variation_id, Number(r.held)]));
+  }
+
+  /**
+   * Fetches the courier rates for this cart now, outside any transaction, so that pricing the order inside one (with the stock locked)
+   * reuses them instead of waiting on the courier. Best effort: a failure here just means the flat prices.
+   */
+  async warmShipping(input: QuoteInput) {
+    await this.quote(input).catch(() => undefined);
   }
 
   async quote(
@@ -117,11 +150,37 @@ export class QuoteService {
       warnings.push(...priced.warnings);
       if (priced.line) lines.push(priced.line);
     }
+    const subtotal = lines.reduce((sum, l) => sum + l.lineCents, 0);
+    const typed = input.discountCode?.trim();
+    const rule = typed ? await this.discounts.find(typed, tx) : null;
+    const applied = typed ? applyDiscount(rule, subtotal) : null;
+    const discount =
+      rule && applied && !applied.message ? { code: rule.code, label: discountLabel(rule) } : null;
+    const discountCents = discount ? applied!.cents : 0;
+    // courier options for what can be bought (not lines that dropped out), priced with the free-shipping rule on the discounted goods
+    const shipping = await this.shipping.options(
+      {
+        country: input.country,
+        province: input.province,
+        postalCode: normalizePostal(input.country, input.postalCode),
+        city: input.city ?? null,
+        items: lines.map((l) => ({ variationId: l.variationId, quantity: l.quantity })),
+      },
+      settings,
+      Math.max(0, subtotal - Math.min(discountCents, subtotal)),
+      tx,
+    );
+    const chosen = pickOption(shipping.options, input.shippingOption, input.shippingMethod);
     return {
       lines,
-      ...cartTotals(lines, input.shippingMethod, settings, Number(tax?.rate ?? 0)),
+      ...totalsWithShipping(lines, chosen?.cents ?? 0, Number(tax?.rate ?? 0), discountCents),
       currency: 'CAD',
       warnings,
+      discount,
+      discountMessage: applied?.message ?? null,
+      shippingOptions: shipping.options,
+      shippingOption: chosen,
+      shippingLive: shipping.live,
     };
   }
 }

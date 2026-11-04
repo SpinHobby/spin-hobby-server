@@ -6,6 +6,8 @@
 //   API:      http://localhost:8080
 //   Sign in:  owner@spinhobby.test / spinhobby   (owner)
 //             staff@spinhobby.test / spinhobby   (staff)
+//             hana@spinhobby.test, daniel@... / spinhobby   (sample customers with a year of orders, favourites and
+//             addresses; src/modules/sample/accounts.ts lists them all. Local only: never on staging or production.)
 //
 // If SQUARE_ACCESS_TOKEN and SQUARE_LOCATION_ID are set (shell or .env), the catalog is also synced from Square once
 // the API is up, so the Square items show next to the samples. With SQUARE_ENVIRONMENT=sandbox and SQUARE_APPLICATION_ID
@@ -41,11 +43,21 @@ if (existsSync(join(root, '.env'))) {
 const setting = (name) => process.env[name] || fileEnv[name] || '';
 const ownDatabase = setting('DEV_DATABASE_URL');
 const imageBase = `http://localhost:${process.env.PORT ?? '8080'}`;
+/** Extra editions of the sample products, so lists (Admin > Products at 500 per page) run past a page. */
+const MORE_PRODUCTS = 520;
 
 // The sample catalog is part of the API (src/modules/sample), so build once and load it from dist.
 execSync('npx nest build', { cwd: root, stdio: 'inherit' });
 const sample = await import(new URL('../dist/modules/sample/seed.js', import.meta.url));
 const { seedSample } = sample;
+const accounts = await import(new URL('../dist/modules/sample/accounts.js', import.meta.url));
+const { seedSampleAccounts, SAMPLE_ACCOUNTS, sampleAccountEmail } = accounts;
+const devUsers = [
+  'owner@spinhobby.test',
+  'staff@spinhobby.test',
+  ...SAMPLE_ACCOUNTS.map(sampleAccountEmail),
+];
+let people = null;
 
 let db = null;
 let server = null;
@@ -57,7 +69,10 @@ if (ownDatabase) {
       root,
       imageBase,
       reset: process.argv.includes('--reset'),
+      moreProducts: MORE_PRODUCTS,
       ...sample,
+      seedSampleAccounts,
+      clearSampleAccounts: accounts.clearSampleAccounts,
     });
   } catch (error) {
     console.error(`\n  Could not use your database (DEV_DATABASE_URL): ${error.message}\n`);
@@ -90,7 +105,9 @@ if (ownDatabase) {
   }
 
   // ---- seed: catalog, categories and orders
-  seeded = await seedSample(db, imageBase);
+  seeded = await seedSample(db, imageBase, { more: MORE_PRODUCTS });
+  // ---- seed: sample shoppers with past orders, favourites, addresses and alerts (local only)
+  people = await seedSampleAccounts(db, imageBase);
 
   // ---- seed: the storefront's Shop playlist (Admin > Settings), so its player shows from the first start
   await db.query('update public.store_settings set music_playlist_id = $1 where id = true', [
@@ -135,12 +152,14 @@ if (db) {
   server = new PGLiteSocketServer({ db, port: DB_PORT, host: '127.0.0.1' });
   await server.start();
   console.log(
-    `\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories (in memory: fresh on every start)`,
+    `\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories, ${people.accounts} sample accounts with ${people.orders} orders and ${people.favourites} favourites (in memory: fresh on every start)`,
   );
 }
 const ownHost = ownDatabase ? new URL(ownDatabase).hostname : '';
 const ownIsLocal = ownHost === 'localhost' || ownHost === '127.0.0.1';
-console.log('  Sign in: owner@spinhobby.test / spinhobby  (or staff@spinhobby.test)\n');
+console.log(
+  '  Sign in: owner@spinhobby.test / spinhobby  (or staff@spinhobby.test, or a sample customer like hana@spinhobby.test)\n',
+);
 const squareReady =
   !('SQUARE_ACCESS_TOKEN' in blanked) &&
   setting('SQUARE_ACCESS_TOKEN') &&
@@ -173,7 +192,7 @@ const api = spawn(process.execPath, [nestCli, 'start', '--watch'], {
     SUPABASE_URL: '',
     SUPABASE_JWT_SECRET: 'local-dev-secret-local-dev-secret-0000',
     AUTH_DEV_LOGIN: 'true',
-    AUTH_DEV_USERS: 'owner@spinhobby.test,staff@spinhobby.test',
+    AUTH_DEV_USERS: devUsers.join(','),
     AUTH_DEV_PASSWORD: 'spinhobby',
     ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:4173',
     // checkout completes with a test payment (no money) when no payment keys are set
@@ -299,7 +318,7 @@ async function announceReady() {
       '  Spin Hobby is running.',
       `    API docs: ${base}/docs`,
       '    Website:  in the spin-hobby folder run `npm run dev`, then open http://localhost:3000',
-      '    Sign in:  owner@spinhobby.test / spinhobby  (or staff@spinhobby.test)',
+      '    Sign in:  owner@spinhobby.test / spinhobby  (or staff@, or a customer like hana@spinhobby.test)',
       '  Leave this window open: the server runs here. Ctrl+C stops it.',
       line,
       '',

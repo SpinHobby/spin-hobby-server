@@ -13,6 +13,11 @@ export interface CategoryListRow {
   sortOrder: number;
   isVisible: boolean;
   productCount: number;
+  /** The packed size of one product here (grams, cm), for courier rates; null where the parent's or the shop's default is used. */
+  parcelWeightG: number | null;
+  parcelLengthCm: number | null;
+  parcelWidthCm: number | null;
+  parcelHeightCm: number | null;
 }
 
 interface CategoryRow {
@@ -40,6 +45,8 @@ export class AdminCategoriesService {
   list() {
     return this.db.many<CategoryListRow>(
       `select c.id, c.parent_id as "parentId", c.name, c.sort_order as "sortOrder", c.is_visible as "isVisible",
+              c.parcel_weight_g as "parcelWeightG", c.parcel_length_cm as "parcelLengthCm", c.parcel_width_cm as "parcelWidthCm",
+              c.parcel_height_cm as "parcelHeightCm",
               (select count(*)::int from public.storefront_products p where p.category_id = c.id) as "productCount"
          from public.store_categories c order by c.sort_order, c.name`,
     );
@@ -108,6 +115,10 @@ export class AdminCategoriesService {
     const sent = sentFields(dto);
     if ('name' in sent) changes.name = sent.name;
     if ('isVisible' in sent) changes.is_visible = sent.isVisible;
+    if ('parcelWeightG' in sent) changes.parcel_weight_g = sent.parcelWeightG;
+    if ('parcelLengthCm' in sent) changes.parcel_length_cm = sent.parcelLengthCm;
+    if ('parcelWidthCm' in sent) changes.parcel_width_cm = sent.parcelWidthCm;
+    if ('parcelHeightCm' in sent) changes.parcel_height_cm = sent.parcelHeightCm;
     if ('parentId' in sent) {
       const parentId = sent.parentId as string | null;
       await this.assertParent(parentId, id);

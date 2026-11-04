@@ -1,13 +1,17 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { notFound } from '../../common/errors.js';
 import { CatalogService } from './catalog.service.js';
+import { RecommendationsService } from './recommendations.service.js';
 import { ProductQuery } from './dto/product-query.dto.js';
 import { publicProduct } from './product.mapper.js';
 import { squareApplicationId, squareLocationId } from '../../config/square.config.js';
 
 @Controller()
 export class CatalogController {
-  constructor(private readonly catalog: CatalogService) {}
+  constructor(
+    private readonly catalog: CatalogService,
+    private readonly recommendations: RecommendationsService,
+  ) {}
 
   @Get('products')
   products(@Query() query: ProductQuery) {
@@ -35,6 +39,25 @@ export class CatalogController {
         updatedAt: row.updated_at,
       })),
     };
+  }
+
+  /** "Frequently bought together": items in the same paid orders as this one (at most 3; none until orders share items). */
+  @Get('products/:id/bought-together')
+  async boughtTogether(@Param('id') id: string) {
+    const rows = await this.recommendations.boughtTogether(id.slice(0, 120));
+    return { success: true, items: rows.map(publicProduct) };
+  }
+
+  /** Cheap add-ons for a cart: `?ids=<item id>,<item id>` (at most 50). Bought with these first, then the best sellers. */
+  @Get('products/add-ons')
+  async addOns(@Query('ids') ids = '') {
+    const itemIds = ids
+      .split(',')
+      .map((id) => id.trim().slice(0, 120))
+      .filter(Boolean)
+      .slice(0, 50);
+    const rows = await this.recommendations.addOns(itemIds);
+    return { success: true, items: rows.map(publicProduct) };
   }
 
   @Get('products/preorders')
