@@ -6,6 +6,7 @@ export const LAYOUT_SECTIONS = [
   'trust',
   'preorders',
   'lists',
+  'recent',
   'shop',
   'about',
   'events',
