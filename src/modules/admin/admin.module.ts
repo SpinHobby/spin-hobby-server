@@ -39,7 +39,10 @@ import { AdminDashboardService } from './dashboard/admin-dashboard.service.js';
 import { AdminEventsController } from './events/admin-events.controller.js';
 import { AdminEventsService } from './events/admin-events.service.js';
 import { AdminReviewsController } from './reviews/admin-reviews.controller.js';
-import { AdminSearchController } from './search/admin-search.controller.js';
+import {
+  AdminSearchController,
+  AdminSynonymsController,
+} from './search/admin-search.controller.js';
 import { AdminSearchService } from './search/admin-search.service.js';
 import { AdminReviewsService } from './reviews/admin-reviews.service.js';
 import { AdminHomepageController } from './homepage/admin-homepage.controller.js';
@@ -93,6 +96,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminEventsController,
     AdminReviewsController,
     AdminSearchController,
+    AdminSynonymsController,
     AdminSquareController,
     AdminSeriesController,
     AdminImportsController,

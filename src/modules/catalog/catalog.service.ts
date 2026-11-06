@@ -11,7 +11,9 @@ import {
   foldSearch,
   parseSearch,
   searchableSql,
-  SYNONYM_WORDS,
+  synonymIndex,
+  type SynonymIndex,
+  currentSynonymsVersion,
   termSql,
   vocabulary,
 } from './search.js';
@@ -153,7 +155,7 @@ export class CatalogService {
     const q = query.q?.trim().slice(0, 100);
     // Every term has to appear somewhere on the product ("miku figure" finds a Miku in Prize Figures), as typed or as one of its
     // synonyms or singular forms; filters written in the search ("under $50", "in stock") apply unless the page set its own.
-    const parsed = q ? parseSearch(q) : null;
+    const parsed = q ? parseSearch(q, await this.synonyms()) : null;
     const at = (value: unknown) => {
       params.push(value);
       return `$${params.length}`;
@@ -215,7 +217,7 @@ export class CatalogService {
    * has every word, so "frie" offers Frieren products, the Frieren series page and nothing else.
    */
   async suggest(q: string | undefined) {
-    const { terms } = parseSearch((q ?? '').slice(0, 100));
+    const { terms } = parseSearch((q ?? '').slice(0, 100), await this.synonyms());
     if (!terms.length) return { success: true as const, products: [], series: [], categories: [] };
     // every term, as typed or as a synonym ("jjk" offers the Jujutsu Kaisen series)
     const patterns: unknown[] = [];
@@ -263,6 +265,23 @@ export class CatalogService {
     );
   }
 
+  private synonymCache: { index: SynonymIndex; version: number; at: number } | null = null;
+
+  /** The shop's synonym groups (Admin > Search), read again after an edit or every few minutes. */
+  private async synonyms(): Promise<SynonymIndex> {
+    const c = this.synonymCache;
+    if (c && c.version === currentSynonymsVersion() && Date.now() - c.at < VOCAB_TTL_MS)
+      return c.index;
+    const version = currentSynonymsVersion();
+    const rows = await this.db.many<{ terms: string[] }>(
+      'select terms from public.search_synonyms',
+    );
+    const index = synonymIndex(rows.map((r) => r.terms));
+    this.synonymCache = { index, version, at: Date.now() };
+    this.vocab = null; // the typo-fix words include the synonyms
+    return index;
+  }
+
   private vocab: { words: Set<string>; at: number } | null = null;
 
   /** `q` with its typos fixed against the catalogue's words, if that finds products under the same filters. */
@@ -272,7 +291,7 @@ export class CatalogService {
         `select concat_ws(' ', name, series, character, manufacturer, category) as text from public.storefront_products`,
       );
       this.vocab = {
-        words: vocabulary([...rows.map((r) => r.text), ...SYNONYM_WORDS]),
+        words: vocabulary([...rows.map((r) => r.text), ...(await this.synonyms()).terms.keys()]),
         at: Date.now(),
       };
     }

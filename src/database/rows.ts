@@ -303,3 +303,12 @@ export interface SearchMissRow {
   first_at: Date;
   last_at: Date;
 }
+
+/** public.search_synonyms: names shoppers use for the same thing, edited in Admin > Search. */
+export interface SearchSynonymRow {
+  id: string;
+  kind: 'type' | 'series' | 'maker' | 'other';
+  terms: string[];
+  created_at: Date;
+  updated_at: Date;
+}

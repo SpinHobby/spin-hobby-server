@@ -4,7 +4,6 @@
  * When nothing matches, `didYouMean` fixes typos against the words the catalogue actually uses ("hatsne miku" → "hatsune miku").
  */
 import { likePattern } from '../../common/validation/rules.js';
-import { SYNONYM_GROUPS } from './synonyms.js';
 
 /** Accented letters and the plain letter each one counts as, so "pokemon" finds "Pokémon" and "ryujin" finds "Ryūjin". */
 const ACCENTS: [string, string][] = [
@@ -137,14 +136,31 @@ export interface ParsedSearch {
   understood: string[];
 }
 
-const SYNONYMS = new Map<string, string[]>();
-for (const group of SYNONYM_GROUPS) {
-  const folded = group.map(foldSearch);
-  for (const entry of folded)
-    SYNONYMS.set(entry, [...new Set([...(SYNONYMS.get(entry) ?? []), ...folded])]);
+/**
+ * The shop's synonym groups (public.search_synonyms, edited in Admin > Search), ready for searching: every folded term and the
+ * terms of its group, and the longest term in words (how far ahead to look for a name like "spy x family").
+ */
+export interface SynonymIndex {
+  terms: Map<string, string[]>;
+  longest: number;
 }
-/** The longest synonym, in words: how far ahead to look for a name like "spy x family". */
-const LONGEST_SYNONYM = Math.max(...[...SYNONYMS.keys()].map((k) => k.split(' ').length));
+
+export function synonymIndex(groups: string[][]): SynonymIndex {
+  const terms = new Map<string, string[]>();
+  for (const group of groups) {
+    const folded = group.map(foldSearch).filter(Boolean);
+    for (const term of folded)
+      terms.set(term, [...new Set([...(terms.get(term) ?? []), ...folded])]);
+  }
+  return { terms, longest: Math.max(1, ...[...terms.keys()].map((k) => k.split(' ').length)) };
+}
+
+const NO_SYNONYMS = synonymIndex([]);
+
+let synonymsVersion = 0;
+/** Called after staff change a group, so the next search reads them again (the API runs as one process). */
+export const synonymsChanged = () => synonymsVersion++;
+export const currentSynonymsVersion = () => synonymsVersion;
 
 const MONEY = String.raw`\$?\s*(\d{1,5}(?:\.\d{1,2})?)\s*(?:\$|dollars?|cad|usd)?`;
 const FILTERS: { re: RegExp; apply: (m: RegExpMatchArray, out: ParsedSearch) => void }[] = [
@@ -200,7 +216,7 @@ function singulars(word: string): string[] {
  * A search as the shop understands it: price and stock filters taken out of the words ("miku under $50 in stock"), names of
  * several words kept together ("spy x family"), and each word with its synonyms and singular forms.
  */
-export function parseSearch(q: string): ParsedSearch {
+export function parseSearch(q: string, synonyms: SynonymIndex = NO_SYNONYMS): ParsedSearch {
   const out: ParsedSearch = { terms: [], text: '', understood: [] };
   let rest = q.toLowerCase().slice(0, 100);
   for (const f of FILTERS) {
@@ -213,8 +229,8 @@ export function parseSearch(q: string): ParsedSearch {
   out.text = pieces.join(' ');
   const units: string[] = [];
   for (let i = 0; i < pieces.length;) {
-    let k = Math.min(LONGEST_SYNONYM, pieces.length - i);
-    while (k > 1 && !SYNONYMS.has(pieces.slice(i, i + k).join(' '))) k--;
+    let k = Math.min(synonyms.longest, pieces.length - i);
+    while (k > 1 && !synonyms.terms.has(pieces.slice(i, i + k).join(' '))) k--;
     units.push(pieces.slice(i, i + k).join(' '));
     i += k;
   }
@@ -222,16 +238,13 @@ export function parseSearch(q: string): ParsedSearch {
     const variants = new Set<string>();
     for (const form of [unit, ...singulars(unit)]) {
       if (form !== unit) variants.add(form);
-      for (const syn of SYNONYMS.get(form) ?? []) variants.add(syn);
+      for (const syn of synonyms.terms.get(form) ?? []) variants.add(syn);
     }
     variants.delete(unit);
     out.terms.push({ typed: unit, variants: [...variants] });
   }
   return out;
 }
-
-/** The catalogue's words plus every synonym, for typo fixes ("pokemn" → "pokemon" even if no product says Pokemon). */
-export const SYNONYM_WORDS = [...SYNONYMS.keys()];
 
 /**
  * The SQL test for one term against a folded text expression, and the values it needs (in order): what was typed anywhere in

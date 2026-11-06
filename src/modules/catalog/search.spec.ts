@@ -4,6 +4,7 @@ import {
   editDistance,
   foldSearch,
   parseSearch,
+  synonymIndex,
   searchWords,
   vocabulary,
 } from './search.js';
@@ -64,8 +65,15 @@ describe('didYouMean', () => {
 });
 
 describe('parseSearch', () => {
-  const typed = (q: string) => parseSearch(q).terms.map((t) => t.typed);
-  const variants = (q: string, i = 0) => parseSearch(q).terms[i].variants;
+  const synonyms = synonymIndex([
+    ['hatsune miku', 'miku', '初音ミク'],
+    ['jujutsu kaisen', 'jjk', '呪術廻戦'],
+    ['pokemon', 'ポケモン'],
+    ['spy x family', 'spy family', 'スパイファミリー'],
+    ['plush', 'plushie', 'ぬいぐるみ'],
+  ]);
+  const typed = (q: string) => parseSearch(q, synonyms).terms.map((t) => t.typed);
+  const variants = (q: string, i = 0) => parseSearch(q, synonyms).terms[i].variants;
 
   it('takes price and stock filters out of the words and says what it understood', () => {
     const p = parseSearch('Miku figure under $50 in stock');
@@ -96,5 +104,9 @@ describe('parseSearch', () => {
     );
     expect(variants('figures')).toContain('figure');
     expect(variants('glass')).toEqual([]); // "ss" is not a plural
+  });
+
+  it('uses no synonyms when given none', () => {
+    expect(parseSearch('jjk').terms).toEqual([{ typed: 'jjk', variants: [] }]);
   });
 });
