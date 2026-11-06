@@ -4,16 +4,46 @@
  * When nothing matches, `didYouMean` fixes typos against the words the catalogue actually uses ("hatsne miku" → "hatsune miku").
  */
 
+/** Accented letters and the plain letter each one counts as, so "pokemon" finds "Pokémon" and "ryujin" finds "Ryūjin". */
+const ACCENTS: [string, string][] = [
+  ['àáâãäåā', 'a'],
+  ['ç', 'c'],
+  ['èéêëē', 'e'],
+  ['ìíîïī', 'i'],
+  ['ñ', 'n'],
+  ['òóôõöō', 'o'],
+  ['ùúûüū', 'u'],
+  ['ýÿ', 'y'],
+];
+const ACCENT_FROM = ACCENTS.map(([from]) => from).join('');
+const ACCENT_TO = ACCENTS.map(([from, to]) => to.repeat(from.length)).join('');
+
+/**
+ * Text as search compares it: lower case, accents off, punctuation as a space ("Re:Zero" and "re zero" are the same).
+ * Only ASCII punctuation goes, so Japanese and symbols like ★ stay as they are. SQL twin: `searchableSql`.
+ */
+export function foldSearch(text: string): string {
+  let out = '';
+  for (const ch of text.toLowerCase()) {
+    const at = ACCENT_FROM.indexOf(ch);
+    out += at === -1 ? ch : ACCENT_TO[at];
+  }
+  return out.replace(/[\x21-\x2f\x3a-\x40\x5b-\x60\x7b-\x7e\s]+/g, ' ').trim();
+}
+
+/** `foldSearch` in Postgres, for a text expression (in the C locale, [:punct:] is ASCII punctuation only). */
+export const searchableSql = (expr: string) =>
+  `trim(regexp_replace(translate(lower(${expr}), '${ACCENT_FROM}', '${ACCENT_TO}'), '[[:punct:][:space:]]+', ' ', 'g'))`;
+
 /** At most this many words count; the rest of a pasted paragraph is ignored. */
 export const MAX_SEARCH_WORDS = 8;
 
-/** The words of a search, lower case, without duplicates. Punctuation inside a word stays (re:zero, 1/7, rx-78-2). */
+/**
+ * The words of a search, folded (see `foldSearch`), without duplicates. A word with punctuation inside stays one phrase:
+ * "re:zero" is matched as "re zero", "rx-78-2" as "rx 78 2".
+ */
 export function searchWords(q: string): string[] {
-  const words = q
-    .toLowerCase()
-    .split(/\s+/)
-    .map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ''))
-    .filter(Boolean);
+  const words = q.split(/\s+/).map(foldSearch).filter(Boolean);
   return [...new Set(words)].slice(0, MAX_SEARCH_WORDS);
 }
 
@@ -21,7 +51,7 @@ export function searchWords(q: string): string[] {
 export function vocabulary(texts: (string | null | undefined)[]): Set<string> {
   const vocab = new Set<string>();
   for (const text of texts) {
-    for (const word of (text ?? '').toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+    for (const word of foldSearch(text ?? '').split(/[^\p{L}\p{N}]+/u)) {
       if (word.length >= 3) vocab.add(word);
     }
   }

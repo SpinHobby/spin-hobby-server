@@ -138,6 +138,7 @@ const EXPECTED: string[] = [
   'GET /products/new-in-stock [public]',
   'GET /products/preorders [public]',
   'GET /products/ranking [public]',
+  'GET /products/suggest [public] limit 120/60s',
   'GET /reminders/stop [public] limit 20/60s',
   'GET /sample-images/:file [public] no-limit',
   'GET /square/catalog [public]',

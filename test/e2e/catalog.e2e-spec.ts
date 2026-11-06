@@ -74,6 +74,25 @@ describe('storefront catalog', () => {
     expect((await http.get('/products?series=no-such-series')).body.items).toEqual([]);
   });
 
+  it('ignores accents, case and punctuation in a search', async () => {
+    for (const q of ['r%C3%A9m', 're%20zero', 'RE-ZERO', 'rem%201%2F7', 'rem%20%201-7'])
+      expect((await http.get(`/products?q=${q}`)).body.items.map((p: any) => p.id)).toEqual([
+        'FIG1',
+      ]);
+  });
+
+  it('suggests products and series while typing', async () => {
+    const res = (await http.get('/products/suggest?q=re%20zer').expect(200)).body;
+    expect(res.products.map((p: any) => p.id)).toEqual(['FIG1']);
+    expect(res.series).toEqual([{ name: 'Re:Zero', slug: 're-zero', count: 1 }]);
+    expect((await http.get('/products/suggest?q=').expect(200)).body).toEqual({
+      success: true,
+      products: [],
+      series: [],
+      categories: [],
+    });
+  });
+
   it('offers the search with its typos fixed when nothing matches', async () => {
     const typo = (await http.get('/products?q=reem%20figur')).body;
     expect(typo.items).toEqual([]);

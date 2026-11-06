@@ -6,7 +6,7 @@ import type { HeroSlideRow, StoreEventRow, StorefrontProductRow } from '../../da
 import type { ProductQuery } from './dto/product-query.dto.js';
 import { FRONT_PAGE_SLOTS } from './front-page.js';
 import { publicProduct } from './product.mapper.js';
-import { didYouMean, searchWords, vocabulary } from './search.js';
+import { didYouMean, searchableSql, searchWords, vocabulary } from './search.js';
 import { slugify } from './slug.js';
 
 const SORTS: Record<string, string> = {
@@ -31,8 +31,13 @@ export const GROUPS: Record<string, { status?: string[]; sale?: boolean; pattern
 };
 
 // Everything a shopper might type to find a product, as one text, so a search's words can match across fields.
-const SEARCH_TEXT = `concat_ws(' ', name, series, character, manufacturer, jan_code, category,
-  (select path from cat_paths where cat_paths.id = sp.category_id))`;
+// Folded like the search words (lower case, no accents, punctuation as spaces): see foldSearch in search.ts.
+const SEARCH_TEXT =
+  searchableSql(`concat_ws(' ', name, series, character, manufacturer, jan_code, category,
+  (select path from cat_paths where cat_paths.id = sp.category_id))`);
+/** How many products, and how many series or categories, the search box offers while typing. */
+const SUGGEST_PRODUCTS = 6;
+const SUGGEST_GROUPS = 3;
 /** How long the typo-fix word list is kept before it's read again (new products add words). */
 const VOCAB_TTL_MS = 5 * 60_000;
 
@@ -172,6 +177,37 @@ export class CatalogService {
       total,
       ...(next < total ? { cursor: String(next) } : {}),
       ...(suggestion ? { didYouMean: suggestion } : {}),
+    };
+  }
+
+  /**
+   * What the search box offers while someone types: the first few products, and the series and shop categories whose name
+   * has every word, so "frie" offers Frieren products, the Frieren series page and nothing else.
+   */
+  async suggest(q: string | undefined) {
+    const words = searchWords((q ?? '').slice(0, 100));
+    if (!words.length) return { success: true as const, products: [], series: [], categories: [] };
+    const matchAll = (expr: string, first: number) =>
+      words.map((_, i) => `${searchableSql(expr)} ilike $${first + i}`).join(' and ');
+    const patterns = words.map(likePattern);
+    const [page, series, categories] = await Promise.all([
+      this.productPage({ q, limit: String(SUGGEST_PRODUCTS), sort: 'featured' }, true),
+      this.db.many<{ series: string; count: number }>(
+        `select series, count(*)::int as count from public.storefront_products
+          where series is not null and ${matchAll('series', 1)}
+          group by series order by count(*) desc, series limit ${SUGGEST_GROUPS}`,
+        patterns,
+      ),
+      this.db.many<{ id: string; name: string }>(
+        `select id, name from public.store_categories where ${matchAll('name', 1)} order by sort_order, name limit ${SUGGEST_GROUPS}`,
+        patterns,
+      ),
+    ]);
+    return {
+      success: true as const,
+      products: page.items,
+      series: series.map((r) => ({ name: r.series, slug: slugify(r.series), count: r.count })),
+      categories,
     };
   }
 

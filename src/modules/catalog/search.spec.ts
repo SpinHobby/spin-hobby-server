@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { didYouMean, editDistance, searchWords, vocabulary } from './search.js';
+import { didYouMean, editDistance, foldSearch, searchWords, vocabulary } from './search.js';
 
 const vocab = vocabulary([
   'Hatsune Miku Luminasta Figure',
@@ -9,10 +9,23 @@ const vocab = vocabulary([
   'Fig Keychain',
 ]);
 
+describe('foldSearch', () => {
+  it('drops accents and case, and turns ASCII punctuation into single spaces', () => {
+    expect(foldSearch('Pokémon')).toBe('pokemon');
+    expect(foldSearch('Ryūjin  Kōta')).toBe('ryujin kota');
+    expect(foldSearch('Re:Zero')).toBe('re zero');
+    expect(foldSearch('RX-78-2 (Ver. B)')).toBe('rx 78 2 ver b');
+  });
+
+  it('keeps Japanese and symbols', () => {
+    expect(foldSearch('初音ミク ★')).toBe('初音ミク ★');
+  });
+});
+
 describe('searchWords', () => {
   it('splits on spaces, lower-cases, drops edge punctuation and repeats', () => {
     expect(searchWords('  Miku, FIGURE miku ')).toEqual(['miku', 'figure']);
-    expect(searchWords('re:zero 1/7 rx-78-2')).toEqual(['re:zero', '1/7', 'rx-78-2']);
+    expect(searchWords('re:zero 1/7 Pokémon')).toEqual(['re zero', '1 7', 'pokemon']);
     expect(searchWords('a b c d e f g h i j')).toHaveLength(8);
   });
 });
