@@ -6,6 +6,7 @@ import type { HeroSlideRow, StoreEventRow, StorefrontProductRow } from '../../da
 import type { ProductQuery } from './dto/product-query.dto.js';
 import { FRONT_PAGE_SLOTS } from './front-page.js';
 import { publicProduct } from './product.mapper.js';
+import { didYouMean, searchWords, vocabulary } from './search.js';
 import { slugify } from './slug.js';
 
 const SORTS: Record<string, string> = {
@@ -28,6 +29,12 @@ export const GROUPS: Record<string, { status?: string[]; sale?: boolean; pattern
   goods: { pattern: 'badge|acrylic|keychain|blind|apparel|poster|tapestry|goods|sticker|stand' },
   media: { pattern: 'book|doujin|manga|video|music|media|\\mcd\\M|dvd|blu-?ray' }, // \\m \\M = Postgres word boundaries
 };
+
+// Everything a shopper might type to find a product, as one text, so a search's words can match across fields.
+const SEARCH_TEXT = `concat_ws(' ', name, series, character, manufacturer, jan_code, category,
+  (select path from cat_paths where cat_paths.id = sp.category_id))`;
+/** How long the typo-fix word list is kept before it's read again (new products add words). */
+const VOCAB_TTL_MS = 5 * 60_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -80,7 +87,7 @@ const DEFAULT_EVENTS = [
 export class CatalogService {
   constructor(private readonly db: Db) {}
 
-  async productPage(query: ProductQuery) {
+  async productPage(query: ProductQuery, suggesting = false) {
     const limit = Math.min(Math.max(Number(query.limit ?? 24) || 24, 1), 60);
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
     const where: string[] = [];
@@ -129,22 +136,23 @@ export class CatalogService {
       add((n) => `price_cents < ${n}`, Math.round(max * 100));
     const seriesSlug = query.series?.trim().toLowerCase().slice(0, 100);
     if (seriesSlug) add((n) => `series = any(${n}::text[])`, await this.seriesNamed(seriesSlug));
-    const q = query.q?.trim();
-    if (q)
-      add(
-        (
-          n,
-        ) => `(name ilike ${n} or series ilike ${n} or character ilike ${n} or jan_code ilike ${n} or category ilike ${n}
-      or exists (select 1 from cat_paths where cat_paths.id = sp.category_id and cat_paths.path ilike ${n}))`,
-        likePattern(q),
-      );
+    const q = query.q?.trim().slice(0, 100);
+    // every word has to appear somewhere on the product: "miku figure" finds a Miku in Prize Figures
+    for (const word of q ? searchWords(q) : [])
+      add((n) => `${SEARCH_TEXT} ilike ${n}`, likePattern(word));
 
     const filter = where.length ? `where ${where.join(' and ')}` : '';
-    const order = SORTS[query.sort ?? 'new'] ?? SORTS.new;
+    let order = SORTS[query.sort ?? 'new'] ?? SORTS.new;
+    const listParams = [...params];
+    // a search shown "Featured" puts names with the whole phrase first, then names that start with it
+    if (q && (query.sort ?? 'featured') === 'featured') {
+      listParams.push(likePattern(q), likePattern(q).slice(1));
+      order = `(name ilike $${listParams.length - 1}) desc, (name ilike $${listParams.length}) desc, ${order}`;
+    }
     const [rows, count] = await Promise.all([
       this.db.many<StorefrontProductRow>(
         `${CATEGORY_PATHS} select sp.* from public.storefront_products sp ${filter} order by ${order} limit ${limit} offset ${offset}`,
-        params,
+        listParams,
       ),
       this.db.one<{ total: number }>(
         `${CATEGORY_PATHS} select count(*)::int as total from public.storefront_products sp ${filter}`,
@@ -153,12 +161,34 @@ export class CatalogService {
     ]);
     const total = count?.total ?? 0;
     const next = offset + rows.length;
+    // nothing found: offer the search with its typos fixed, when that search finds something
+    const suggestion =
+      q && total === 0 && offset === 0 && !suggesting
+        ? await this.searchSuggestion(query, q)
+        : null;
     return {
       success: true as const,
       items: rows.map(publicProduct),
       total,
       ...(next < total ? { cursor: String(next) } : {}),
+      ...(suggestion ? { didYouMean: suggestion } : {}),
     };
+  }
+
+  private vocab: { words: Set<string>; at: number } | null = null;
+
+  /** `q` with its typos fixed against the catalogue's words, if that finds products under the same filters. */
+  private async searchSuggestion(query: ProductQuery, q: string): Promise<string | null> {
+    if (!this.vocab || Date.now() - this.vocab.at > VOCAB_TTL_MS) {
+      const rows = await this.db.many<{ text: string }>(
+        `select concat_ws(' ', name, series, character, manufacturer, category) as text from public.storefront_products`,
+      );
+      this.vocab = { words: vocabulary(rows.map((r) => r.text)), at: Date.now() };
+    }
+    const fixed = didYouMean(q, this.vocab.words);
+    if (!fixed) return null;
+    const found = await this.productPage({ ...query, q: fixed, limit: '1', cursor: null }, true);
+    return found.total > 0 ? fixed : null;
   }
 
   async facets() {

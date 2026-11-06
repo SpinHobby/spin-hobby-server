@@ -74,6 +74,21 @@ describe('storefront catalog', () => {
     expect((await http.get('/products?series=no-such-series')).body.items).toEqual([]);
   });
 
+  it('offers the search with its typos fixed when nothing matches', async () => {
+    const typo = (await http.get('/products?q=reem%20figur')).body;
+    expect(typo.items).toEqual([]);
+    expect(typo.didYouMean).toBe('rem figure');
+    expect(
+      (await http.get(`/products?q=${encodeURIComponent(typo.didYouMean)}`)).body.items.map(
+        (p: any) => p.id,
+      ),
+    ).toEqual(['FIG1']);
+    // nothing close, or a fix that still finds nothing under the same filters: no suggestion
+    expect((await http.get('/products?q=zzzzqqq')).body.didYouMean).toBeUndefined();
+    expect((await http.get('/products?q=reem&status=out')).body.didYouMean).toBeUndefined();
+    expect((await http.get('/products?q=rem')).body.didYouMean).toBeUndefined();
+  });
+
   it('derives status from stock and pre-order dates like the storefront expects', async () => {
     const res = await http.get('/products?limit=60').expect(200);
     const status = Object.fromEntries(res.body.items.map((p: any) => [p.id, p.status]));
@@ -104,6 +119,13 @@ describe('storefront catalog', () => {
       'FIG1',
     ]);
     expect((await http.get('/products?q=100%25')).body.items).toEqual([]); // LIKE wildcards are escaped
+    // each word on its own, across fields: "rem" is in the name, "re:zero" in the series
+    expect((await http.get('/products?q=rem%20re:zero')).body.items.map((p: any) => p.id)).toEqual([
+      'FIG1',
+    ]);
+    expect((await http.get('/products?q=figure%20rem')).body.items.map((p: any) => p.id)).toEqual([
+      'FIG1',
+    ]);
     const first = (await http.get('/products?limit=2&sort=price_desc')).body;
     expect(first.cursor).toBe('2');
     const second = (await http.get(`/products?limit=2&sort=price_desc&cursor=${first.cursor}`))
