@@ -278,6 +278,8 @@ export interface StoreSettingsRow {
   packaging_weight_g: number;
   /** The storefront layout (Admin > Homepage > Page layout); null is the default. Read it through storefrontLayout(). */
   storefront_layout: unknown;
+  /** The storefront's look (Admin > Homepage > Theme). Read it through storefrontTheme(). */
+  storefront_theme: string;
   updated_at: string;
 }
 

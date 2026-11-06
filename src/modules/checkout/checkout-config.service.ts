@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Db } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';
 import { storefrontLayout } from '../admin/settings/layout.js';
+import { storefrontTheme } from '../admin/settings/themes.js';
 import { ExchangeRateService } from '../../integrations/fx/exchange-rate.service.js';
 import { testPaymentsActive } from '../payments/test-payments.js';
 import { paypalClientId, paypalIsLive } from '../../config/paypal.config.js';
@@ -50,6 +51,8 @@ export class CheckoutConfigService {
       musicPlaylistId: s.music_playlist_id ?? null,
       // the storefront's layout, always complete (defaults filled in)
       layout: storefrontLayout(s.storefront_layout),
+      // the storefront's look (Admin > Homepage > Theme)
+      theme: storefrontTheme(s.storefront_theme),
       productBackground: background ? { id: background.id, url: background.image_url } : null,
     };
   }
