@@ -11,7 +11,11 @@ import { sentFields } from '../dto/defined-fields.js';
 import { CatalogSearchService } from './catalog-search.service.js';
 import type { CatalogSearchQuery } from './dto/catalog-search.query.dto.js';
 import type { UpdateProductDto } from './dto/update-product.dto.js';
-import type { CatalogProductRow, ProductMetadataRow } from '../../../database/rows.js';
+import type {
+  CatalogProductRow,
+  ProductMetadataRow,
+  StorefrontProductRow,
+} from '../../../database/rows.js';
 
 /** Managing products in the admin: finding them, editing their storefront details, and restock emails. */
 @Injectable()
@@ -217,12 +221,16 @@ export class AdminProductsService {
     );
     if (recipients.length && !this.email.configured)
       throw new AppError('Restock email is not configured.', 503);
+    const listing = await this.db.one<StorefrontProductRow>(
+      'select * from public.storefront_products where id = $1',
+      [squareItemId],
+    );
     const sent: string[] = [];
     for (const r of recipients) {
       const ok = await this.email.send(
         r.email,
         `${product.name} is back at Spin Hobby`,
-        this.email.restockHtml(product.name),
+        this.email.restockHtml(product.name, listing),
       );
       if (ok) sent.push(r.id);
     }
