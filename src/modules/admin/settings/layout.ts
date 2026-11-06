@@ -18,6 +18,7 @@ const COLUMNS = ['auto', 3, 4, 5, 6] as const;
 const SHAPES = ['square', 'portrait'] as const;
 const SIDEBARS = ['left', 'right', 'hidden'] as const;
 const WIDTHS = ['standard', 'wide', 'full'] as const;
+const LOGOS = ['badge', 'wordmark'] as const;
 
 /** How the storefront is laid out (Admin > Homepage > Page layout). */
 export interface StorefrontLayout {
@@ -35,6 +36,8 @@ export interface StorefrontLayout {
   width: (typeof WIDTHS)[number];
   /** The thin bar at the very top (free shipping, account links). */
   announcementBar: boolean;
+  /** The header logo: the original badge picture, or a clean wordmark (the mascot and "Spin Hobby" in the heading font). */
+  logo: (typeof LOGOS)[number];
 }
 
 export const DEFAULT_LAYOUT: StorefrontLayout = {
@@ -45,6 +48,7 @@ export const DEFAULT_LAYOUT: StorefrontLayout = {
   sidebar: 'left',
   width: 'standard',
   announcementBar: true,
+  logo: 'badge',
 };
 
 function pick<T>(field: string, allowed: readonly T[], value: unknown, fallback: T): T {
@@ -87,5 +91,6 @@ export function storefrontLayout(value: unknown): StorefrontLayout {
     sidebar: pick('sidebar', SIDEBARS, v.sidebar, DEFAULT_LAYOUT.sidebar),
     width: pick('width', WIDTHS, v.width, DEFAULT_LAYOUT.width),
     announcementBar: v.announcementBar ?? DEFAULT_LAYOUT.announcementBar,
+    logo: pick('logo', LOGOS, v.logo, DEFAULT_LAYOUT.logo),
   };
 }

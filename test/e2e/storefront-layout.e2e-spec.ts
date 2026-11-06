@@ -28,10 +28,12 @@ describe('storefront layout', () => {
           sidebar: 'hidden',
           width: 'wide',
           announcementBar: false,
+          logo: 'wordmark',
         },
       })
       .expect(200);
     expect(saved.body.settings.storefront_layout.columns).toBe(5);
+    expect(saved.body.settings.storefront_layout.logo).toBe('wordmark');
 
     const after = (await http.get('/checkout/config').expect(200)).body.layout;
     expect(after.sections.slice(0, 3)).toEqual([
