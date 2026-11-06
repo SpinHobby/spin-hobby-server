@@ -7,8 +7,10 @@ import type { ProductQuery } from './dto/product-query.dto.js';
 import { FRONT_PAGE_SLOTS } from './front-page.js';
 import { publicProduct } from './product.mapper.js';
 import {
+  addCloseWords,
   didYouMean,
   foldSearch,
+  mayBeTypo,
   parseSearch,
   searchableSql,
   synonymIndex,
@@ -51,6 +53,27 @@ const SUGGEST_GROUPS = 3;
 const SEARCH_NAME = searchableSql('name');
 /** How long the typo-fix word list is kept before it's read again (new products add words). */
 const VOCAB_TTL_MS = 5 * 60_000;
+
+/**
+ * How popular each product is lately, for ordering search results that match equally well: units sold on paid orders, then
+ * add-to-carts and product views from the anonymous daily counts (public.analytics_daily). Weighted so one sale outweighs
+ * a handful of views.
+ */
+const POPULARITY_DAYS = 60;
+const POPULAR = `popular as (
+  select product_id, sum(points)::int as score from (
+    select oi.square_item_id as product_id, sum(oi.quantity) * 10 as points
+      from public.order_items oi join public.orders o on o.id = oi.order_id
+     where o.status in ('paid', 'preorder_reserved', 'fulfilled', 'shipped')
+       and o.created_at > now() - interval '${POPULARITY_DAYS} days'
+     group by oi.square_item_id
+    union all
+    select product_id, sum(count * case event when 'add_to_cart' then 3 else 1 end)
+      from public.analytics_daily
+     where event in ('product_view', 'add_to_cart') and day > current_date - ${POPULARITY_DAYS}
+     group by product_id
+  ) points group by product_id
+)`;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -156,6 +179,11 @@ export class CatalogService {
     // Every term has to appear somewhere on the product ("miku figure" finds a Miku in Prize Figures), as typed or as one of its
     // synonyms or singular forms; filters written in the search ("under $50", "in stock") apply unless the page set its own.
     const parsed = q ? parseSearch(q, await this.synonyms()) : null;
+    // words the catalogue doesn't know get the catalogue words a typo or two away ("hatsne" → hatsune)
+    const fuzzy =
+      parsed && parsed.terms.some((t) => mayBeTypo(t.typed))
+        ? addCloseWords(parsed, await this.words())
+        : false;
     const at = (value: unknown) => {
       params.push(value);
       return `$${params.length}`;
@@ -176,30 +204,47 @@ export class CatalogService {
     if (parsed?.status && !statuses.length && !group?.status)
       add((n) => `status = any(${n}::text[])`, parsed.status === 'in' ? ['in', 'low'] : ['pre']);
 
+    // the same terms without their close words: products that match as typed come before near-misses, in every sort
+    const exact =
+      fuzzy && parsed
+        ? parsed.terms
+            .filter((t) => t.close)
+            .map((t) => termSql({ ...t, close: undefined }, SEARCH_TEXT, at))
+            .join(' and ')
+        : 'true';
+
     const filter = where.length ? `where ${where.join(' and ')}` : '';
     let order = SORTS[query.sort ?? 'new'] ?? SORTS.new;
     const listParams = [...params];
+    let popular = '';
     // a search shown "Featured" puts names with the whole phrase first, then names that start with it
     if (q && (query.sort ?? 'featured') === 'featured') {
       listParams.push(likePattern(q), likePattern(q).slice(1));
       const score = nameScores.length ? `(${nameScores.join(' + ')}) desc, ` : '';
-      order = `(name ilike $${listParams.length - 1}) desc, (name ilike $${listParams.length}) desc, ${score}${order}`;
+      // then what sells and gets looked at most, so equally good matches show the popular one first
+      order = `(name ilike $${listParams.length - 1}) desc, (name ilike $${listParams.length}) desc, ${score}coalesce(pop.score, 0) desc, ${order}`;
+      popular = `, ${POPULAR}`;
     }
+    if (fuzzy) order = `(${exact}) desc, ${order}`;
     const [rows, count] = await Promise.all([
       this.db.many<StorefrontProductRow>(
-        `${CATEGORY_PATHS} select sp.* from public.storefront_products sp ${filter} order by ${order} limit ${limit} offset ${offset}`,
+        `${CATEGORY_PATHS}${popular} select sp.* from public.storefront_products sp
+          ${popular ? 'left join popular pop on pop.product_id = sp.id' : ''}
+          ${filter} order by ${order} limit ${limit} offset ${offset}`,
         listParams,
       ),
-      this.db.one<{ total: number }>(
-        `${CATEGORY_PATHS} select count(*)::int as total from public.storefront_products sp ${filter}`,
+      this.db.one<{ total: number; exact: number }>(
+        `${CATEGORY_PATHS} select count(*)::int as total, (count(*) filter (where ${exact}))::int as exact
+          from public.storefront_products sp ${filter}`,
         params,
       ),
     ]);
     const total = count?.total ?? 0;
+    const exactTotal = count?.exact ?? 0;
     const next = offset + rows.length;
-    // nothing found: offer the search with its typos fixed, when that search finds something
+    // nothing found as typed: offer the search with its typos fixed (the results may already be close matches)
     const suggestion =
-      parsed?.text && total === 0 && offset === 0 && !suggesting
+      parsed?.text && exactTotal === 0 && offset === 0 && !suggesting
         ? await this.searchSuggestion(query, parsed.text)
         : null;
     return {
@@ -208,6 +253,7 @@ export class CatalogService {
       total,
       ...(next < total ? { cursor: String(next) } : {}),
       ...(suggestion ? { didYouMean: suggestion } : {}),
+      ...(total > 0 && exactTotal === 0 ? { closeMatches: true } : {}),
       ...(parsed?.understood.length ? { understood: parsed.understood } : {}),
     };
   }
@@ -217,7 +263,9 @@ export class CatalogService {
    * has every word, so "frie" offers Frieren products, the Frieren series page and nothing else.
    */
   async suggest(q: string | undefined) {
-    const { terms } = parseSearch((q ?? '').slice(0, 100), await this.synonyms());
+    const parsed = parseSearch((q ?? '').slice(0, 100), await this.synonyms());
+    if (parsed.terms.some((t) => mayBeTypo(t.typed))) addCloseWords(parsed, await this.words());
+    const { terms } = parsed;
     if (!terms.length) return { success: true as const, products: [], series: [], categories: [] };
     // every term, as typed or as a synonym ("jjk" offers the Jujutsu Kaisen series)
     const patterns: unknown[] = [];
@@ -284,8 +332,8 @@ export class CatalogService {
 
   private vocab: { words: Set<string>; at: number } | null = null;
 
-  /** `q` with its typos fixed against the catalogue's words, if that finds products under the same filters. */
-  private async searchSuggestion(query: ProductQuery, q: string): Promise<string | null> {
+  /** The catalogue's own words and the synonyms, for typo fixes; read again every few minutes (new products add words). */
+  private async words(): Promise<Set<string>> {
     if (!this.vocab || Date.now() - this.vocab.at > VOCAB_TTL_MS) {
       const rows = await this.db.many<{ text: string }>(
         `select concat_ws(' ', name, series, character, manufacturer, category) as text from public.storefront_products`,
@@ -295,7 +343,12 @@ export class CatalogService {
         at: Date.now(),
       };
     }
-    const fixed = didYouMean(q, this.vocab.words);
+    return this.vocab.words;
+  }
+
+  /** `q` with its typos fixed against the catalogue's words, if that finds products under the same filters. */
+  private async searchSuggestion(query: ProductQuery, q: string): Promise<string | null> {
+    const fixed = didYouMean(q, await this.words());
     if (!fixed) return null;
     const found = await this.productPage({ ...query, q: fixed, limit: '1', cursor: null }, true);
     return found.total > 0 ? fixed : null;

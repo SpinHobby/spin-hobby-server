@@ -86,6 +86,22 @@ export function editDistance(a: string, b: string, max: number): number {
 const allowedEdits = (word: string) => (word.length <= 5 ? 1 : word.length <= 9 ? 2 : 3);
 
 /**
+ * Catalogue words within a few typos of `word`, closest first. Ties go to the longer word ("figur" → "figure", not "fig"),
+ * then alphabetical so the answer never flips.
+ */
+export function closeWords(word: string, vocab: Set<string>): string[] {
+  const max = allowedEdits(word);
+  const found: { w: string; d: number }[] = [];
+  for (const candidate of vocab) {
+    const d = editDistance(word, candidate, max);
+    if (d !== Infinity && d > 0) found.push({ w: candidate, d });
+  }
+  return found
+    .sort((a, b) => a.d - b.d || b.w.length - a.w.length || (a.w < b.w ? -1 : 1))
+    .map((f) => f.w);
+}
+
+/**
  * The search with each unknown word swapped for the closest catalogue word, or null when nothing changes. Words the catalogue
  * already has, numbers, codes and anything that isn't Latin letters (Japanese searches) are left as typed.
  */
@@ -93,22 +109,7 @@ export function didYouMean(q: string, vocab: Set<string>): string | null {
   let changed = false;
   const fixed = searchWords(q).map((word) => {
     if (vocab.has(word) || word.length < 3 || !/^[a-z]+$/.test(word)) return word;
-    let best: string | null = null;
-    let bestDistance = allowedEdits(word);
-    for (const candidate of vocab) {
-      const d = editDistance(word, candidate, bestDistance);
-      if (d === Infinity) continue;
-      // ties go to the longer word ("figur" → "figure", not "fig"), then alphabetical so the answer never flips
-      const better =
-        !best ||
-        d < bestDistance ||
-        candidate.length > best.length ||
-        (candidate.length === best.length && candidate < best);
-      if (better) {
-        best = candidate;
-        bestDistance = d;
-      }
-    }
+    const best = closeWords(word, vocab)[0];
     if (!best) return word;
     changed = true;
     return best;
@@ -123,6 +124,8 @@ export function didYouMean(q: string, vocab: Set<string>): string | null {
 export interface SearchTerm {
   typed: string;
   variants: string[];
+  /** Catalogue words a typo or two away, when the catalogue doesn't know what was typed (see `addCloseWords`). */
+  close?: string[];
 }
 
 export interface ParsedSearch {
@@ -246,13 +249,39 @@ export function parseSearch(q: string, synonyms: SynonymIndex = NO_SYNONYMS): Pa
   return out;
 }
 
+/** Close words kept per misspelt term: enough for "hatsne" → hatsune, few enough that unrelated products stay out. */
+const MAX_CLOSE_WORDS = 3;
+
+/** A word typo matching looks at: Latin letters, five or more (shorter words have too many neighbours: "rem", "ram", "rim"). */
+export const mayBeTypo = (word: string) => /^[a-z]{5,}$/.test(word);
+
+/**
+ * Gives each term the catalogue doesn't know its closest catalogue words, so "hatsne mikku" finds Hatsune Miku while the
+ * shopper is still looking at results. Terms the catalogue knows, as typed or as a synonym, are left alone. True when any
+ * term got close words (the shop then lists exact matches first).
+ */
+export function addCloseWords(parsed: ParsedSearch, vocab: Set<string>): boolean {
+  let added = false;
+  for (const term of parsed.terms) {
+    if (!mayBeTypo(term.typed) || vocab.has(term.typed) || term.variants.some((v) => vocab.has(v)))
+      continue;
+    const close = closeWords(term.typed, vocab).slice(0, MAX_CLOSE_WORDS);
+    if (!close.length) continue;
+    term.close = close;
+    added = true;
+  }
+  return added;
+}
+
 /**
  * The SQL test for one term against a folded text expression, and the values it needs (in order): what was typed anywhere in
- * the text, then the Latin variants as whole words (plural allowed), then the Japanese ones anywhere (Japanese has no spaces).
+ * the text, then the Latin variants and close words as whole words (plural allowed), then the Japanese ones anywhere
+ * (Japanese has no spaces).
  */
 export function termSql(term: SearchTerm, text: string, at: (value: unknown) => string): string {
-  const latin = term.variants.filter((v) => /^[a-z0-9 ]+$/.test(v));
-  const other = term.variants.filter((v) => !/^[a-z0-9 ]+$/.test(v));
+  const all = [...term.variants, ...(term.close ?? [])];
+  const latin = all.filter((v) => /^[a-z0-9 ]+$/.test(v));
+  const other = all.filter((v) => !/^[a-z0-9 ]+$/.test(v));
   const parts = [`${text} ilike ${at(likePattern(term.typed))}`];
   if (latin.length) parts.push(`${text} ~ ${at(String.raw`\m(?:${latin.join('|')})(?:s|es)?\M`)}`);
   if (other.length) parts.push(`${text} ilike any(${at(other.map(likePattern))}::text[])`);

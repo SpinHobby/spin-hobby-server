@@ -124,6 +124,30 @@ describe('storefront catalog', () => {
     expect((await http.get('/products?q=rem')).body.didYouMean).toBeUndefined();
   });
 
+  it('finds products through typos straight away, and says they are close matches', async () => {
+    const res = (await http.get('/products?q=mikku%20prize%20figuer')).body;
+    expect(res.items.map((p: any) => p.id)).toEqual(['PRZ1']);
+    expect(res.closeMatches).toBe(true);
+    expect(res.didYouMean).toBe('miku prize figure');
+    expect(
+      (await http.get('/products/suggest?q=mikku')).body.products.map((p: any) => p.id),
+    ).toEqual(['PRZ1']);
+    // short words have too many neighbours to guess at, and exact results are not "close"
+    expect((await http.get('/products?q=reem')).body.items).toEqual([]);
+    expect((await http.get('/products?q=miku')).body.closeMatches).toBeUndefined();
+  });
+
+  it('puts what shoppers view and add to cart first among equally good matches', async () => {
+    const ids = async () => (await http.get('/products?q=figure')).body.items.map((p: any) => p.id);
+    await pglite.query(
+      `insert into public.analytics_daily (day, event, product_id, count) values
+        (current_date, 'product_view', 'CHB1', 5), (current_date, 'add_to_cart', 'PRZ1', 1),
+        (current_date - 90, 'product_view', 'FIG1', 50)`,
+    );
+    expect(await ids()).toEqual(['CHB1', 'PRZ1', 'FIG1']); // FIG1's views are too old to count
+    await pglite.query('delete from public.analytics_daily');
+  });
+
   it('derives status from stock and pre-order dates like the storefront expects', async () => {
     const res = await http.get('/products?limit=60').expect(200);
     const status = Object.fromEntries(res.body.items.map((p: any) => [p.id, p.status]));

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addCloseWords,
+  closeWords,
   didYouMean,
   editDistance,
   foldSearch,
@@ -46,6 +48,14 @@ describe('editDistance', () => {
     expect(editDistance('maki', 'miku', 1)).toBe(Infinity);
     expect(editDistance('fiugre', 'figure', 2)).toBe(1); // a swap is one edit
     expect(editDistance('hatsne', 'hatsune', 1)).toBe(1);
+  });
+});
+
+describe('closeWords', () => {
+  it('lists catalogue words a typo or two away, closest first', () => {
+    expect(closeWords('figuer', vocab)).toEqual(['figure']);
+    expect(closeWords('hatsne', vocab)).toEqual(['hatsune']);
+    expect(closeWords('figure', vocab)).toEqual([]); // the word itself is not "close"
   });
 });
 
@@ -104,6 +114,18 @@ describe('parseSearch', () => {
     );
     expect(variants('figures')).toContain('figure');
     expect(variants('glass')).toEqual([]); // "ss" is not a plural
+  });
+
+  it('gives words the catalogue does not know their closest catalogue words', () => {
+    const p = parseSearch('hatsne mikku figure frieren rem', synonyms);
+    expect(addCloseWords(p, vocab)).toBe(true);
+    expect(p.terms.map((t) => t.close)).toEqual([
+      ['hatsune'],
+      ['miku'],
+      undefined, // known
+      undefined, // known
+      undefined, // too short to guess
+    ]);
   });
 
   it('uses no synonyms when given none', () => {
