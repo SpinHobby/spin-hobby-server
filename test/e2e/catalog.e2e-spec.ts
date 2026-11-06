@@ -81,6 +81,22 @@ describe('storefront catalog', () => {
       ]);
   });
 
+  it('understands synonyms, Japanese names, plurals and filters written in the search', async () => {
+    const ids = async (q: string) =>
+      (await http.get(`/products?q=${encodeURIComponent(q)}&limit=60`)).body.items
+        .map((p: any) => p.id)
+        .sort();
+    expect(await ids('rezero')).toEqual(['FIG1']);
+    expect(await ids('リゼロ')).toEqual(['FIG1']);
+    expect(await ids('初音ミク')).toEqual(['PRZ1']); // "Miku Prize Figure" only says Miku
+    expect(await ids('pins')).toEqual(['BDG1']); // a badge, and never "Spin" anything
+    expect(await ids('plushies')).toEqual(['OLD1']);
+    expect(await ids('figures under $70')).toEqual(['CHB1', 'PRZ1']);
+    const pre = (await http.get('/products?q=figure%20pre-order')).body;
+    expect(pre.items.map((p: any) => p.id)).toEqual(['FIG1']);
+    expect(pre.understood).toEqual(['pre-orders']);
+  });
+
   it('suggests products and series while typing', async () => {
     const res = (await http.get('/products/suggest?q=re%20zer').expect(200)).body;
     expect(res.products.map((p: any) => p.id)).toEqual(['FIG1']);

@@ -15,8 +15,12 @@ export class CatalogController {
   ) {}
 
   @Get('products')
-  products(@Query() query: ProductQuery) {
-    return this.catalog.productPage(query);
+  async products(@Query() query: ProductQuery) {
+    const page = await this.catalog.productPage(query);
+    // a shopper's search that found nothing goes on Admin > Dashboard (never holds up the answer)
+    if (query.q?.trim() && !query.cursor && page.total === 0)
+      void this.catalog.recordMiss(query.q).catch(() => undefined);
+    return page;
   }
 
   /** The search box's suggestions while typing (a few products, series and categories). Called as people type, so limited per visitor. */

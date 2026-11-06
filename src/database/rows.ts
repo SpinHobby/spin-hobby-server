@@ -295,3 +295,11 @@ export interface ProductReviewRow {
   created_at: string;
   reviewed_at: string | null;
 }
+
+/** public.search_misses: a shop search that found nothing (folded words only), and how often it came up. */
+export interface SearchMissRow {
+  query: string;
+  times: number;
+  first_at: Date;
+  last_at: Date;
+}
