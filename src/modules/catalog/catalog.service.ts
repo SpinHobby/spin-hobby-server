@@ -55,25 +55,34 @@ const SEARCH_NAME = searchableSql('name');
 const VOCAB_TTL_MS = 5 * 60_000;
 
 /**
- * How popular each product is lately, for ordering search results that match equally well: units sold on paid orders, then
- * add-to-carts and product views from the anonymous daily counts (public.analytics_daily). Weighted so one sale outweighs
- * a handful of views.
+ * How popular each product is lately, for ordering search results that match equally well. Most of the shop is one of a kind,
+ * so a sale says more about the series than the item (which is then usually sold out): paid units count for every product in
+ * the same series, as well as for the product itself. Add-to-carts and product views from the anonymous daily counts
+ * (public.analytics_daily) count for the product. Weighted so one sale outweighs a handful of views.
  */
 const POPULARITY_DAYS = 60;
-const POPULAR = `popular as (
-  select product_id, sum(points)::int as score from (
-    select oi.square_item_id as product_id, sum(oi.quantity) * 10 as points
-      from public.order_items oi join public.orders o on o.id = oi.order_id
-     where o.status in ('paid', 'preorder_reserved', 'fulfilled', 'shipped')
-       and o.created_at > now() - interval '${POPULARITY_DAYS} days'
-     group by oi.square_item_id
-    union all
-    select product_id, sum(count * case event when 'add_to_cart' then 3 else 1 end)
-      from public.analytics_daily
-     where event in ('product_view', 'add_to_cart') and day > current_date - ${POPULARITY_DAYS}
-     group by product_id
-  ) points group by product_id
+const POPULAR = `sold as (
+  select oi.square_item_id as product_id, m.series as sold_series, sum(oi.quantity)::int * 10 as points
+    from public.order_items oi
+    join public.orders o on o.id = oi.order_id
+    left join public.product_metadata m on m.square_item_id = oi.square_item_id
+   where o.status in ('paid', 'preorder_reserved', 'fulfilled', 'shipped')
+     and o.created_at > now() - interval '${POPULARITY_DAYS} days'
+   group by oi.square_item_id, m.series
+), series_sold as (
+  select sold_series, sum(points)::int as points from sold where sold_series is not null group by sold_series
+), interest as (
+  select product_id, sum(count * case event when 'add_to_cart' then 3 else 1 end)::int as points
+    from public.analytics_daily
+   where event in ('product_view', 'add_to_cart') and day > current_date - ${POPULARITY_DAYS}
+   group by product_id
 )`;
+/** A product's popularity from the POPULAR tables, joined as below. */
+const POPULARITY_JOINS = `left join interest pi on pi.product_id = sp.id
+  left join sold ps on ps.product_id = sp.id
+  left join series_sold pss on pss.sold_series = sp.series`;
+const POPULARITY_SCORE =
+  'coalesce(pi.points, 0) + coalesce(ps.points, 0) + coalesce(pss.points, 0)';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -221,15 +230,15 @@ export class CatalogService {
     if (q && (query.sort ?? 'featured') === 'featured') {
       listParams.push(likePattern(q), likePattern(q).slice(1));
       const score = nameScores.length ? `(${nameScores.join(' + ')}) desc, ` : '';
-      // then what sells and gets looked at most, so equally good matches show the popular one first
-      order = `(name ilike $${listParams.length - 1}) desc, (name ilike $${listParams.length}) desc, ${score}coalesce(pop.score, 0) desc, ${order}`;
+      // then what can still be bought, then what sells and gets looked at most, so equally good matches show the popular one first
+      order = `(name ilike $${listParams.length - 1}) desc, (name ilike $${listParams.length}) desc, ${score}(status in ('out', 'closed')), ${POPULARITY_SCORE} desc, ${order}`;
       popular = `, ${POPULAR}`;
     }
     if (fuzzy) order = `(${exact}) desc, ${order}`;
     const [rows, count] = await Promise.all([
       this.db.many<StorefrontProductRow>(
         `${CATEGORY_PATHS}${popular} select sp.* from public.storefront_products sp
-          ${popular ? 'left join popular pop on pop.product_id = sp.id' : ''}
+          ${popular ? POPULARITY_JOINS : ''}
           ${filter} order by ${order} limit ${limit} offset ${offset}`,
         listParams,
       ),

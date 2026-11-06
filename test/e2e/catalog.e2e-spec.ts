@@ -145,6 +145,36 @@ describe('storefront catalog', () => {
         (current_date - 90, 'product_view', 'FIG1', 50)`,
     );
     expect(await ids()).toEqual(['CHB1', 'PRZ1', 'FIG1']); // FIG1's views are too old to count
+
+    // most items are one of a kind, so a sale lifts the rest of its series: a sold Re:Zero one-off lifts the Rem figure
+    await pglite.query(
+      "update public.product_metadata set series = 'Re:Zero' where square_item_id = 'HID1'",
+    );
+    const order = await pglite.query<{ id: number }>(
+      `insert into public.orders (status, provider, subtotal_cents, shipping_cents, total_cents, shipping_method, billing_email,
+         billing_address, shipping_address) values ('paid', 'square', 1000, 0, 1000, 'standard', 'fan@example.com', '{}', '{}')
+       returning id`,
+    );
+    await pglite.query(
+      `insert into public.order_items (order_id, square_item_id, square_variation_id, name, unit_price_cents, quantity)
+       values ($1, 'HID1', 'HID1_V', 'Hidden Convention One-off', 1000, 1)`,
+      [order.rows[0].id],
+    );
+    expect(await ids()).toEqual(['FIG1', 'CHB1', 'PRZ1']);
+
+    // what can't be bought any more goes after what can, however popular
+    await pglite.query(
+      "update public.inventory_snapshots set quantity = 0 where square_variation_id = 'CHB1_V'",
+    );
+    expect(await ids()).toEqual(['FIG1', 'PRZ1', 'CHB1']);
+
+    await pglite.query(
+      "update public.inventory_snapshots set quantity = 2 where square_variation_id = 'CHB1_V'",
+    );
+    await pglite.query('delete from public.orders where id = $1', [order.rows[0].id]);
+    await pglite.query(
+      "update public.product_metadata set series = null where square_item_id = 'HID1'",
+    );
     await pglite.query('delete from public.analytics_daily');
   });
 
