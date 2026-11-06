@@ -90,7 +90,9 @@ export class EmailService {
       )
       .join(' · ');
     return (
-      `<p>New pre-order${products.length === 1 ? '' : 's'} at Spin Hobby from what you follow:</p>` +
+      (follows.some((f) => f.kind === 'all')
+        ? `<p>This week's new pre-order${products.length === 1 ? '' : 's'} at Spin Hobby:</p>`
+        : `<p>New pre-order${products.length === 1 ? '' : 's'} at Spin Hobby from what you follow:</p>`) +
       `<table style="border-collapse:collapse">${rows}</table>` +
       `<p>Pre-orders are reserved now and ship on release.</p>` +
       `<p style="font-size:12px">You're getting this because you asked for news about ${follows.map((f) => escape(f.name)).join(', ')}. ${stops}. Spin Hobby, Canada · ${escape(site())}</p>`
