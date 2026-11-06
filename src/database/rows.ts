@@ -276,5 +276,41 @@ export interface StoreSettingsRow {
   parcel_height_cm: number;
   /** What the box and padding add to every order (grams). */
   packaging_weight_g: number;
+  /** The storefront layout (Admin > Homepage > Page layout); null is the default. Read it through storefrontLayout(). */
+  storefront_layout: unknown;
+  /** The storefront's look (Admin > Homepage > Theme). Read it through storefrontTheme(). */
+  storefront_theme: string;
   updated_at: string;
+}
+
+export interface ProductReviewRow {
+  id: string;
+  square_item_id: string;
+  order_id: number;
+  user_id: string | null;
+  author_name: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reply: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+}
+
+/** public.search_misses: a shop search that found nothing (folded words only), and how often it came up. */
+export interface SearchMissRow {
+  query: string;
+  times: number;
+  first_at: Date;
+  last_at: Date;
+}
+
+/** public.search_synonyms: names shoppers use for the same thing, edited in Admin > Search. */
+export interface SearchSynonymRow {
+  id: string;
+  kind: 'type' | 'series' | 'maker' | 'other';
+  terms: string[];
+  created_at: Date;
+  updated_at: Date;
 }
