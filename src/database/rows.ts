@@ -280,3 +280,18 @@ export interface StoreSettingsRow {
   storefront_layout: unknown;
   updated_at: string;
 }
+
+export interface ProductReviewRow {
+  id: string;
+  square_item_id: string;
+  order_id: number;
+  user_id: string | null;
+  author_name: string;
+  rating: number;
+  title: string | null;
+  body: string;
+  status: 'pending' | 'approved' | 'rejected';
+  reply: string | null;
+  created_at: string;
+  reviewed_at: string | null;
+}
