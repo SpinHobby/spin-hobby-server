@@ -39,8 +39,8 @@ with it, so a one-of-a-kind figure can never sell twice.
    `Spin_Hobby-SpinHobb-shop-abcdef`): put it in `EBAY_RU_NAME`.
 4. **Token key.** `EBAY_TOKEN_KEY` = `openssl rand -base64 32`. It encrypts the seller's tokens in the database; changing it means
    connecting eBay again.
-5. **Seller account.** In eBay's Seller Hub, opt in to business policies and create a shipping, a payment and a return policy for eBay
-   Canada.
+5. **Seller account.** Create a shipping, a payment and a return policy for eBay Canada in eBay's Seller Hub. The admin opts the account
+   in to business policies itself the first time it reads them (eBay can take a few minutes, up to a day, to switch them on).
 6. **Connect.** As an owner: Admin → Settings → eBay → **Connect eBay**, sign in on eBay's page and approve. Back in Settings, choose the
    three policies and where items ship from (or **+ New location**), and **Save eBay setup**.
 7. **List.** Open a product → eBay → **List on eBay**: check the title (80 characters at most), pick the category eBay suggests, fill the

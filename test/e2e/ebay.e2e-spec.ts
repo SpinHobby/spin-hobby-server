@@ -42,6 +42,15 @@ const body = (init: RequestInit | undefined) =>
       : init.body
     : undefined;
 const inventoryItems = new Map<string, unknown>();
+/** Business policies: whether the seller has them, and whether eBay switches them on as soon as the shop opts in. */
+const policyProgram = { optedIn: true, switchesOnAtOnce: true, optIns: 0 };
+const notEligible = () =>
+  new Response(
+    JSON.stringify({
+      errors: [{ errorId: 20403, message: 'The user is not eligible for Business Policy.' }],
+    }),
+    { status: 400 },
+  );
 const ebay = mockFetch({
   'https://api.sandbox.ebay.com/identity/v1/oauth2/token': (init) => {
     sent.push({ method: 'POST', url: 'token', body: body(init) });
@@ -55,9 +64,15 @@ const ebay = mockFetch({
   'https://apiz.sandbox.ebay.com/commerce/identity/v1/user/': () => ({
     username: 'spinhobby_seller',
   }),
-  'https://api.sandbox.ebay.com/sell/account/v1/fulfillment_policy': () => ({
-    fulfillmentPolicies: [{ fulfillmentPolicyId: 'F1', name: 'Canada Post' }],
-  }),
+  'https://api.sandbox.ebay.com/sell/account/v1/program/opt_in': () => {
+    policyProgram.optIns++;
+    policyProgram.optedIn = policyProgram.switchesOnAtOnce;
+    return {};
+  },
+  'https://api.sandbox.ebay.com/sell/account/v1/fulfillment_policy': () =>
+    policyProgram.optedIn
+      ? { fulfillmentPolicies: [{ fulfillmentPolicyId: 'F1', name: 'Canada Post' }] }
+      : notEligible(),
   'https://api.sandbox.ebay.com/sell/account/v1/payment_policy': () => ({
     paymentPolicies: [{ paymentPolicyId: 'P1', name: 'Managed payments' }],
   }),
@@ -227,6 +242,18 @@ describe('connecting the seller account', () => {
     ).rows[0];
     expect(row.access_token).not.toContain('user-access-token');
     expect(row.refresh_token.startsWith('v1.')).toBe(true);
+  });
+
+  it('opts a seller in to business policies, and says so while eBay is still switching them on', async () => {
+    Object.assign(policyProgram, { optedIn: false, switchesOnAtOnce: false, optIns: 0 });
+    const waiting = await http.get('/admin/ebay/setup').set(asOwner).expect(409);
+    expect(waiting.body.error).toMatch(/switching on business policies/);
+    expect(policyProgram.optIns).toBe(1);
+
+    Object.assign(policyProgram, { switchesOnAtOnce: true, optIns: 0 });
+    const choices = (await http.get('/admin/ebay/setup').set(asOwner).expect(200)).body;
+    expect(choices.policies.fulfillment).toEqual([{ id: 'F1', name: 'Canada Post' }]);
+    expect(policyProgram.optIns).toBe(1);
   });
 
   it('saves the policies and location every listing uses, only ones the seller really has', async () => {
