@@ -169,6 +169,7 @@ const EXPECTED: string[] = [
   'POST /admin/describe-jobs/cancel-queued [staff]',
   'POST /admin/discounts [owner]',
   'POST /admin/ebay/connect [owner]',
+  'POST /admin/ebay/connect/finish [owner]',
   'POST /admin/ebay/locations [owner]',
   'POST /admin/ebay/products/:id/end [staff]',
   'POST /admin/ebay/sync [staff]',
