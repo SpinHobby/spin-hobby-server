@@ -344,7 +344,12 @@ export class EbayListingsService implements OnModuleInit, OnModuleDestroy {
           price: { value: (input.priceCents / 100).toFixed(2), currency: ebayCurrency() },
         },
       };
-      const known = existing?.offer_id ?? (await this.ebay.offersFor(sku))[0]?.offerId ?? null;
+      let known = existing?.offer_id ?? (await this.ebay.offersFor(sku))[0]?.offerId ?? null;
+      // An ended listing starts again from a new offer: eBay can refuse to change an offer it has withdrawn.
+      if (known && existing?.status === 'ended') {
+        await this.ebay.deleteOffer(known);
+        known = null;
+      }
       let offerId = known;
       if (offerId) await this.ebay.updateOffer(offerId, offer);
       else offerId = await this.ebay.createOffer(offer);

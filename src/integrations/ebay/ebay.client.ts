@@ -456,6 +456,16 @@ export class EbayClient {
     ).listingId;
   }
 
+  /** Deletes an offer (and its listing, if any). An offer eBay no longer has counts as deleted. */
+  async deleteOffer(offerId: string) {
+    await this.request('DELETE', `/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`).catch(
+      (e: unknown) => {
+        if (e instanceof EbayError && (e.ebayStatus === 404 || e.errorIds.includes(25713))) return;
+        throw e;
+      },
+    );
+  }
+
   withdrawOffer(offerId: string) {
     return this.request('POST', `/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/withdraw`);
   }

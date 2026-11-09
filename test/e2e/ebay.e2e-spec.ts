@@ -109,7 +109,8 @@ const ebay = mockFetch({
     if (url.includes('/publish')) return { listingId: '110551234567' };
     if (url.includes('/withdraw')) return { listingId: '110551234567' };
     if (init?.method === 'POST') return { offerId: 'OFFER1' };
-    if (init?.method === 'PUT') return new Response(null, { status: 204 });
+    if (init?.method === 'PUT' || init?.method === 'DELETE')
+      return new Response(null, { status: 204 });
     return new Response(
       JSON.stringify({ errors: [{ errorId: 25713, message: 'This Offer is not available.' }] }),
       { status: 404 },
@@ -604,6 +605,30 @@ describe('photos on the shop background', () => {
 });
 
 describe('ending and disconnecting', () => {
+  it('lists an ended product again from a new offer', async () => {
+    await http.post('/admin/ebay/products/SQ_E/end').set(asStaff).expect(200);
+    const from = sent.length;
+    const again = (
+      await http
+        .put('/admin/ebay/products/SQ_E')
+        .set(asStaff)
+        .send({
+          title: 'SEGA prize figure',
+          categoryId: '158666',
+          condition: 'NEW',
+          priceCents: 4500,
+          aspects: { Brand: ['SEGA'], Type: ['Figure'] },
+        })
+        .expect(200)
+    ).body;
+    expect(again.listing.status).toBe('active');
+    const calls = sent.slice(from).map((s) => `${s.method} ${s.url.replace(/^.*\/v1\//, '')}`);
+    expect(calls).toEqual(
+      expect.arrayContaining(['DELETE offer/OFFER1', 'POST offer', 'POST offer/OFFER1/publish']),
+    );
+    expect(calls).not.toContain('PUT offer/OFFER1');
+  });
+
   it('will not disconnect while a listing is live, ends the listing, then disconnects', async () => {
     expect(
       (await http.delete('/admin/ebay/connection').set(asOwner).send({}).expect(409)).body.error,
