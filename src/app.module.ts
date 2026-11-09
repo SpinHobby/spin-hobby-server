@@ -17,6 +17,7 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { CashierModule } from './modules/cashier/cashier.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { CheckoutModule } from './modules/checkout/checkout.module.js';
+import { GlossaryModule } from './modules/glossary/glossary.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { OpsModule } from './modules/ops/ops.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
@@ -49,6 +50,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     CatalogModule,
     CheckoutModule,
     EbayModule,
+    GlossaryModule,
     HealthModule,
     OpsModule,
     OrdersModule,

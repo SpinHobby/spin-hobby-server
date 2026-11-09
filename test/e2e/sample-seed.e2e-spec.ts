@@ -6,6 +6,7 @@ import {
   seedSampleAccounts,
 } from '../../src/modules/sample/accounts.js';
 import { sampleImageFor } from '../../src/modules/sample/images.js';
+import { SAMPLE_GLOSSARY } from '../../src/modules/sample/catalog.js';
 import { seedSample } from '../../src/modules/sample/seed.js';
 import { createDatabase } from '../support/harness.js';
 
@@ -48,6 +49,18 @@ describe('sample shop', () => {
     );
     const drawn = pictures.rows.map((r) => r.image_url).find((u) => u.endsWith('.svg'))!;
     expect(sampleImageFor(drawn.split('/').pop()!)).toContain('<svg');
+    await pglite.close();
+  });
+
+  it('adds the glossary terms', async () => {
+    const { pglite } = await createDatabase();
+    const seeded = await seedSample(pglite, 'http://localhost:8080');
+    expect(seeded.glossaryTerms).toBe(SAMPLE_GLOSSARY.length);
+    const { rows } = await pglite.query<{ term: string }>(
+      'select term from public.glossary_terms order by lower(term)',
+    );
+    expect(rows.map((r) => r.term)).toContain('Nendoroid');
+    expect(rows).toHaveLength(SAMPLE_GLOSSARY.length);
     await pglite.close();
   });
 });

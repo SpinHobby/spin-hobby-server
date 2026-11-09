@@ -1,10 +1,11 @@
 /**
  * Loads the sample catalog (catalog.ts) into a database: categories, products with pictures, homepage
- * banners and a month of orders. Used by the staging API on its first start, by `npm run dev:local`
+ * banners, glossary terms and a month of orders. Used by the staging API on its first start, by `npm run dev:local`
  * against its in-process Postgres, and by `npm run seed:staging`.
  */
 import {
   SAMPLE_CATEGORIES,
+  SAMPLE_GLOSSARY,
   SAMPLE_PEOPLE,
   SAMPLE_PREFIX,
   SAMPLE_PRODUCTS,
@@ -140,6 +141,16 @@ export async function seedSample(db: SampleDb, imageBase: string, { more = 0 } =
     }
   }
 
+  // Glossary terms. "on conflict do nothing" skips a term staff already added by hand, instead of failing.
+  let glossaryTerms = 0;
+  for (const [term, meaning] of SAMPLE_GLOSSARY) {
+    const added = await db.query(
+      'insert into public.glossary_terms (term, meaning) values ($1, $2) on conflict (lower(btrim(term))) do nothing returning id',
+      [term, meaning],
+    );
+    glossaryTerms += added.rows.length;
+  }
+
   // Orders: one per person over the last month, one to three items each, every status represented.
   const orderable = SAMPLE_PRODUCTS.filter(
     (p) =>
@@ -210,6 +221,7 @@ export async function seedSample(db: SampleDb, imageBase: string, { more = 0 } =
     categories: categoryIds.size,
     orders: SAMPLE_PEOPLE.length,
     slides,
+    glossaryTerms,
   };
 }
 
