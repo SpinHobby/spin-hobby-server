@@ -22,6 +22,12 @@ export const ebayCurrency = () => env('EBAY_CURRENCY') ?? 'CAD';
  */
 export const ebayTokenKey = () => env('EBAY_TOKEN_KEY');
 
+/**
+ * eBay will not send a browser back to localhost, so a local copy uses a RuName with no accepted URL: eBay shows its own "thank you" page,
+ * and the owner pastes that page's address into Settings (`true` turns the paste box on). Leave unset on Render.
+ */
+export const ebayPasteBack = () => env('EBAY_PASTE_BACK') === 'true';
+
 /** Where the admin is, to send the owner back after signing in on eBay (default: STOREFRONT_URL + /admin). */
 export const ebayAdminReturnUrl = () => envUrl('EBAY_ADMIN_RETURN_URL');
 

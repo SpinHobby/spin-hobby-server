@@ -6,6 +6,7 @@ import {
   ebayAdminReturnUrl,
   ebayIsProduction,
   ebayMarketplaceId,
+  ebayPasteBack,
   ebayTokenKey,
 } from '../../config/ebay.config.js';
 import { Db } from '../../database/db.service.js';
@@ -80,6 +81,7 @@ export class EbayConnectionService {
     return {
       configured: this.ebay.configured() && !!ebayTokenKey(),
       environment: ebayIsProduction() ? 'production' : 'sandbox',
+      pasteBack: ebayPasteBack(),
       marketplace: ebayMarketplaceId(),
       connected: !!c,
       username: c?.username ?? null,
@@ -176,6 +178,26 @@ export class EbayConnectionService {
     if (started.created_by)
       await this.log.write(started.created_by, 'ebay.connected', username ?? 'eBay', {});
     return { username };
+  }
+
+  /** The address of eBay's "thank you" page, pasted by the owner (see EBAY_PASTE_BACK): its code and state finish connecting. */
+  async finishFromAddress(address: string) {
+    let q: URLSearchParams;
+    try {
+      q = new URL(address.trim()).searchParams;
+    } catch {
+      throw new AppError("That isn't a web address. Copy the whole address of eBay's page.", 400);
+    }
+    if (q.get('error') === 'access_denied')
+      throw new AppError('The eBay sign-in was cancelled. Start again with Connect eBay.', 400);
+    const code = q.get('code');
+    const state = q.get('state');
+    if (!code || !state)
+      throw new AppError(
+        'That address has no sign-in code. Copy the address of the page eBay shows after you agree.',
+        400,
+      );
+    return this.finishConnect(code, state);
   }
 
   /** Where the owner lands after eBay's sign-in page. */

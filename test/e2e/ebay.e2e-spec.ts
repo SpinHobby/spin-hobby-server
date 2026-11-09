@@ -244,6 +244,42 @@ describe('connecting the seller account', () => {
     expect(row.refresh_token.startsWith('v1.')).toBe(true);
   });
 
+  it("finishes connecting from the address of eBay's thank-you page, pasted by an owner", async () => {
+    const { url } = (await http.post('/admin/ebay/connect').set(asOwner).expect(200)).body as {
+      url: string;
+    };
+    const state = new URL(url).searchParams.get('state')!;
+    const thanks = `https://signin.sandbox.ebay.com/ws/eBayISAPI.dll?ThirdPartyAuthSucessFailure&isAuthSuccessful=true&state=${state}&code=v%5E1.1%23the-code&expires_in=299`;
+    await http
+      .post('/admin/ebay/connect/finish')
+      .set(asStaff)
+      .send({ address: thanks })
+      .expect(403);
+    expect(
+      (
+        await http
+          .post('/admin/ebay/connect/finish')
+          .set(asOwner)
+          .send({ address: 'not an address' })
+          .expect(400)
+      ).body.error,
+    ).toMatch(/isn't a web address/);
+    const done = (
+      await http
+        .post('/admin/ebay/connect/finish')
+        .set(asOwner)
+        .send({ address: thanks })
+        .expect(200)
+    ).body.ebay;
+    expect(done).toMatchObject({ connected: true, username: 'spinhobby_seller', pasteBack: false });
+    // the same address cannot be used twice
+    await http
+      .post('/admin/ebay/connect/finish')
+      .set(asOwner)
+      .send({ address: thanks })
+      .expect(400);
+  });
+
   it('opts a seller in to business policies, and says so while eBay is still switching them on', async () => {
     Object.assign(policyProgram, { optedIn: false, switchesOnAtOnce: false, optIns: 0 });
     const waiting = await http.get('/admin/ebay/setup').set(asOwner).expect(409);
