@@ -4,14 +4,27 @@ import { escapeHtml as escape } from '../../common/html.js';
 import type { OrderItemRow, OrderRow, StorefrontProductRow } from '../../database/rows.js';
 import { slugify } from '../../modules/catalog/slug.js';
 import { port, publicApiUrl, renderExternalUrl, storefrontUrl } from '../../config/app.config.js';
-import { fromEmail, resendApiKey } from '../../config/email.config.js';
+import { fromEmail, resendApiKey, supportEmail } from '../../config/email.config.js';
+import { emailButton, emailLayout, trackingUrl } from './layout.js';
 
 const money = (cents: unknown) =>
   `${Number(cents) < 0 ? '-' : ''}$${(Math.abs(Number(cents)) / 100).toFixed(2)}`;
 /** A link to the website's order-status page with the order number filled in (the shopper adds their email there). */
 const statusLink = (orderId: number) =>
-  `<p><a href="${escape(`${storefrontUrl().replace(/\/$/, '')}/order-status?order=${orderId}`)}">Check your order status</a></p>`;
+  emailButton(
+    `${storefrontUrl().replace(/\/$/, '')}/order-status?order=${orderId}`,
+    'Check your order status',
+  );
+/** The inbox preview line: the email's first words, without the markup. */
+const preheaderOf = (html: string) =>
+  html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
 const site = () => storefrontUrl().replace(/\/$/, '');
+const COUNTRY_NAMES: Record<string, string> = { CA: 'Canada', US: 'United States' };
 /** Where a stop link lands: a small page on the API itself (works even if the website is down). */
 const api = () =>
   (publicApiUrl() ?? renderExternalUrl() ?? `http://localhost:${port()}`).replace(/\/$/, '');
@@ -44,16 +57,35 @@ export class EmailService {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html }),
+      body: JSON.stringify({
+        from,
+        to: [to],
+        reply_to: supportEmail(), // "reply to this email" reaches the shop even when From is a no-reply address
+        subject,
+        html: emailLayout({
+          body: html,
+          preheader: preheaderOf(html),
+          site: site(),
+          supportEmail: supportEmail(),
+        }),
+      }),
       signal: AbortSignal.timeout(8_000), // a slow mail provider must never hold up the caller for long
     });
     if (!res.ok) this.logger.warn(`Resend rejected an email to ${to}: ${res.status}`);
     return res.ok;
   }
 
-  restockHtml(productName: string) {
-    const site = storefrontUrl();
-    return `<p><strong>${escape(productName)}</strong> is back in stock at Spin Hobby.</p><p><a href="${escape(site)}">Shop now</a></p>`;
+  /** "It's back": the product's photo, name and price when it's on the shop, and a button straight to it. */
+  restockHtml(productName: string, product?: StorefrontProductRow | null) {
+    return (
+      `<p><strong>${escape(productName)}</strong> is back in stock at Spin Hobby. Restocks can sell out again quickly.</p>` +
+      (product ? `<table style="border-collapse:collapse">${productRow(product)}</table>` : '') +
+      emailButton(
+        product ? productUrl(product) : site(),
+        product ? 'View the product' : 'Shop now',
+      ) +
+      `<p style="font-size:12px">You asked us to tell you when this came back. This was a one-time alert.</p>`
+    );
   }
 
   /** "You left something in your cart": the items still for sale, a link that opens the same cart again, and a stop link. */
@@ -61,7 +93,7 @@ export class EmailService {
     return (
       `<p>You left these in your Spin Hobby cart. They're still here, but popular items and pre-orders can go fast.</p>` +
       `<table style="border-collapse:collapse">${items.map((i) => productRow(i.product, i.quantity)).join('')}</table>` +
-      `<p><a href="${escape(`${site()}/checkout?restore=${token}`)}"><strong>Finish checking out</strong></a></p>` +
+      emailButton(`${site()}/checkout?restore=${token}`, 'Finish checking out') +
       optInFooter(
         "You're getting this one reminder because you asked for it at checkout.",
         `${api()}/reminders/stop?token=${token}`,
@@ -90,18 +122,22 @@ export class EmailService {
       )
       .join(' · ');
     return (
-      `<p>New pre-order${products.length === 1 ? '' : 's'} at Spin Hobby from what you follow:</p>` +
+      (follows.some((f) => f.kind === 'all')
+        ? `<p>This week's new pre-order${products.length === 1 ? '' : 's'} at Spin Hobby:</p>`
+        : `<p>New pre-order${products.length === 1 ? '' : 's'} at Spin Hobby from what you follow:</p>`) +
       `<table style="border-collapse:collapse">${rows}</table>` +
       `<p>Pre-orders are reserved now and ship on release.</p>` +
+      emailButton(`${site()}/pre-orders`, 'See all pre-orders') +
       `<p style="font-size:12px">You're getting this because you asked for news about ${follows.map((f) => escape(f.name)).join(', ')}. ${stops}. Spin Hobby, Canada · ${escape(site())}</p>`
     );
   }
 
   shippedHtml(orderId: number, carrier: string | null, tracking: string) {
+    const track = trackingUrl(carrier, tracking);
     return (
       `<p>Good news! Your Spin Hobby order <strong>#${orderId}</strong> is on its way.</p>` +
       `<p>${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
-      statusLink(orderId) +
+      (track ? emailButton(track, 'Track your package') : statusLink(orderId)) +
       `<p>Questions? Reply to this email with your order number.</p>`
     );
   }
@@ -130,7 +166,7 @@ export class EmailService {
       a.address1,
       a.address2,
       [a.city, a.province].filter(Boolean).join(', ') + (a.postalCode ? ` ${a.postalCode}` : ''),
-      a.country,
+      COUNTRY_NAMES[a.country as string] ?? a.country,
     ]
       .filter((line) => typeof line === 'string' && line.trim())
       .map((line) => escape(line))

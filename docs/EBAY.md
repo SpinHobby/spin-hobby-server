@@ -39,8 +39,8 @@ with it, so a one-of-a-kind figure can never sell twice.
    `Spin_Hobby-SpinHobb-shop-abcdef`): put it in `EBAY_RU_NAME`.
 4. **Token key.** `EBAY_TOKEN_KEY` = `openssl rand -base64 32`. It encrypts the seller's tokens in the database; changing it means
    connecting eBay again.
-5. **Seller account.** In eBay's Seller Hub, opt in to business policies and create a shipping, a payment and a return policy for eBay
-   Canada.
+5. **Seller account.** Create a shipping, a payment and a return policy for eBay Canada in eBay's Seller Hub. The admin opts the account
+   in to business policies itself the first time it reads them (eBay can take a few minutes, up to a day, to switch them on).
 6. **Connect.** As an owner: Admin → Settings → eBay → **Connect eBay**, sign in on eBay's page and approve. Back in Settings, choose the
    three policies and where items ship from (or **+ New location**), and **Save eBay setup**.
 7. **List.** Open a product → eBay → **List on eBay**: check the title (80 characters at most), pick the category eBay suggests, fill the
@@ -48,12 +48,27 @@ with it, so a one-of-a-kind figure can never sell twice.
    for eBay (the "eBay" chips on the product's photos), or else the product's photos; eBay fetches them itself, so they must be on
    https (Square's and our storage's are).
 
+## On your own computer (sandbox)
+
+eBay will not send a browser back to `localhost`, so a local copy connects by pasting:
+
+1. In the developer portal, Environment **Sandbox** → User Tokens → **+ Add eBay Redirect URL**, and leave both auth URLs **empty**
+   (eBay then shows its own "thank you" page). Its RuName is the local one.
+2. In this folder's `.env`: the Sandbox `EBAY_CLIENT_ID` and `EBAY_CLIENT_SECRET`, that RuName as `EBAY_RU_NAME`,
+   `EBAY_ENVIRONMENT=sandbox`, any `EBAY_TOKEN_KEY`, and `EBAY_PASTE_BACK=true`. `npm run dev:local` drops eBay keys that are not
+   sandbox ones.
+3. Settings → eBay → **Connect eBay** opens eBay in a new tab. Sign in with a Sandbox test user and agree, copy the address of the page
+   eBay lands on, and paste it into **Finish connecting**.
+
+The local database starts fresh on every run, so connect again after a restart.
+
 ## Routes
 
 | Route | Who | What |
 | --- | --- | --- |
 | `GET /admin/ebay` | staff | connection, setup, sync state, recent eBay sales |
 | `POST /admin/ebay/connect` | owner | eBay's sign-in page address |
+| `POST /admin/ebay/connect/finish` | owner | finish connecting from the pasted address of eBay's "thank you" page (`EBAY_PASTE_BACK`) |
 | `GET /ebay/oauth/callback` | eBay | the end of the sign-in; redirects to the admin |
 | `GET/PUT /admin/ebay/setup` | owner | the seller's policies and locations; save the ones to use |
 | `POST /admin/ebay/locations` | owner | create a location on eBay |

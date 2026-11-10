@@ -247,3 +247,35 @@ describe('following a series or maker for new pre-orders', () => {
     expect(left.rows).toHaveLength(1);
   });
 });
+
+describe('weekly digest of every new pre-order', () => {
+  it('sends what was announced since sign-up, once a week, and nothing in between', async () => {
+    const ok = await http
+      .post('/follows')
+      .send({ email: 'Digest@Example.com', kind: 'all' })
+      .expect(200);
+    expect(ok.body).toMatchObject({ kind: 'all', name: 'every new pre-order' });
+    await seedProduct(pglite, {
+      id: 'FIG3',
+      name: 'Ram 1/7 Scale Figure',
+      category: 'Scale Figures',
+      priceCents: 23900,
+      availability: 'preorder',
+      orderBy: new Date(Date.now() + 30 * 86_400_000).toISOString(),
+    });
+    const later = (days: number) => new Date(Date.now() + days * 86_400_000);
+    const mail = resend();
+    try {
+      expect((await scheduler.run()).digests).toBe(0); // FIG3 announced now; the digest isn't due for a week
+      expect((await scheduler.run(later(8))).digests).toBe(1);
+      expect((await scheduler.run(later(9))).digests).toBe(0); // sent this week already
+    } finally {
+      mail.restore();
+    }
+    const digest = sent(mail).find((e) => e.to[0] === 'digest@example.com')!;
+    expect(digest.subject).toBe('New pre-order this week: Ram 1/7 Scale Figure');
+    expect(digest.html).toContain("This week's new pre-order at Spin Hobby");
+    expect(digest.html).not.toContain('Emilia'); // announced before they signed up
+    expect(digest.html).toContain('Stop news about every new pre-order');
+  });
+});

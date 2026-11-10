@@ -59,6 +59,11 @@ const describe = (body: unknown, status: number): EbayError => {
   );
 };
 
+/** eBay's answer when the seller has not opted in to business policies yet (error 20403). */
+const notEligibleForPolicies = (e: unknown) =>
+  e instanceof EbayError &&
+  (e.errorIds.includes(20403) || /not eligible for business polic/i.test(e.message));
+
 /**
  * eBay's REST APIs for one seller account: signing in (the owner approves the shop's app on eBay's own page), the user token (refreshed
  * before it expires and saved encrypted), and the calls the shop makes. The token belongs to the connected account in `ebay_connection`.
@@ -219,8 +224,34 @@ export class EbayClient {
     return me?.username ?? null;
   }
 
-  /** The seller's business policies on the marketplace (shipping, payment, returns). */
+  /**
+   * The seller's business policies on the marketplace (shipping, payment, returns). An account that never opted in to business policies
+   * (every new seller, and every Sandbox test user) is opted in here and asked again; eBay can take a while to switch it on.
+   */
   async policies() {
+    try {
+      return await this.readPolicies();
+    } catch (e) {
+      if (!notEligibleForPolicies(e)) throw e;
+    }
+    await this.request('POST', '/sell/account/v1/program/opt_in', {
+      programType: 'SELLING_POLICY_MANAGEMENT',
+    }).catch((e: unknown) => {
+      // already asked for: eBay is still switching it on
+      if (!(e instanceof EbayError && e.ebayStatus === 409)) throw e;
+    });
+    try {
+      return await this.readPolicies();
+    } catch (e) {
+      if (!notEligibleForPolicies(e)) throw e;
+      throw new AppError(
+        'eBay is switching on business policies for this account. This usually takes a few minutes (eBay allows up to a day): reload this page later.',
+        409,
+      );
+    }
+  }
+
+  private async readPolicies() {
     const m = encodeURIComponent(ebayMarketplaceId());
     const [fulfillment, payment, returns] = await Promise.all([
       this.request<{ fulfillmentPolicies?: { fulfillmentPolicyId: string; name: string }[] }>(
@@ -423,6 +454,16 @@ export class EbayClient {
         `/sell/inventory/v1/offer/${encodeURIComponent(offerId)}/publish`,
       )
     ).listingId;
+  }
+
+  /** Deletes an offer (and its listing, if any). An offer eBay no longer has counts as deleted. */
+  async deleteOffer(offerId: string) {
+    await this.request('DELETE', `/sell/inventory/v1/offer/${encodeURIComponent(offerId)}`).catch(
+      (e: unknown) => {
+        if (e instanceof EbayError && (e.ebayStatus === 404 || e.errorIds.includes(25713))) return;
+        throw e;
+      },
+    );
   }
 
   withdrawOffer(offerId: string) {

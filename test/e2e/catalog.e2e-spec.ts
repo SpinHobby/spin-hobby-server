@@ -74,6 +74,110 @@ describe('storefront catalog', () => {
     expect((await http.get('/products?series=no-such-series')).body.items).toEqual([]);
   });
 
+  it('ignores accents, case and punctuation in a search', async () => {
+    for (const q of ['r%C3%A9m', 're%20zero', 'RE-ZERO', 'rem%201%2F7', 'rem%20%201-7'])
+      expect((await http.get(`/products?q=${q}`)).body.items.map((p: any) => p.id)).toEqual([
+        'FIG1',
+      ]);
+  });
+
+  it('understands synonyms, Japanese names, plurals and filters written in the search', async () => {
+    const ids = async (q: string) =>
+      (await http.get(`/products?q=${encodeURIComponent(q)}&limit=60`)).body.items
+        .map((p: any) => p.id)
+        .sort();
+    expect(await ids('rezero')).toEqual(['FIG1']);
+    expect(await ids('リゼロ')).toEqual(['FIG1']);
+    expect(await ids('初音ミク')).toEqual(['PRZ1']); // "Miku Prize Figure" only says Miku
+    expect(await ids('pins')).toEqual(['BDG1']); // a badge, and never "Spin" anything
+    expect(await ids('plushies')).toEqual(['OLD1']);
+    expect(await ids('figures under $70')).toEqual(['CHB1', 'PRZ1']);
+    const pre = (await http.get('/products?q=figure%20pre-order')).body;
+    expect(pre.items.map((p: any) => p.id)).toEqual(['FIG1']);
+    expect(pre.understood).toEqual(['pre-orders']);
+  });
+
+  it('suggests products and series while typing', async () => {
+    const res = (await http.get('/products/suggest?q=re%20zer').expect(200)).body;
+    expect(res.products.map((p: any) => p.id)).toEqual(['FIG1']);
+    expect(res.series).toEqual([{ name: 'Re:Zero', slug: 're-zero', count: 1 }]);
+    expect((await http.get('/products/suggest?q=').expect(200)).body).toEqual({
+      success: true,
+      products: [],
+      series: [],
+      categories: [],
+    });
+  });
+
+  it('offers the search with its typos fixed when nothing matches', async () => {
+    const typo = (await http.get('/products?q=reem%20figur')).body;
+    expect(typo.items).toEqual([]);
+    expect(typo.didYouMean).toBe('rem figure');
+    expect(
+      (await http.get(`/products?q=${encodeURIComponent(typo.didYouMean)}`)).body.items.map(
+        (p: any) => p.id,
+      ),
+    ).toEqual(['FIG1']);
+    // nothing close, or a fix that still finds nothing under the same filters: no suggestion
+    expect((await http.get('/products?q=zzzzqqq')).body.didYouMean).toBeUndefined();
+    expect((await http.get('/products?q=reem&status=out')).body.didYouMean).toBeUndefined();
+    expect((await http.get('/products?q=rem')).body.didYouMean).toBeUndefined();
+  });
+
+  it('finds products through typos straight away, and says they are close matches', async () => {
+    const res = (await http.get('/products?q=mikku%20prize%20figuer')).body;
+    expect(res.items.map((p: any) => p.id)).toEqual(['PRZ1']);
+    expect(res.closeMatches).toBe(true);
+    expect(res.didYouMean).toBe('miku prize figure');
+    expect(
+      (await http.get('/products/suggest?q=mikku')).body.products.map((p: any) => p.id),
+    ).toEqual(['PRZ1']);
+    // short words have too many neighbours to guess at, and exact results are not "close"
+    expect((await http.get('/products?q=reem')).body.items).toEqual([]);
+    expect((await http.get('/products?q=miku')).body.closeMatches).toBeUndefined();
+  });
+
+  it('puts what shoppers view and add to cart first among equally good matches', async () => {
+    const ids = async () => (await http.get('/products?q=figure')).body.items.map((p: any) => p.id);
+    await pglite.query(
+      `insert into public.analytics_daily (day, event, product_id, count) values
+        (current_date, 'product_view', 'CHB1', 5), (current_date, 'add_to_cart', 'PRZ1', 1),
+        (current_date - 90, 'product_view', 'FIG1', 50)`,
+    );
+    expect(await ids()).toEqual(['CHB1', 'PRZ1', 'FIG1']); // FIG1's views are too old to count
+
+    // most items are one of a kind, so a sale lifts the rest of its series: a sold Re:Zero one-off lifts the Rem figure
+    await pglite.query(
+      "update public.product_metadata set series = 'Re:Zero' where square_item_id = 'HID1'",
+    );
+    const order = await pglite.query<{ id: number }>(
+      `insert into public.orders (status, provider, subtotal_cents, shipping_cents, total_cents, shipping_method, billing_email,
+         billing_address, shipping_address) values ('paid', 'square', 1000, 0, 1000, 'standard', 'fan@example.com', '{}', '{}')
+       returning id`,
+    );
+    await pglite.query(
+      `insert into public.order_items (order_id, square_item_id, square_variation_id, name, unit_price_cents, quantity)
+       values ($1, 'HID1', 'HID1_V', 'Hidden Convention One-off', 1000, 1)`,
+      [order.rows[0].id],
+    );
+    expect(await ids()).toEqual(['FIG1', 'CHB1', 'PRZ1']);
+
+    // what can't be bought any more goes after what can, however popular
+    await pglite.query(
+      "update public.inventory_snapshots set quantity = 0 where square_variation_id = 'CHB1_V'",
+    );
+    expect(await ids()).toEqual(['FIG1', 'PRZ1', 'CHB1']);
+
+    await pglite.query(
+      "update public.inventory_snapshots set quantity = 2 where square_variation_id = 'CHB1_V'",
+    );
+    await pglite.query('delete from public.orders where id = $1', [order.rows[0].id]);
+    await pglite.query(
+      "update public.product_metadata set series = null where square_item_id = 'HID1'",
+    );
+    await pglite.query('delete from public.analytics_daily');
+  });
+
   it('derives status from stock and pre-order dates like the storefront expects', async () => {
     const res = await http.get('/products?limit=60').expect(200);
     const status = Object.fromEntries(res.body.items.map((p: any) => [p.id, p.status]));
@@ -104,6 +208,13 @@ describe('storefront catalog', () => {
       'FIG1',
     ]);
     expect((await http.get('/products?q=100%25')).body.items).toEqual([]); // LIKE wildcards are escaped
+    // each word on its own, across fields: "rem" is in the name, "re:zero" in the series
+    expect((await http.get('/products?q=rem%20re:zero')).body.items.map((p: any) => p.id)).toEqual([
+      'FIG1',
+    ]);
+    expect((await http.get('/products?q=figure%20rem')).body.items.map((p: any) => p.id)).toEqual([
+      'FIG1',
+    ]);
     const first = (await http.get('/products?limit=2&sort=price_desc')).body;
     expect(first.cursor).toBe('2');
     const second = (await http.get(`/products?limit=2&sort=price_desc&cursor=${first.cursor}`))

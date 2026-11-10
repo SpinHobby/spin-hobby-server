@@ -1,5 +1,7 @@
 import { AppError } from '../../../../common/errors.js';
 import { Flag, OptionalText, Provided, Rule } from '../../../../common/validation/decorators.js';
+import { storefrontLayout, type StorefrontLayout } from '../layout.js';
+import { themeId, type StorefrontTheme } from '../themes.js';
 import { playlistId } from '../playlist.js';
 
 const positiveWhole = (field: string) => (value: unknown) => {
@@ -42,6 +44,16 @@ export class UpdateSettingsDto {
   @Provided()
   @Rule(playlistId)
   music_playlist_id?: string | null;
+
+  /** How the storefront is laid out (see layout.ts); fields left out keep their defaults, null is the default layout. */
+  @Provided()
+  @Rule(storefrontLayout)
+  storefront_layout?: StorefrontLayout;
+
+  /** The storefront's look: classic, water-glass, sakura, matcha or manga (themes.ts). */
+  @Provided()
+  @Rule(themeId)
+  storefront_theme?: StorefrontTheme;
 
   @Provided()
   @Rule(wholeNumber('shipping_standard_cents'))
