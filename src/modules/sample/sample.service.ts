@@ -2,7 +2,13 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PRODUCTION_SUPABASE_REF } from '../auth/staging-admin.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 import { MigrationService } from '../../database/migrations/migration.service.js';
-import { countProducts, seedSample, tidySamplePictures, type SampleDb } from './seed.js';
+import {
+  countProducts,
+  frameSamplePortraits,
+  seedSample,
+  tidySamplePictures,
+  type SampleDb,
+} from './seed.js';
 import { isProduction, isStaging } from '../../config/app.config.js';
 import { supabaseUrl } from '../../config/supabase.config.js';
 import { sampleDataDisabled, sampleImageBase } from '../../config/app.config.js';
@@ -46,6 +52,9 @@ export class SampleDataService implements OnModuleInit {
           this.logger.log(
             `Sample catalog: removed ${tidied} drawn pictures shown over real photos.`,
           );
+        const framed = await frameSamplePortraits(adapter());
+        if (framed)
+          this.logger.log(`Sample catalog: zoomed ${framed} portraits past their black edges.`);
         return;
       }
       const base = sampleImageBase();

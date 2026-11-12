@@ -6,7 +6,11 @@ import {
   seedSampleAccounts,
 } from '../../src/modules/sample/accounts.js';
 import { sampleImageFor } from '../../src/modules/sample/images.js';
-import { seedSample, tidySamplePictures } from '../../src/modules/sample/seed.js';
+import {
+  frameSamplePortraits,
+  seedSample,
+  tidySamplePictures,
+} from '../../src/modules/sample/seed.js';
 import { createDatabase } from '../support/harness.js';
 
 describe('sample shop', () => {
@@ -101,6 +105,36 @@ describe('tidySamplePictures', () => {
     );
     expect(kept.rows[0].n).toBe(1);
     expect(await tidySamplePictures(pglite)).toBe(0);
+    await pglite.close();
+  });
+});
+
+describe('frameSamplePortraits', () => {
+  it('zooms every sample portrait past its black edges once, and leaves a frame someone set alone', async () => {
+    const { pglite } = await createDatabase();
+    await seedSample(pglite, 'http://localhost:8080');
+    const portraits = await pglite.query<{ n: number }>(
+      "select count(*)::int as n from public.product_images where image_url like 'https://www.thiswaifudoesnotexist.net/%'",
+    );
+    const frames = await pglite.query<{ n: number; zooms: number[] }>(
+      'select count(*)::int as n, array_agg(distinct zoom) as zooms from public.photo_frames',
+    );
+    expect(portraits.rows[0].n).toBeGreaterThan(0);
+    expect(frames.rows[0].n).toBe(portraits.rows[0].n);
+    expect(frames.rows[0].zooms).toEqual([1.25]);
+
+    const one = await pglite.query<{ id: string; url: string }>(
+      'select square_item_id as id, image_url as url from public.photo_frames limit 1',
+    );
+    await pglite.query('update public.photo_frames set zoom = 2 where square_item_id = $1', [
+      one.rows[0].id,
+    ]);
+    expect(await frameSamplePortraits(pglite)).toBe(0);
+    const kept = await pglite.query<{ zoom: number }>(
+      'select zoom from public.photo_frames where square_item_id = $1',
+      [one.rows[0].id],
+    );
+    expect(kept.rows[0].zoom).toBe(2);
     await pglite.close();
   });
 });

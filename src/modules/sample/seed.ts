@@ -40,6 +40,24 @@ export async function tidySamplePictures(db: SampleDb): Promise<number> {
   return rows.length;
 }
 
+/**
+ * The sample portraits (thiswaifudoesnotexist.net) have black bars painted into their edges. Photos fill their square on the shop, so each
+ * portrait is zoomed in a little (photo_frames), which keeps the bars out of view. Leaves a frame someone already set alone. Returns how many
+ * it added.
+ */
+export async function frameSamplePortraits(db: SampleDb): Promise<number> {
+  const { rows } = await db.query(
+    `insert into public.photo_frames (square_item_id, image_url, x, y, zoom)
+     select square_item_id, image_url, 50, 50, $2 from public.product_images
+      where square_item_id like $1 and image_url like 'https://www.thiswaifudoesnotexist.net/%'
+     on conflict (square_item_id, image_url) do nothing
+     returning square_item_id`,
+    [`${SAMPLE_PREFIX}%`, PORTRAIT_ZOOM],
+  );
+  return rows.length;
+}
+const PORTRAIT_ZOOM = 1.25;
+
 const STATUSES = [
   'paid',
   'shipped',
@@ -222,6 +240,7 @@ export async function seedSample(db: SampleDb, imageBase: string, { more = 0 } =
       );
     }
   }
+  await frameSamplePortraits(db);
 
   return {
     products: products.length,

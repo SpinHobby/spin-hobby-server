@@ -13,6 +13,8 @@ export function publicProduct(p: StorefrontProductRow) {
     images: p.images ?? [],
     // the photos that are transparent cut-outs: the storefront shows them on the shop background
     cutouts: p.cutout_images ?? [],
+    // photos the admin moved or zoomed inside their square, by address (the rest sit in the middle)
+    frames: p.photo_frames ?? {},
     priceCents: p.price_cents,
     compareAtCents: p.compare_at_cents,
     currency: p.currency,

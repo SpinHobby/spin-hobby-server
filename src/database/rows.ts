@@ -199,6 +199,8 @@ export interface StorefrontProductRow {
   images: string[];
   /** Which of `images` are transparent cut-outs (shown on the shop background). */
   cutout_images?: string[];
+  /** Moved or zoomed photos, by address: the point kept in view (x, y in %) and the zoom (photo_frames). */
+  photo_frames?: Record<string, { x: number; y: number; zoom: number }>;
   /** The maker (brand), for search engines. */
   manufacturer?: string | null;
   price_cents: number;

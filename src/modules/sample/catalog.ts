@@ -62,7 +62,7 @@ export type Availability = 'auto' | 'preorder' | 'backorder' | 'hidden';
 /**
  * Character products and figures get a portrait of an anime character as their main picture, from
  * thiswaifudoesnotexist.net: AI-generated art with no rights holder, one fixed picture per seed, so
- * each product keeps the same face. The drawn illustration (images.ts) is their second picture.
+ * each product keeps the same face. Other products show the drawn illustration (images.ts) instead.
  */
 const PORTRAIT_KINDS = new Set<Kind>([
   'figure',
