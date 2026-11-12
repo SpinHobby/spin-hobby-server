@@ -4,10 +4,13 @@ import { AppError, notFound } from '../../common/errors.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 import type { OrderRow } from '../../database/rows.js';
 import {
-  pointsForGoods,
+  multiplierAt,
+  pointsForLines,
   pointsToTakeBack,
   pointsValueCents,
   redeemProblem,
+  type ProductRule,
+  type Requirement,
   type RewardRates,
 } from './rewards-math.js';
 
@@ -24,13 +27,44 @@ const OFF = () => new AppError('Rewards are switched off right now.', 403, 'REWA
 
 export interface RewardSettings extends RewardRates {
   enabled: boolean;
+  /** An order's points become usable this many days after it ships. */
+  returnWindowDays: number;
 }
 interface SettingsRow {
   enabled: boolean;
   points_per_dollar: number;
   cents_per_100_points: number;
   min_redeem_points: number;
+  return_window_days: number;
 }
+/** A product's own rule, as Admin > product > Rewards points sets it. */
+export interface ProductRuleInput {
+  /** 2 = double points, 0 = no points, 1 = normal. */
+  multiplier: number;
+  /** When a promotion (multiplier other than 1) ends. */
+  endsAt?: string | null;
+  note?: string | null;
+  /** Only customers with this many points from past orders can buy it (e.g. a hyped release sold at MSRP, kept from scalpers). */
+  minEarnedPoints?: number | null;
+  /** The same order must also have at least this much (cents) of other products. */
+  minOtherCents?: number | null;
+}
+interface ProductRuleRow {
+  square_item_id: string;
+  multiplier: number;
+  ends_at: string | null;
+  note: string | null;
+  min_earned_points: number | null;
+  min_other_cents: number | null;
+}
+type ProductRuleView = ReturnType<typeof ruleView>;
+const ruleView = (r: ProductRuleRow) => ({
+  multiplier: Number(r.multiplier),
+  endsAt: r.ends_at,
+  note: r.note,
+  minEarnedPoints: r.min_earned_points === null ? null : Number(r.min_earned_points),
+  minOtherCents: r.min_other_cents === null ? null : Number(r.min_other_cents),
+});
 export interface RewardApp {
   slug: string;
   name: string;
@@ -51,6 +85,10 @@ interface Posting {
   createdBy?: string | null;
   /** A spend must be covered by the balance (true), or may push it below zero (a refund taking back points already spent). */
   mustCover?: boolean;
+  /** Kept out of the balance until `availableAt` passes (an order's points before its return window ends; null = not shipped yet). */
+  pending?: boolean;
+  availableAt?: string | null;
+  orderId?: number | null;
 }
 
 /**
@@ -66,15 +104,16 @@ export class RewardsService {
 
   async settings(tx?: Queryable): Promise<RewardSettings> {
     const row = await this.db.one<SettingsRow>(
-      'select enabled, points_per_dollar, cents_per_100_points, min_redeem_points from public.reward_settings where id',
+      'select enabled, points_per_dollar, cents_per_100_points, min_redeem_points, return_window_days from public.reward_settings where id',
       [],
       tx,
     );
     return {
       enabled: Boolean(row?.enabled),
-      pointsPerDollar: Number(row?.points_per_dollar ?? 1),
+      pointsPerDollar: Number(row?.points_per_dollar ?? 3),
       centsPer100Points: Number(row?.cents_per_100_points ?? 100),
       minRedeemPoints: Number(row?.min_redeem_points ?? 500),
+      returnWindowDays: Number(row?.return_window_days ?? 14),
     };
   }
 
@@ -88,6 +127,7 @@ export class RewardsService {
           points_per_dollar = coalesce($2, points_per_dollar),
           cents_per_100_points = coalesce($3, cents_per_100_points),
           min_redeem_points = coalesce($4, min_redeem_points),
+          return_window_days = coalesce($5, return_window_days),
           updated_at = now()
         where id`,
       [
@@ -95,6 +135,7 @@ export class RewardsService {
         changes.pointsPerDollar ?? null,
         changes.centsPer100Points ?? null,
         changes.minRedeemPoints ?? null,
+        changes.returnWindowDays ?? null,
       ],
     );
     return this.settings();
@@ -117,11 +158,21 @@ export class RewardsService {
    */
   private async post(p: Posting, tx: Queryable) {
     const entry = await this.db.one<{ id: string }>(
-      `insert into public.reward_entries (user_id, app, points, reason, ref, created_by)
-       values ($1, $2, $3, $4, $5, $6)
+      `insert into public.reward_entries (user_id, app, points, reason, ref, created_by, pending, available_at, order_id)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        on conflict (app, ref) where ref is not null do nothing
        returning id`,
-      [p.userId, p.app, p.points, p.reason.slice(0, 200), p.ref ?? null, p.createdBy ?? null],
+      [
+        p.userId,
+        p.app,
+        p.points,
+        p.reason.slice(0, 200),
+        p.ref ?? null,
+        p.createdBy ?? null,
+        Boolean(p.pending),
+        p.availableAt ?? null,
+        p.orderId ?? null,
+      ],
       tx,
     );
     if (!entry) {
@@ -138,6 +189,8 @@ export class RewardsService {
         duplicate: true,
       };
     }
+    if (p.pending)
+      return { entryId: entry.id, balance: await this.balance(p.userId, tx), duplicate: false };
     await this.db.exec(
       'insert into public.reward_balances (user_id) values ($1) on conflict do nothing',
       [p.userId],
@@ -154,23 +207,66 @@ export class RewardsService {
     return { entryId: entry.id, balance: Number(moved.points), duplicate: false };
   }
 
+  /**
+   * Moves pending entries whose time has come into the balance (one account, or everyone). Run before a balance is read or spent, so
+   * nobody waits on a timer. Safe to run twice at once: an entry stops being pending in the same statement that counts it.
+   */
+  async releaseDue(userId?: string | null, tx?: Queryable) {
+    await this.db.exec(
+      `with due as (
+         update public.reward_entries set pending = false
+          where pending and available_at <= now() and ($1::uuid is null or user_id = $1::uuid)
+          returning user_id, points
+       )
+       insert into public.reward_balances (user_id, points)
+       select user_id, sum(points)::int from due group by user_id
+       on conflict (user_id) do update set points = public.reward_balances.points + excluded.points, updated_at = now()`,
+      [userId ?? null],
+      tx,
+    );
+  }
+
+  /** Points still on the way to an account (orders not yet shipped, or inside their return window). */
+  private async pendingPoints(userId: string, tx?: Queryable) {
+    const row = await this.db.one<{ points: number }>(
+      'select coalesce(sum(points), 0)::int as points from public.reward_entries where user_id = $1 and pending',
+      [userId],
+      tx,
+    );
+    return Math.max(0, Number(row?.points ?? 0));
+  }
+
   // ---------- the shop: orders ----------
 
-  /** Gives a paid order's points to the account that placed it (guests earn nothing). Called inside the payment's transaction. */
+  /**
+   * Gives a paid order's points to the account that placed it (guests earn nothing), as pending: they join the balance once the order
+   * has shipped and its return window has passed. Each product earns at its own rule as it stood when the order was placed. Called
+   * inside the payment's transaction.
+   */
   async earnForOrder(orderId: number, tx: Queryable) {
     const settings = await this.settings(tx);
     if (!settings.enabled) return 0;
-    const order = await this.db.one<
-      Pick<OrderRow, 'user_id' | 'subtotal_cents' | 'discount_cents'>
-    >(
-      'select user_id, subtotal_cents, discount_cents from public.orders where id = $1',
+    const order = await this.db.one<Pick<OrderRow, 'user_id' | 'discount_cents' | 'created_at'>>(
+      'select user_id, discount_cents, created_at from public.orders where id = $1',
       [orderId],
       tx,
     );
     if (!order?.user_id) return 0;
-    const points = pointsForGoods(
-      Number(order.subtotal_cents) - Number(order.discount_cents ?? 0),
+    const items = await this.db.many<{ square_item_id: string; cents: number }>(
+      'select square_item_id, (unit_price_cents * quantity)::int as cents from public.order_items where order_id = $1',
+      [orderId],
+      tx,
+    );
+    const lines = items.map((i) => ({ itemId: i.square_item_id, lineCents: Number(i.cents) }));
+    const points = pointsForLines(
+      lines,
+      Number(order.discount_cents ?? 0),
       settings.pointsPerDollar,
+      await this.rulesFor(
+        lines.map((l) => l.itemId),
+        tx,
+      ),
+      Date.parse(order.created_at),
     );
     if (!points) return 0;
     await this.post(
@@ -180,10 +276,24 @@ export class RewardsService {
         points,
         reason: `Order #${orderId}`,
         ref: `order:${orderId}`,
+        pending: true,
+        orderId,
       },
       tx,
     );
     return points;
+  }
+
+  /** The order has shipped: its points become usable once the return window has passed (at once when the window is 0 days). */
+  async startReturnClock(orderId: number, tx: Queryable) {
+    const { returnWindowDays } = await this.settings(tx);
+    const rows = await this.db.many<{ user_id: string }>(
+      `update public.reward_entries set available_at = now() + make_interval(days => $2::int)
+        where order_id = $1 and pending and available_at is null returning user_id`,
+      [orderId, returnWindowDays],
+      tx,
+    );
+    if (rows.length) await this.releaseDue(rows[0].user_id, tx);
   }
 
   /** Takes back the refunded share of what an order earned. The balance may go below zero if those points were already spent. */
@@ -194,8 +304,16 @@ export class RewardsService {
       tx,
     );
     if (!order?.user_id) return 0;
-    const rows = await this.db.one<{ earned: number; taken: number; refunds: number }>(
+    const rows = await this.db.one<{
+      earned: number;
+      taken: number;
+      refunds: number;
+      pending: boolean | null;
+      available_at: string | null;
+    }>(
       `select coalesce(sum(points) filter (where ref = $1), 0)::int as earned,
+              bool_or(pending) filter (where ref = $1) as pending,
+              max(available_at) filter (where ref = $1) as available_at,
               coalesce(-sum(points) filter (where ref like $1 || ':refund:%'), 0)::int as taken,
               count(*) filter (where ref like $1 || ':refund:%')::int as refunds
          from public.reward_entries where app = 'shop' and user_id = $2`,
@@ -218,6 +336,10 @@ export class RewardsService {
         ref: `order:${orderId}:refund:${Number(rows?.refunds ?? 0) + 1}`,
         createdBy: adminId,
         mustCover: false,
+        // points still on the way are taken back on the way too: both join the balance (or don't) together
+        pending: Boolean(rows?.pending),
+        availableAt: rows?.pending ? rows.available_at : null,
+        orderId,
       },
       tx,
     );
@@ -228,19 +350,27 @@ export class RewardsService {
 
   /** Whether rewards are on and the balance: what the storefront header shows, in one query. */
   async headerBalance(userId: string) {
-    const row = await this.db.one<{ enabled: boolean; points: number }>(
+    await this.releaseDue(userId);
+    const row = await this.db.one<{ enabled: boolean; points: number; pending: number }>(
       `select coalesce((select enabled from public.reward_settings where id), false) as enabled,
-              coalesce((select points from public.reward_balances where user_id = $1), 0)::int as points`,
+              coalesce((select points from public.reward_balances where user_id = $1), 0)::int as points,
+              coalesce((select sum(points) from public.reward_entries where user_id = $1 and pending), 0)::int as pending`,
       [userId],
     );
-    return { enabled: Boolean(row?.enabled), balance: Number(row?.points ?? 0) };
+    return {
+      enabled: Boolean(row?.enabled),
+      balance: Number(row?.points ?? 0),
+      pending: Math.max(0, Number(row?.pending ?? 0)),
+    };
   }
 
   /** Everything the Account > Rewards page shows. */
   async summary(userId: string) {
-    const [settings, balance, entries, links, codes] = await Promise.all([
+    await this.releaseDue(userId);
+    const [settings, balance, pending, entries, links, codes] = await Promise.all([
       this.settings(),
       this.balance(userId),
+      this.pendingPoints(userId),
       this.db.many<{
         id: string;
         app: string;
@@ -248,8 +378,10 @@ export class RewardsService {
         points: number;
         reason: string;
         created_at: string;
+        pending: boolean;
+        available_at: string | null;
       }>(
-        `select e.id, e.app, a.name as app_name, e.points, e.reason, e.created_at
+        `select e.id, e.app, a.name as app_name, e.points, e.reason, e.created_at, e.pending, e.available_at
            from public.reward_entries e left join public.reward_apps a on a.slug = e.app
           where e.user_id = $1 order by e.created_at desc limit 50`,
         [userId],
@@ -275,10 +407,12 @@ export class RewardsService {
     return {
       enabled: settings.enabled,
       balance,
+      pending,
       rates: {
         pointsPerDollar: settings.pointsPerDollar,
         centsPer100Points: settings.centsPer100Points,
         minRedeemPoints: settings.minRedeemPoints,
+        returnWindowDays: settings.returnWindowDays,
       },
       worthCents: pointsValueCents(balance, settings.centsPer100Points),
       entries: entries.map((e) => ({
@@ -290,6 +424,9 @@ export class RewardsService {
         points: Number(e.points),
         reason: e.reason,
         createdAt: e.created_at,
+        /** On the way: not usable yet. `availableAt` is null until the order ships. */
+        pending: Boolean(e.pending),
+        availableAt: e.available_at,
       })),
       links: links.map((l) => ({ app: l.app, name: l.name, linkedAt: l.created_at })),
       codes: codes.map((c) => ({
@@ -306,6 +443,7 @@ export class RewardsService {
     return this.db.transaction(async (tx) => {
       const settings = await this.settings(tx);
       if (!settings.enabled) throw OFF();
+      await this.releaseDue(userId, tx);
       const problem = redeemProblem(points, await this.balance(userId, tx), settings);
       if (problem) throw new AppError(problem);
       const valueCents = pointsValueCents(points, settings.centsPer100Points);
@@ -403,6 +541,7 @@ export class RewardsService {
   }
 
   private async memberView(userId: string, tx?: Queryable) {
+    await this.releaseDue(userId, tx);
     const [balance, settings, profile] = await Promise.all([
       this.balance(userId, tx),
       this.settings(tx),
@@ -434,6 +573,7 @@ export class RewardsService {
         404,
         'NOT_LINKED',
       );
+    await this.releaseDue(row.user_id, tx);
     return row.user_id;
   }
 
@@ -491,15 +631,23 @@ export class RewardsService {
   // ---------- the owner ----------
 
   async overview() {
-    const [settings, apps, totals, recent] = await Promise.all([
+    await this.releaseDue();
+    const [settings, apps, totals, recent, products] = await Promise.all([
       this.settings(),
       this.db.many<RewardApp & { members: number }>(
         `select a.slug, a.name, a.daily_cap, a.active, a.created_at, a.last_used_at,
                 (select count(*)::int from public.reward_links l where l.app = a.slug and l.unlinked_at is null) as members
            from public.reward_apps a order by a.created_at`,
       ),
-      this.db.one<{ outstanding: number; members: number; earned30: number; spent30: number }>(
+      this.db.one<{
+        outstanding: number;
+        pending: number;
+        members: number;
+        earned30: number;
+        spent30: number;
+      }>(
         `select (select coalesce(sum(points), 0)::int from public.reward_balances where points > 0) as outstanding,
+                (select coalesce(sum(points), 0)::int from public.reward_entries where pending) as pending,
                 (select count(*)::int from public.reward_balances where points > 0) as members,
                 (select coalesce(sum(points), 0)::int from public.reward_entries where points > 0 and created_at > now() - interval '30 days') as earned30,
                 (select coalesce(-sum(points), 0)::int from public.reward_entries where points < 0 and created_at > now() - interval '30 days') as spent30`,
@@ -516,6 +664,7 @@ export class RewardsService {
            from public.reward_entries e left join public.profiles p on p.id = e.user_id
           order by e.created_at desc limit 50`,
       ),
+      this.productRules(),
     ]);
     const outstanding = Number(totals?.outstanding ?? 0);
     return {
@@ -524,11 +673,168 @@ export class RewardsService {
       totals: {
         outstandingPoints: outstanding,
         outstandingCents: pointsValueCents(outstanding, settings.centsPer100Points),
+        pendingPoints: Math.max(0, Number(totals?.pending ?? 0)),
         members: Number(totals?.members ?? 0),
         earned30: Number(totals?.earned30 ?? 0),
         spent30: Number(totals?.spent30 ?? 0),
       },
       recent: recent.map((r) => ({ ...r, points: Number(r.points) })),
+      products,
+    };
+  }
+
+  // ---------- products with their own rules ----------
+
+  /** The earning rules that apply to these products, for working out points. */
+  async rulesFor(itemIds: string[], tx?: Queryable): Promise<Map<string, ProductRule>> {
+    return new Map(
+      [...(await this.productRows(itemIds, tx))].map(([id, r]) => [
+        id,
+        { multiplier: r.multiplier, endsAt: r.endsAt },
+      ]),
+    );
+  }
+
+  /** What these products ask of a buyer (only products that ask something), for the cart. */
+  async requirementsFor(itemIds: string[], tx?: Queryable): Promise<Map<string, Requirement>> {
+    const out = new Map<string, Requirement>();
+    for (const [id, r] of await this.productRows(itemIds, tx))
+      if (r.minEarnedPoints || r.minOtherCents)
+        out.set(id, { minEarnedPoints: r.minEarnedPoints, minOtherCents: r.minOtherCents });
+    return out;
+  }
+
+  private async productRows(itemIds: string[], tx?: Queryable) {
+    if (!itemIds.length) return new Map<string, ProductRuleView>();
+    const rows = await this.db.many<ProductRuleRow>(
+      `select square_item_id, multiplier, ends_at, note, min_earned_points, min_other_cents
+         from public.reward_product_rules where square_item_id = any($1::text[])`,
+      [[...new Set(itemIds)]],
+      tx,
+    );
+    return new Map(rows.map((r) => [r.square_item_id, ruleView(r)]));
+  }
+
+  /**
+   * Points a customer has earned from shop orders, less what refunds took back (still on the way included). Points from apps, gifts
+   * and spending don't change it, so it can't be farmed in a game. What "N points from past orders" checks.
+   */
+  async purchasePoints(userId: string, tx?: Queryable) {
+    const row = await this.db.one<{ points: number }>(
+      `select coalesce(sum(points), 0)::int as points from public.reward_entries
+        where user_id = $1 and app = 'shop' and ref like 'order:%'`,
+      [userId],
+      tx,
+    );
+    return Math.max(0, Number(row?.points ?? 0));
+  }
+
+  /** Every product with its own rule, for Admin > Rewards (ended promotions without a requirement are left out). */
+  async productRules() {
+    const rows = await this.db.many<ProductRuleRow & { name: string | null }>(
+      `select r.square_item_id, p.name, r.multiplier, r.ends_at, r.note, r.min_earned_points, r.min_other_cents
+         from public.reward_product_rules r left join public.catalog_products p on p.square_item_id = r.square_item_id
+        where r.ends_at is null or r.ends_at > now() or r.min_earned_points is not null or r.min_other_cents is not null
+        order by r.multiplier = 0, r.ends_at nulls last, p.name`,
+    );
+    return rows.map((r) => ({ productId: r.square_item_id, name: r.name, ...ruleView(r) }));
+  }
+
+  /** One product's rule (null: normal points, nothing asked of the buyer), for Admin > product. */
+  async productRule(itemId: string) {
+    return (await this.productRows([itemId])).get(itemId) ?? null;
+  }
+
+  /** Sets how a product earns and what it asks of a buyer. Normal points with nothing asked removes the rule. */
+  async setProductRule(adminId: string, itemId: string, input: ProductRuleInput) {
+    const product = await this.db.one(
+      'select 1 from public.catalog_products where square_item_id = $1',
+      [itemId],
+    );
+    if (!product) throw notFound('Product');
+    const promo = input.multiplier !== 1;
+    if (promo && input.endsAt && Date.parse(input.endsAt) <= Date.now())
+      throw new AppError('The end date must be in the future.');
+    const minEarned = input.minEarnedPoints || null;
+    const minOther = input.minOtherCents || null;
+    if (!promo && !minEarned && !minOther) {
+      await this.db.exec('delete from public.reward_product_rules where square_item_id = $1', [
+        itemId,
+      ]);
+      return null;
+    }
+    await this.db.exec(
+      `insert into public.reward_product_rules
+         (square_item_id, multiplier, ends_at, note, min_earned_points, min_other_cents, updated_by)
+       values ($1, $2, $3, $4, $5, $6, $7)
+       on conflict (square_item_id) do update set multiplier = excluded.multiplier, ends_at = excluded.ends_at,
+         note = excluded.note, min_earned_points = excluded.min_earned_points, min_other_cents = excluded.min_other_cents,
+         updated_by = excluded.updated_by, updated_at = now()`,
+      [
+        itemId,
+        input.multiplier,
+        promo ? (input.endsAt ?? null) : null,
+        input.note ?? null,
+        minEarned,
+        minOther,
+        adminId,
+      ],
+    );
+    return this.productRule(itemId);
+  }
+
+  // ---------- what shoppers see before they buy ----------
+
+  /** What a cart would earn (null while rewards are off). The same arithmetic as earnForOrder. */
+  async quotePoints(
+    lines: { itemId: string; lineCents: number }[],
+    discountCents: number,
+    tx?: Queryable,
+  ): Promise<number | null> {
+    const settings = await this.settings(tx);
+    if (!settings.enabled) return null;
+    return pointsForLines(
+      lines,
+      discountCents,
+      settings.pointsPerDollar,
+      await this.rulesFor(
+        lines.map((l) => l.itemId),
+        tx,
+      ),
+    );
+  }
+
+  /**
+   * What one unit of a product earns, any promotion on it, and what it asks of a buyer, for its page. With a signed-in customer, also
+   * how many points they have from past orders, so the page can say whether they can buy it.
+   */
+  async productPoints(itemId: string, userId?: string | null) {
+    const [settings, rows] = await Promise.all([this.settings(), this.productRows([itemId])]);
+    const rule = rows.get(itemId);
+    const requirement =
+      rule && (rule.minEarnedPoints || rule.minOtherCents)
+        ? { minEarnedPoints: rule.minEarnedPoints, minOtherCents: rule.minOtherCents }
+        : null;
+    const earned =
+      requirement?.minEarnedPoints && userId ? await this.purchasePoints(userId) : null;
+    if (!settings.enabled) return { enabled: false as const, requirement, earned };
+    const price = await this.db.one<{ cents: number | null }>(
+      'select min(price_cents)::int as cents from public.catalog_variations where square_item_id = $1 and price_cents > 0',
+      [itemId],
+    );
+    const multiplier = multiplierAt(rule, Date.now());
+    return {
+      enabled: true as const,
+      points: pointsForLines(
+        [{ itemId, lineCents: Number(price?.cents ?? 0) }],
+        0,
+        settings.pointsPerDollar,
+        rule ? new Map([[itemId, rule]]) : new Map(),
+      ),
+      multiplier,
+      endsAt: rule && multiplier !== 1 ? rule.endsAt : null,
+      requirement,
+      earned,
     };
   }
 
@@ -582,6 +888,7 @@ export class RewardsService {
     );
     if (!profile) throw notFound('Account with that email');
     return this.db.transaction(async (tx) => {
+      await this.releaseDue(profile.id, tx);
       const done = await this.post(
         {
           userId: profile.id,

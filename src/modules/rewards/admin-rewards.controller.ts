@@ -6,6 +6,7 @@ import { AdminLog } from '../admin/admin-log.service.js';
 import { sentFields } from '../admin/dto/defined-fields.js';
 import {
   AdjustPointsDto,
+  ProductRuleDto,
   CreateRewardAppDto,
   RewardSettingsDto,
   UpdateRewardAppDto,
@@ -65,6 +66,27 @@ export class AdminRewardsController {
     const made = await this.rewards.newKey(slug);
     await this.log.write(admin.id, 'rewards.app_key', slug);
     return { success: true, ...made };
+  }
+
+  /** How one product earns (Admin > product > Rewards points). `rule` is null when it earns the normal rate. */
+  @Get('products/:id')
+  @Access('staff')
+  async productRule(@Param('id') id: string) {
+    return { success: true, rule: await this.rewards.productRule(id) };
+  }
+
+  @Put('products/:id')
+  async setProductRule(
+    @CurrentUser() admin: AppUser,
+    @Param('id') id: string,
+    @Body() dto: ProductRuleDto,
+  ) {
+    const rule = await this.rewards.setProductRule(admin.id, id, dto);
+    await this.log.write(admin.id, 'rewards.product_rule', id, {
+      multiplier: dto.multiplier,
+      endsAt: dto.endsAt,
+    });
+    return { success: true, rule };
   }
 
   @Post('adjust')

@@ -1,6 +1,6 @@
 import { AppError } from '../../../common/errors.js';
 import { Provided, Rule } from '../../../common/validation/decorators.js';
-import { boolValue, email, stringValue } from '../../../common/validation/rules.js';
+import { boolValue, email, optionalString, stringValue } from '../../../common/validation/rules.js';
 
 const whole = (field: string, min: number, max: number) => (v: unknown) => {
   const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
@@ -17,6 +17,9 @@ const ref = (v: unknown) => {
     );
   return v.trim();
 };
+
+const wholeOrNull = (field: string, max: number) => (v: unknown) =>
+  v == null || v === '' || v === 0 ? null : whole(field, 1, max)(v);
 
 /** Turn points into a one-time discount code. */
 export class RedeemDto {
@@ -58,6 +61,41 @@ export class RewardSettingsDto {
   @Provided()
   @Rule(whole('minRedeemPoints', 100, 1_000_000))
   minRedeemPoints?: number;
+
+  /** Days after an order ships before its points can be used (the return window). */
+  @Provided()
+  @Rule(whole('returnWindowDays', 0, 90))
+  returnWindowDays?: number;
+}
+
+/** How one product earns: `multiplier` 2 = double points, 0 = none, 1 = normal; an optional end for a promotion. */
+export class ProductRuleDto {
+  @Rule((v) => {
+    const n = typeof v === 'string' && v.trim() !== '' ? Number(v) : v;
+    if (typeof n !== 'number' || !Number.isFinite(n) || n < 0 || n > 10)
+      throw new AppError('multiplier must be a number from 0 (no points) to 10.');
+    return Math.round(n * 100) / 100;
+  })
+  multiplier!: number;
+
+  @Rule((v) => {
+    if (v == null || v === '') return null;
+    if (typeof v !== 'string' || Number.isNaN(Date.parse(v)))
+      throw new AppError('endsAt must be a date.');
+    return new Date(v).toISOString();
+  })
+  endsAt: string | null = null;
+
+  @Rule((v) => optionalString(v, 200))
+  note: string | null = null;
+
+  /** Only customers with this many points from past orders can buy it (empty: anyone). */
+  @Rule(wholeOrNull('minEarnedPoints', 1_000_000))
+  minEarnedPoints: number | null = null;
+
+  /** The same order must also have this much (cents) of other products (empty: no need). */
+  @Rule(wholeOrNull('minOtherCents', 100_000_000))
+  minOtherCents: number | null = null;
 }
 
 export class CreateRewardAppDto {

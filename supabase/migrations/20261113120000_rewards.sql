@@ -2,16 +2,19 @@
 -- apps (Gleamshelf, the games) give or spend them through the rewards API with their own key, once the customer links that app to
 -- their account with a short code. Points are spent in the shop as a one-time discount code.
 
--- How the shop gives and takes points. One row. Off until the owner switches it on (points are worth money).
+-- How the shop gives and takes points. One row; these defaults (3 points per $1, 100 points = $1: 3% back) are the starting values the
+-- owner changes in Admin > Rewards. Off until the owner switches it on (points are worth money).
 create table if not exists public.reward_settings (
   id boolean primary key default true check (id),
   enabled boolean not null default false,
   -- points for each whole dollar of goods paid (after any discount; not shipping or tax)
-  points_per_dollar integer not null default 1 check (points_per_dollar between 0 and 100),
+  points_per_dollar integer not null default 3 check (points_per_dollar between 0 and 100),
   -- what 100 points take off an order, in cents (100 = $1, so 1 point back per dollar is 1% back)
   cents_per_100_points integer not null default 100 check (cents_per_100_points between 1 and 10000),
   -- the fewest points a customer can turn into a code at once
   min_redeem_points integer not null default 500 check (min_redeem_points between 100 and 1000000),
+  -- an order's points become usable this many days after it ships (the return window); until then they show as "on the way"
+  return_window_days integer not null default 14 check (return_window_days between 0 and 90),
   updated_at timestamptz not null default now()
 );
 insert into public.reward_settings (id) values (true) on conflict do nothing;
@@ -33,8 +36,15 @@ create table if not exists public.reward_entries (
   reason text not null check (length(reason) between 1 and 200),
   ref text check (ref is null or length(ref) between 1 and 200),
   created_by uuid references public.profiles(id) on delete set null,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- an order's points (and what a refund takes back of them) wait here, outside the balance, until the order has shipped and its
+  -- return window has passed: available_at is set when it ships, and the entry joins the balance once that time comes
+  pending boolean not null default false,
+  available_at timestamptz,
+  order_id bigint references public.orders(id) on delete set null
 );
+create index if not exists reward_entries_pending_idx on public.reward_entries (available_at) where pending;
+create index if not exists reward_entries_order_idx on public.reward_entries (order_id) where order_id is not null;
 create unique index if not exists reward_entries_app_ref_idx on public.reward_entries (app, ref) where ref is not null;
 create index if not exists reward_entries_user_idx on public.reward_entries (user_id, created_at desc);
 create index if not exists reward_entries_created_idx on public.reward_entries (created_at desc);
@@ -68,6 +78,22 @@ create table if not exists public.reward_link_codes (
   expires_at timestamptz not null
 );
 
+-- Products with their own rules: a promotion (multiplier 2 = double points, until ends_at), no points at all (multiplier 0, e.g. a
+-- rare piece), and/or a requirement to buy it. Products without a row earn the normal rate. Kept by Square item id, like
+-- product_metadata.
+create table if not exists public.reward_product_rules (
+  square_item_id text primary key,
+  multiplier numeric(4, 2) not null default 1 check (multiplier between 0 and 10),
+  ends_at timestamptz,
+  -- what a product can ask of a buyer (a hyped release sold at MSRP, kept from scalpers): points earned from past orders, and/or
+  -- other products in the same order worth this much
+  min_earned_points integer check (min_earned_points is null or min_earned_points > 0),
+  min_other_cents integer check (min_other_cents is null or min_other_cents > 0),
+  note text check (note is null or length(note) <= 200),
+  updated_by uuid references public.profiles(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+
 -- Discount codes made from points belong to the account that made them.
 alter table public.discount_codes add column if not exists reward_user_id uuid references public.profiles(id) on delete set null;
 alter table public.discount_codes add column if not exists reward_points integer check (reward_points is null or reward_points > 0);
@@ -75,7 +101,7 @@ alter table public.discount_codes add column if not exists reward_points integer
 do $$
 declare t text;
 begin
-  foreach t in array array['reward_settings', 'reward_balances', 'reward_entries', 'reward_apps', 'reward_links', 'reward_link_codes'] loop
+  foreach t in array array['reward_settings', 'reward_balances', 'reward_entries', 'reward_apps', 'reward_links', 'reward_link_codes', 'reward_product_rules'] loop
     execute format('alter table public.%I enable row level security', t);
     execute format('revoke all on public.%I from anon, authenticated', t);
     execute format('drop policy if exists "Service role manages %s" on public.%I', t, t);

@@ -98,6 +98,8 @@ export class AdminOrdersService {
         ],
         tx,
       );
+      // the order's rewards points become usable once its return window has passed
+      await this.rewards.startReturnClock(orderId, tx);
       await this.log.write(
         adminId,
         'order.shipped',

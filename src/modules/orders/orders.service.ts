@@ -65,6 +65,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     const ship = (details.shipping ?? {}) as { postalCode?: unknown; city?: unknown };
     input = {
       ...input,
+      userId: user?.id ?? null,
       postalCode: typeof ship.postalCode === 'string' ? ship.postalCode : input.postalCode,
       city: typeof ship.city === 'string' ? ship.city.slice(0, 80) : input.city,
     };

@@ -2,19 +2,31 @@
 
 One points balance per Spin Hobby account, shared by every Spin Hobby app.
 
-- **The shop** gives points for paid orders (whole dollars of goods after any discount, times _points per dollar_; not shipping or
-  tax) and takes back the refunded share when an order is refunded. Guests earn nothing.
+- **The shop** gives points for paid orders: each product's goods (its share of any discount; not shipping or tax), times _points per
+  dollar_, times the product's own multiplier. They are **on the way** (pending) until the order ships and its return window
+  (_return window days_, default 14) has passed, then they join the balance. A refund takes back the refunded share: from points still
+  on the way if they are, otherwise from the balance (which can then go below zero). Guests earn nothing.
+- **Products** can have their own rule (Admin > product > Rewards points):
+  - a promotion, e.g. ×2 until a date;
+  - no points at all, e.g. a rare piece;
+  - a requirement to buy it, e.g. a hyped release sold at MSRP and kept from scalpers. The requirement is either points from past
+    orders (`min_earned_points`; only shop orders count, less refunds, so app and gift points can't unlock it), or other products
+    in the same order worth at least `min_other_cents`.
+  - The cart quote (and so checkout) takes out a product the buyer doesn't qualify for, with a `REQUIREMENT` warning saying why.
+    Requirements apply even while rewards are switched off.
 - **Customers** turn points into a one-time discount code (Account > Rewards). 100 points are worth _cents per 100 points_
   (default $1). A code is good for a year and is used at checkout like any other code.
 - **Other apps** (Gleamshelf, Hangout, Shelved, …) give and spend points through the API below, with their own key.
-- **The owner** switches rewards on, sets the rates, connects apps and gives or takes points by hand (Admin > Rewards).
+- **The owner** switches rewards on, sets the rates, connects apps and gives or takes points by hand (Admin > Rewards). The starting
+  values (3 points per $1, 100 points = $1, so 3% back; 500 points to use; 14-day return window) are the table's defaults in the
+  migration, and the owner changes them there.
 
 Rewards are **off** until the owner switches them on, because points are worth money. While off, nothing is earned or spent;
 balances can still be read.
 
 Code: `src/modules/rewards/` (the arithmetic is in `rewards-math.ts`). Tables: `reward_settings`, `reward_balances` (running total),
-`reward_entries` (every change, never edited), `reward_apps`, `reward_links`, `reward_link_codes`
-(migration `20261113120000_rewards.sql`). Tests: `test/e2e/rewards.e2e-spec.ts`.
+`reward_entries` (every change, never edited), `reward_apps`, `reward_links`, `reward_link_codes`,
+`reward_product_rules` (migration `20261113120000_rewards.sql`). Tests: `test/e2e/rewards.e2e-spec.ts`.
 
 ## Connecting an app
 
@@ -54,5 +66,5 @@ curl -X POST https://api.spinhobby.com/rewards/members/$MEMBER/award \
 
 - A balance can go below zero only when a refund takes back points that were already spent. Spends (by the customer, an app or the
   owner taking points) never go below zero.
-- Points have no expiry yet. Points codes don't come back if the order that used them is refunded; the owner can give them back by hand.
+- Points from apps and from the owner count at once; only order points wait. Points have no expiry yet. Points codes don't come back if the order that used them is refunded; the owner can give them back by hand.
 - Every owner change is in the admin log (`rewards.*`).

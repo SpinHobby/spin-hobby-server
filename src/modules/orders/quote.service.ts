@@ -5,6 +5,8 @@ import { Db, type Queryable } from '../../database/db.service.js';
 import { StoreService } from '../store/store.service.js';
 import { applyDiscount, discountLabel } from '../discounts/discount-math.js';
 import { DiscountsService } from '../discounts/discounts.service.js';
+import { RewardsService } from '../rewards/rewards.service.js';
+import { requirementProblem } from '../rewards/rewards-math.js';
 import { priceCartLine, totalsWithShipping, type QuoteRow } from './quote-math.js';
 import { normalizePostal, pickOption, type ShippingOption } from '../shipping/shipping-math.js';
 import { ShippingRatesService } from '../shipping/shipping-rates.service.js';
@@ -21,6 +23,8 @@ export interface QuoteInput {
   city?: string | null;
   /** The courier option picked from a quote's `shippingOptions` (its id); otherwise `shippingMethod` picks the cheapest or fastest. */
   shippingOption?: string | null;
+  /** The signed-in buyer (set by the server, never by the browser): some products are only for customers with enough points. */
+  userId?: string | null;
 }
 export interface QuoteLine {
   variationId: string;
@@ -34,7 +38,13 @@ export interface QuoteLine {
 }
 export interface QuoteWarning {
   variationId: string;
-  code: 'OUT_OF_STOCK' | 'QTY_REDUCED' | 'PREORDER_CLOSED' | 'LIMIT_EXCEEDED' | 'NO_PRICE';
+  code:
+    | 'OUT_OF_STOCK'
+    | 'QTY_REDUCED'
+    | 'PREORDER_CLOSED'
+    | 'LIMIT_EXCEEDED'
+    | 'NO_PRICE'
+    | 'REQUIREMENT';
   message: string;
 }
 export interface Quote {
@@ -57,6 +67,8 @@ export interface Quote {
   shippingOption: ShippingOption | null;
   /** True when the options are couriers' live rates, false for the shop's flat prices. */
   shippingLive: boolean;
+  /** Rewards points this cart earns a signed-in customer (null while rewards are off). */
+  rewardPoints: number | null;
 }
 
 /** Server-side price/stock/tax check. Never trusts prices from the browser. The rules live in quote-math.ts. */
@@ -67,6 +79,7 @@ export class QuoteService {
     private readonly store: StoreService,
     private readonly discounts: DiscountsService,
     private readonly shipping: ShippingRatesService,
+    private readonly rewards: RewardsService,
   ) {}
 
   /**
@@ -110,6 +123,35 @@ export class QuoteService {
     await this.quote(input).catch(() => undefined);
   }
 
+  /**
+   * Takes out lines whose product asks something this buyer doesn't have (points from past orders, or enough other products in the
+   * same order), with a warning saying why. Products that ask nothing are never touched.
+   */
+  private async checkRequirements(
+    lines: QuoteLine[],
+    warnings: QuoteWarning[],
+    userId: string | null,
+    tx?: Queryable,
+  ) {
+    const reqs = await this.rewards.requirementsFor(
+      lines.map((l) => l.itemId),
+      tx,
+    );
+    if (!reqs.size) return;
+    const earned = userId ? await this.rewards.purchasePoints(userId, tx) : null;
+    // "other items" are the products that ask nothing themselves, so two gated products can't vouch for each other
+    const plainCents = lines
+      .filter((l) => !reqs.has(l.itemId))
+      .reduce((t, l) => t + l.lineCents, 0);
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const req = reqs.get(lines[i].itemId);
+      const problem = req && requirementProblem(lines[i].name, req, earned, plainCents);
+      if (!problem) continue;
+      warnings.push({ variationId: lines[i].variationId, code: 'REQUIREMENT', message: problem });
+      lines.splice(i, 1);
+    }
+  }
+
   async quote(
     input: QuoteInput,
     tx?: Queryable,
@@ -150,6 +192,7 @@ export class QuoteService {
       warnings.push(...priced.warnings);
       if (priced.line) lines.push(priced.line);
     }
+    await this.checkRequirements(lines, warnings, input.userId ?? null, tx);
     const subtotal = lines.reduce((sum, l) => sum + l.lineCents, 0);
     const typed = input.discountCode?.trim();
     const rule = typed ? await this.discounts.find(typed, tx) : null;
@@ -181,6 +224,11 @@ export class QuoteService {
       shippingOptions: shipping.options,
       shippingOption: chosen,
       shippingLive: shipping.live,
+      rewardPoints: await this.rewards.quotePoints(
+        lines.map((l) => ({ itemId: l.itemId, lineCents: l.lineCents })),
+        discountCents,
+        tx,
+      ),
     };
   }
 }

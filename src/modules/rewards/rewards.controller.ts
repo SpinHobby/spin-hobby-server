@@ -48,6 +48,19 @@ export class AccountRewardsController {
   }
 }
 
+/** What shoppers see before they buy: the points a product earns, and any promotion on it. */
+@ApiTags('Rewards: shop')
+@Controller('products')
+@Access('public')
+export class ProductPointsController {
+  constructor(private readonly rewards: RewardsService) {}
+
+  @Get(':id/points')
+  async points(@Param('id') id: string, @CurrentUser() user: AppUser | null) {
+    return { success: true, ...(await this.rewards.productPoints(id, user?.id)) };
+  }
+}
+
 /**
  * What another Spin Hobby app (Gleamshelf, the games) calls. Not for people: the app sends its key as a bearer token. It only ever
  * sees a member id per linked customer, never their email. See docs/REWARDS.md.
