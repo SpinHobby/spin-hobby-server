@@ -56,13 +56,28 @@ describe('accounts', () => {
       .set('Authorization', shopper.auth)
       .send({ squareItemId: 'HID1' })
       .expect(400);
+    await http
+      .post('/wishlist')
+      .set('Authorization', shopper.auth)
+      .send({ squareItemId: 'CHB1' })
+      .expect(200);
+    // backdate PRZ1 so the newest-first order is deterministic
+    await pglite.query(
+      "update public.wishlist_items set created_at = now() - interval '1 hour' where user_id = $1 and square_item_id = 'PRZ1'",
+      [shopper.id],
+    );
+    const { body } = await http.get('/wishlist').set('Authorization', shopper.auth);
+    expect(body.items.map((p: any) => p.id)).toEqual(['CHB1', 'PRZ1']);
+    for (const p of body.items) {
+      expect(p.addedAt).toBeTypeOf('string');
+      expect(Date.parse(p.addedAt)).not.toBeNaN();
+    }
+    await http.delete('/wishlist/PRZ1').set('Authorization', shopper.auth).expect(200);
     expect(
       (await http.get('/wishlist').set('Authorization', shopper.auth)).body.items.map(
         (p: any) => p.id,
       ),
-    ).toEqual(['PRZ1']);
-    await http.delete('/wishlist/PRZ1').set('Authorization', shopper.auth).expect(200);
-    expect((await http.get('/wishlist').set('Authorization', shopper.auth)).body.items).toEqual([]);
+    ).toEqual(['CHB1']);
   });
 
   it('records restock alerts for guests and validates input', async () => {
