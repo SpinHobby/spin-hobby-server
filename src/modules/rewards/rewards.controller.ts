@@ -19,6 +19,12 @@ export class AccountRewardsController {
     return { success: true, ...(await this.rewards.summary(user.id)) };
   }
 
+  /** Just the balance, for the storefront header (one quick read on every page). */
+  @Get('balance')
+  async balance(@CurrentUser() user: AppUser) {
+    return { success: true, ...(await this.rewards.headerBalance(user.id)) };
+  }
+
   /** Turns points into a one-time discount code. */
   @Post('redeem')
   @HttpCode(200)

@@ -86,6 +86,12 @@ describe('rewards', () => {
     orderId = await buy();
     const me = await mine();
     expect(me.balance).toBe(780);
+    const header = await http
+      .get('/account/rewards/balance')
+      .set('Authorization', shopper.auth)
+      .expect(200);
+    expect(header.body).toEqual({ success: true, enabled: true, balance: 780 });
+    await http.get('/account/rewards/balance').expect(401);
     expect(me.worthCents).toBe(780);
     expect(me.entries).toEqual([
       expect.objectContaining({

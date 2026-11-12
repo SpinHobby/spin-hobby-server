@@ -226,6 +226,16 @@ export class RewardsService {
 
   // ---------- a customer's own account ----------
 
+  /** Whether rewards are on and the balance: what the storefront header shows, in one query. */
+  async headerBalance(userId: string) {
+    const row = await this.db.one<{ enabled: boolean; points: number }>(
+      `select coalesce((select enabled from public.reward_settings where id), false) as enabled,
+              coalesce((select points from public.reward_balances where user_id = $1), 0)::int as points`,
+      [userId],
+    );
+    return { enabled: Boolean(row?.enabled), balance: Number(row?.points ?? 0) };
+  }
+
   /** Everything the Account > Rewards page shows. */
   async summary(userId: string) {
     const [settings, balance, entries, links, codes] = await Promise.all([
