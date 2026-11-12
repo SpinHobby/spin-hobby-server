@@ -6,6 +6,7 @@ import { Db } from '../../database/db.service.js';
 import type { InventorySnapshotRow, OrderItemRow, OrderRow } from '../../database/rows.js';
 import { EmailService } from '../../integrations/email/email.service.js';
 import { StoreService } from '../store/store.service.js';
+import { RewardsService } from '../rewards/rewards.service.js';
 import { orderExpiryIntervalMinutes, orderHoldMinutes } from '../../config/orders.config.js';
 
 export interface OrderDetails {
@@ -34,6 +35,7 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
     private readonly quotes: QuoteService,
     private readonly store: StoreService,
     private readonly email: EmailService,
+    private readonly rewards: RewardsService,
   ) {}
 
   onModuleInit() {
@@ -237,6 +239,8 @@ export class OrdersService implements OnModuleInit, OnModuleDestroy {
         [orderId],
         tx,
       );
+      // a signed-in customer's rewards points (when the owner has rewards switched on)
+      await this.rewards.earnForOrder(orderId, tx);
       const event = current.status === 'cancelled' ? { ...data, late: true } : data;
       await this.db.exec(
         "insert into public.order_events (order_id, event_type, data) values ($1, 'paid', $2)",
