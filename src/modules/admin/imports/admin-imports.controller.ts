@@ -21,6 +21,7 @@ import {
   RestockImportDto,
 } from './dto/imports.dto.js';
 import { ImportsService, type PhotoKey } from './imports.service.js';
+import { ImportsStatsService } from './imports-stats.service.js';
 import { AddPhotoDto } from '../products/dto/photos.dto.js';
 import { AppError } from '../../../common/errors.js';
 
@@ -29,7 +30,10 @@ import { AppError } from '../../../common/errors.js';
 @Controller('admin/imports')
 @Access('staff')
 export class AdminImportsController {
-  constructor(private readonly imports: ImportsService) {}
+  constructor(
+    private readonly imports: ImportsService,
+    private readonly importStats: ImportsStatsService,
+  ) {}
 
   @Get()
   async list(@Query() query: ImportsQuery) {
@@ -56,6 +60,15 @@ export class AdminImportsController {
   async disconnect(@CurrentUser() admin: AppUser, @Param('id', ParseUUIDPipe) id: string) {
     await this.imports.revoke(admin.id, id);
     return { success: true };
+  }
+
+  /** Admin > Dashboard > "Gleamshelf": drafts received and decided, how many went in unedited, what people change, photo queue speed. `?days=30` (1 to 365). */
+  @Get('stats')
+  async stats(@Query('days') days = '30') {
+    const n = Number(days);
+    if (!Number.isInteger(n) || n < 1 || n > 365)
+      throw new AppError('Days must be a whole number from 1 to 365.');
+    return { success: true, ...(await this.importStats.stats(n)) };
   }
 
   @Get(':id')

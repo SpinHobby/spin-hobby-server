@@ -23,6 +23,7 @@ import { AdminImportsController } from './imports/admin-imports.controller.js';
 import { GleamshelfController } from './imports/gleamshelf.controller.js';
 import { GleamshelfTokenGuard } from './imports/gleamshelf-token.guard.js';
 import { ImportsService } from './imports/imports.service.js';
+import { ImportsStatsService } from './imports/imports-stats.service.js';
 import { AdminPhotoJobsController } from './imports/admin-photo-jobs.controller.js';
 import { PhotoJobsService } from './imports/photo-jobs.service.js';
 import { AdminListingJobsController } from './imports/admin-listing-jobs.controller.js';
@@ -112,6 +113,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminAuditService,
     AdminAccountsService,
     ImportsService,
+    ImportsStatsService,
     PhotoJobsService,
     ListingJobsService,
     DescribeJobsService,

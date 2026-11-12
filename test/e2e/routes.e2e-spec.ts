@@ -90,6 +90,7 @@ const EXPECTED: string[] = [
   'GET /admin/imports/:id [staff]',
   'GET /admin/imports/:id/photos/:key/file [staff]',
   'GET /admin/imports/connections [owner]',
+  'GET /admin/imports/stats [staff]',
   'GET /admin/listing-jobs [staff]',
   'GET /admin/orders [staff]',
   'GET /admin/orders/:id [staff]',
