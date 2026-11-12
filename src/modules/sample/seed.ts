@@ -23,6 +23,23 @@ export async function countProducts(db: SampleDb): Promise<number> {
   return rows[0].n;
 }
 
+/**
+ * Removes the drawn pictures that earlier seeds added after a sample product's real photo (they faded in over it on hover).
+ * Only sample products, only drawings, and only where the product keeps another picture. Returns how many went.
+ */
+export async function tidySamplePictures(db: SampleDb): Promise<number> {
+  const { rows } = await db.query(
+    `delete from public.product_images i
+      where i.square_item_id like $1
+        and i.image_url like '%/sample-images/%'
+        and exists (select 1 from public.product_images o
+                     where o.square_item_id = i.square_item_id and o.image_url not like '%/sample-images/%')
+      returning i.square_item_id`,
+    [`${SAMPLE_PREFIX}%`],
+  );
+  return rows.length;
+}
+
 const STATUSES = [
   'paid',
   'shipped',
@@ -114,8 +131,9 @@ export async function seedSample(db: SampleDb, imageBase: string, { more = 0 } =
         i,
       ],
     );
-    const drawing = picture(p.drawing ?? p.slug);
-    const pictures = p.photo ? [p.photo, drawing] : [drawing];
+    // A product with a real photo shows only that: cards fade a second picture in on hover, and the drawing (an icon and the name)
+    // read as odd icons laid over the photo.
+    const pictures = [p.photo ?? picture(p.drawing ?? p.slug)];
     for (const [n, url] of pictures.entries()) {
       await db.query(
         'insert into public.product_images (square_item_id, image_url, alt_text, sort_order) values ($1, $2, $3, $4)',
