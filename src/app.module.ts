@@ -27,7 +27,7 @@ import { SampleModule } from './modules/sample/sample.module.js';
 import { SquareSyncModule } from './modules/square-sync/square-sync.module.js';
 import { StoreModule } from './modules/store/store.module.js';
 import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
-
+import { HelloModule } from './modules/hello/hello.module.js';
 /**
  * The root module: lists the feature modules and registers the two things that apply to every
  * request. Read docs/ARCHITECTURE.md for how the pieces fit together.
@@ -60,6 +60,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     SquareSyncModule,
     StoreModule,
     WebhooksModule,
+    HelloModule,
   ],
   providers: [
     // Guards run in the order they are listed: rate limits first, so abusive traffic never costs a profile lookup.
