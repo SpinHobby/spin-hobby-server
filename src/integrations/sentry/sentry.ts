@@ -9,7 +9,7 @@ let sentry: SentryLike | null = null;
 
 /**
  * Error tracking is opt-in: it switches on only when SENTRY_DSN is set, and the SDK is loaded lazily so the
- * app neither needs nor installs it otherwise (add it with `npm i @sentry/node` when a Sentry project exists).
+ * app pays nothing for it otherwise. To turn it on, create a Sentry project and set SENTRY_DSN on the host.
  */
 export async function initSentry() {
   const dsn = sentryDsn();
@@ -26,9 +26,7 @@ export async function initSentry() {
     sentry = mod;
     logger.log('Error reporting enabled.');
   } catch {
-    logger.warn(
-      'SENTRY_DSN is set but @sentry/node could not be loaded; run `npm i @sentry/node`. Errors are logged only.',
-    );
+    logger.warn('SENTRY_DSN is set but @sentry/node could not be loaded. Errors are logged only.');
   }
 }
 
