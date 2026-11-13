@@ -67,6 +67,7 @@ describe('rewards math', () => {
       /1,000 points from past orders. You have 999/,
     );
     expect(requirementProblem('ETB', points, 1_000, 0)).toBeNull();
+    expect(requirementProblem('ETB', points, 1_000, 0, false)).toMatch(/confirmed their email/);
     const other = { minEarnedPoints: null, minOtherCents: 5_000 };
     expect(requirementProblem('ETB', other, null, 4_999)).toBe(
       'ETB needs at least $50.00 of other items in the same order.',

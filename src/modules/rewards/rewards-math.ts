@@ -94,11 +94,14 @@ export function requirementProblem(
   req: Requirement,
   earned: number | null,
   otherCents: number,
+  emailConfirmed = true,
 ): string | null {
   if (req.minEarnedPoints) {
     const need = req.minEarnedPoints.toLocaleString('en-CA');
     if (earned === null)
       return `${name} is for customers with ${need} points from past orders. Sign in to buy it.`;
+    if (!emailConfirmed)
+      return `${name} is for customers who have confirmed their email. Confirm yours in Account to buy it.`;
     if (earned < req.minEarnedPoints)
       return `${name} is for customers with ${need} points from past orders. You have ${earned.toLocaleString('en-CA')}.`;
   }

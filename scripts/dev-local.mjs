@@ -108,6 +108,8 @@ if (ownDatabase) {
   seeded = await seedSample(db, imageBase, { more: MORE_PRODUCTS });
   // ---- seed: sample shoppers with past orders, favourites, addresses and alerts (local only)
   people = await seedSampleAccounts(db, imageBase);
+  // seeded accounts behave like long-time customers: email confirmed, welcome step done (local sign-ups start fresh)
+  await db.query('update public.profiles set email_verified_at = now(), welcomed_at = now()');
 
   // ---- seed: the storefront's Shop playlist (Admin > Settings), so its player shows from the first start
   await db.query('update public.store_settings set music_playlist_id = $1 where id = true', [

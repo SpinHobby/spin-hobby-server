@@ -132,6 +132,17 @@ export class EmailService {
     );
   }
 
+  /** The 6-digit code that confirms a new account's email. */
+  emailCodeHtml(code: string, firstName: string | null, minutes: number) {
+    return (
+      `<p>${firstName ? `Hi ${escape(firstName)},` : 'Hi,'}</p>` +
+      `<p>Here is your code to confirm your email at Spin Hobby:</p>` +
+      `<p style="font-size:28px;letter-spacing:6px;margin:16px 0"><strong>${escape(code)}</strong></p>` +
+      `<p>It works for ${minutes} minutes. Once your email is confirmed you can use your rewards points and buy limited releases.</p>` +
+      `<p style="font-size:12px">If you didn't make an account at Spin Hobby, you can ignore this email.</p>`
+    );
+  }
+
   shippedHtml(orderId: number, carrier: string | null, tracking: string) {
     const track = trackingUrl(carrier, tracking);
     return (

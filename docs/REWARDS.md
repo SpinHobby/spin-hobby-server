@@ -14,6 +14,9 @@ One points balance per Spin Hobby account, shared by every Spin Hobby app.
     in the same order worth at least `min_other_cents`.
   - The cart quote (and so checkout) takes out a product the buyer doesn't qualify for, with a `REQUIREMENT` warning saying why.
     Requirements apply even while rewards are switched off.
+- **A confirmed email** is needed to use points, link an app or buy a product that asks for points from past orders. New accounts
+  confirm with a 6-digit code emailed at sign-up (`POST /auth/email-code`, `POST /auth/email-code/confirm`); Google/Discord
+  sign-ins, staff and accounts made before 2026-11-14 count as confirmed. Shopping and earning never wait for it.
 - **Customers** turn points into a one-time discount code (Account > Rewards). 100 points are worth _cents per 100 points_
   (default $1). A code is good for a year and is used at checkout like any other code.
 - **Other apps** (Gleamshelf, Hangout, Shelved, …) give and spend points through the API below, with their own key.

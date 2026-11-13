@@ -1,11 +1,18 @@
 import { Body, Controller, Delete, Get, HttpCode, Param, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { AppError } from '../../common/errors.js';
 import { RateLimit } from '../../common/guards/rate-limit.guard.js';
 import { Access, CurrentUser } from '../auth/access.js';
 import type { AppUser } from '../auth/auth.service.js';
 import { AppPointsDto, LinkAppDto, RedeemDto } from './dto/rewards.dto.js';
 import { CallingApp, RewardAppGuard } from './reward-app.guard.js';
 import { RewardsService, type RewardApp } from './rewards.service.js';
+
+/** Using points (and linking apps that give them) waits until the customer has confirmed their email. */
+function needsConfirmedEmail(user: AppUser) {
+  if (!user.emailVerified)
+    throw new AppError('Confirm your email to use your points.', 403, 'EMAIL_UNCONFIRMED');
+}
 
 /** A signed-in customer's own points: balance and history, turning points into a code, and linking other apps. */
 @ApiTags('Account: rewards')
@@ -16,7 +23,11 @@ export class AccountRewardsController {
 
   @Get()
   async summary(@CurrentUser() user: AppUser) {
-    return { success: true, ...(await this.rewards.summary(user.id)) };
+    return {
+      success: true,
+      emailConfirmed: user.emailVerified,
+      ...(await this.rewards.summary(user.id)),
+    };
   }
 
   /** Just the balance, for the storefront header (one quick read on every page). */
@@ -30,6 +41,7 @@ export class AccountRewardsController {
   @HttpCode(200)
   @RateLimit({ limit: 10, windowMs: 60_000 })
   async redeem(@CurrentUser() user: AppUser, @Body() dto: RedeemDto) {
+    needsConfirmedEmail(user);
     return { success: true, ...(await this.rewards.redeem(user.id, dto.points)) };
   }
 
@@ -38,6 +50,7 @@ export class AccountRewardsController {
   @HttpCode(200)
   @RateLimit({ limit: 10, windowMs: 60_000 })
   async linkCode(@CurrentUser() user: AppUser) {
+    needsConfirmedEmail(user);
     return { success: true, ...(await this.rewards.linkCode(user.id)) };
   }
 

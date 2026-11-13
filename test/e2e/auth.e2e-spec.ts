@@ -67,7 +67,7 @@ describe('sign-in through the API', () => {
     }
   });
 
-  it('creates confirmed customer accounts without sending email', async () => {
+  it('creates customer accounts that can sign in at once, and emails a code to confirm the address', async () => {
     resetSignupLimits();
     const newbie = { id: '00000000-0000-4000-8000-00000000abcd', email: 'newbie@example.com' };
     const auth = mockFetch({
@@ -84,6 +84,7 @@ describe('sign-in through the API', () => {
         );
         return gotrue(200, { id: newbie.id, email: body.email })();
       },
+      'api.resend.com': () => ({ id: 'code-email' }),
       'grant_type=password': async () =>
         gotrue(200, {
           access_token: await tokenFor(newbie.id, newbie.email),
@@ -102,8 +103,12 @@ describe('sign-in through the API', () => {
         .expect(400, { success: false, error: 'Use a password with at least 8 characters.' });
       await http
         .post('/auth/signup')
-        .send({ email: 'fan@example.com', password: 'longenough' })
+        .send({ email: 'fan@example.com', password: 'longenough', firstName: 'Fan' })
         .expect(409);
+      await http
+        .post('/auth/signup')
+        .send({ email: 'x@example.com', password: 'longenough', firstName: '  ' })
+        .expect(400, { success: false, error: 'Enter your first name.', code: 'first_name' });
       const ok = await http
         .post('/auth/signup')
         .send({ email: 'Newbie@Example.com', password: 'longenough', firstName: 'Nia' })
@@ -127,14 +132,23 @@ describe('sign-in through the API', () => {
         [newbie.id],
       );
       expect(profile.rows[0].first_name).toBe('Nia');
+      // not confirmed yet: a 6-digit code went out through the shop's mailer
+      expect(ok.body.user).toMatchObject({
+        emailVerified: false,
+        welcomed: false,
+        firstName: 'Nia',
+      });
+      const mail = auth.calls.find((c) => c.url.includes('api.resend.com'));
+      expect(mail?.body.to).toEqual(['newbie@example.com']);
+      expect(mail?.body.subject).toMatch(/^\d{6} is your Spin Hobby code$/);
       for (let i = 0; i < 3; i++)
         await http
           .post('/auth/signup')
-          .send({ email: 'fan@example.com', password: 'longenough' })
+          .send({ email: 'fan@example.com', password: 'longenough', firstName: 'Fan' })
           .expect(409);
       await http
         .post('/auth/signup')
-        .send({ email: 'late@example.com', password: 'longenough' })
+        .send({ email: 'late@example.com', password: 'longenough', firstName: 'Late' })
         .expect(429);
     } finally {
       auth.restore();
@@ -258,7 +272,7 @@ describe('sign-in through the API', () => {
       resetSignupLimits();
       await http
         .post('/auth/signup')
-        .send({ email: adminEmail, password: 'longenough' })
+        .send({ email: adminEmail, password: 'longenough', firstName: 'Admin' })
         .expect(409);
 
       // Never against the production project.

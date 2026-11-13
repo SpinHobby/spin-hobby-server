@@ -139,13 +139,15 @@ export class QuoteService {
     );
     if (!reqs.size) return;
     const earned = userId ? await this.rewards.purchasePoints(userId, tx) : null;
+    // one person, many unconfirmed accounts: a limited item asks for a confirmed email too
+    const confirmed = userId ? await this.rewards.emailConfirmed(userId, tx) : false;
     // "other items" are the products that ask nothing themselves, so two gated products can't vouch for each other
     const plainCents = lines
       .filter((l) => !reqs.has(l.itemId))
       .reduce((t, l) => t + l.lineCents, 0);
     for (let i = lines.length - 1; i >= 0; i--) {
       const req = reqs.get(lines[i].itemId);
-      const problem = req && requirementProblem(lines[i].name, req, earned, plainCents);
+      const problem = req && requirementProblem(lines[i].name, req, earned, plainCents, confirmed);
       if (!problem) continue;
       warnings.push({ variationId: lines[i].variationId, code: 'REQUIREMENT', message: problem });
       lines.splice(i, 1);

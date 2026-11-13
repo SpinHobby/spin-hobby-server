@@ -1,8 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { RateLimiter } from '../../common/guards/rate-limit.guard.js';
 import { SupabaseAuthClient } from '../../integrations/supabase/supabase-auth.client.js';
 import { DevLogin } from './dev-login.service.js';
+import { EmailCheckService } from './email-check.service.js';
 import type { SignupDto } from './dto/signup.dto.js';
 import { SessionService, type Session } from './session.service.js';
 import { StagingAdminLogin } from './staging-admin-login.service.js';
@@ -23,11 +24,14 @@ export function resetSignupLimits() {
  */
 @Injectable()
 export class SignInService {
+  private readonly logger = new Logger(SignInService.name);
+
   constructor(
     private readonly supabase: SupabaseAuthClient,
     private readonly sessions: SessionService,
     private readonly devLogin: DevLogin,
     private readonly stagingAdminLogin: StagingAdminLogin,
+    private readonly emailCheck: EmailCheckService,
   ) {}
 
   /** Which sign-in methods to show. `username: true` means the email field also accepts the staging admin username. */
@@ -36,7 +40,7 @@ export class SignInService {
       return {
         success: true,
         password: true,
-        signup: false,
+        signup: true,
         google: false,
         discord: false,
         dev: true,
@@ -64,9 +68,13 @@ export class SignInService {
     return this.signInWithPassword(email, password);
   }
 
-  /** Creates an already-confirmed customer account, then signs it in. */
+  /**
+   * Creates a customer account, signs it in and emails a 6-digit code to confirm the address. The account can shop at once (Supabase
+   * marks it confirmed so it can sign in); the shop's own `email_verified_at` waits for the code.
+   */
   async signup(dto: SignupDto, ip: string): Promise<Session> {
-    if (this.devLogin.enabled() || !this.supabase.config() || !this.supabase.serviceKey())
+    const local = this.devLogin.enabled();
+    if (!local && (!this.supabase.config() || !this.supabase.serviceKey()))
       throw new AppError('Creating accounts is not available right now.', 503);
     // The staging admin's reserved address can't be claimed through sign-up.
     if (dto.email === stagingAdmin()?.email)
@@ -75,10 +83,22 @@ export class SignInService {
         409,
         'email_exists',
       );
+    if (!dto.firstName) throw new AppError('Enter your first name.', 400, 'first_name');
     if (!allowSignup(ip || 'unknown'))
       throw new AppError('Too many sign-ups from this network. Try again later.', 429);
-    await this.supabase.createCustomer(dto);
-    return this.signInWithPassword(dto.email, dto.password);
+    let session: Session;
+    if (local) session = await this.devLogin.signup(dto);
+    else {
+      await this.supabase.createCustomer(dto);
+      session = await this.signInWithPassword(dto.email, dto.password);
+    }
+    // The first code goes out now; if the mailer is down the customer can ask again from the welcome step.
+    await this.emailCheck
+      .send(session.user)
+      .catch((e: unknown) =>
+        this.logger.warn(`First email code for a new account was not sent: ${String(e)}`),
+      );
+    return session;
   }
 
   /**
@@ -101,8 +121,10 @@ export class SignInService {
   }
 
   refresh(refreshToken: string): Promise<Session> {
-    if (this.devLogin.enabled() && refreshToken.startsWith('dev:'))
-      return this.devLogin.login(refreshToken.slice('dev:'.length), this.devLogin.password());
+    if (this.devLogin.enabled() && refreshToken.startsWith('dev:')) {
+      const email = refreshToken.slice('dev:'.length);
+      return this.devLogin.login(email, this.devLogin.passwordFor(email));
+    }
     return this.refreshWithSupabase(refreshToken);
   }
 

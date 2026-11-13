@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module.js';
 import { AccountController } from './account.controller.js';
+import { ProfileService } from './profile.service.js';
 import { RestockAlertService } from './restock-alert.service.js';
 import { WishlistService } from './wishlist.service.js';
 
@@ -8,6 +9,6 @@ import { WishlistService } from './wishlist.service.js';
 @Module({
   imports: [AuthModule],
   controllers: [AccountController],
-  providers: [WishlistService, RestockAlertService],
+  providers: [WishlistService, RestockAlertService, ProfileService],
 })
 export class AccountModule {}

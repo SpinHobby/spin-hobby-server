@@ -28,6 +28,19 @@ export class FollowService {
     private readonly email: EmailService,
   ) {}
 
+  /** The series with the most products in the shop, for "What do you collect?" after signing up. */
+  async popularSeries(limit = 24) {
+    const rows = await this.db.many<{ name: string }>(
+      `select min(btrim(series)) as name from public.storefront_products
+        where series is not null and btrim(series) <> ''
+        group by lower(btrim(series))
+        order by count(*) desc, min(btrim(series))
+        limit $1`,
+      [limit],
+    );
+    return rows.map((r) => r.name);
+  }
+
   /**
    * Following again is fine (nothing changes). Only a series or maker some product in the shop has can be followed; `all` is the
    * weekly digest of every new pre-order (its name is ignored).

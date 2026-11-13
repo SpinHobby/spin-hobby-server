@@ -368,6 +368,7 @@ describe('rewards', () => {
       endsAt: null,
       requirement: null,
       earned: null,
+      emailConfirmed: null,
     });
     expect((await quote()).rewardPoints).toBe(780);
     expect(
@@ -426,6 +427,7 @@ describe('rewards', () => {
       enabled: false,
       requirement: null,
       earned: null,
+      emailConfirmed: null,
     });
     expect((await quote()).rewardPoints).toBeNull();
   });
@@ -464,12 +466,24 @@ describe('rewards', () => {
     expect(page).toMatchObject({
       requirement: { minEarnedPoints: 5_000, minOtherCents: null },
       earned: 1_560,
+      emailConfirmed: true,
     });
 
     await rule({ multiplier: 1, minEarnedPoints: 1_500 }).expect(200);
     q = await quote(chibi(), shopper);
     expect(q.lines.map((l: { itemId: string }) => l.itemId)).toEqual(['CHB1']);
     expect(q.warnings).toEqual([]);
+
+    // enough points, but an email never confirmed: one person can't stack fresh accounts on a limited item
+    await pglite.query('update public.profiles set email_verified_at = null where id = $1', [
+      shopper.id,
+    ]);
+    q = await quote(chibi(), shopper);
+    expect(q.lines).toEqual([]);
+    expect(q.warnings[0].message).toMatch(/confirmed their email/);
+    await pglite.query('update public.profiles set email_verified_at = now() where id = $1', [
+      shopper.id,
+    ]);
 
     // checkout asks the same: a signed-out buyer can't get past it
     const intent = await http

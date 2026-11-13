@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { AppError, notFound } from '../../common/errors.js';
 import { Db, type Queryable } from '../../database/db.service.js';
+import { rolesFrom } from '../auth/roles.js';
 import type { OrderRow } from '../../database/rows.js';
 import {
   multiplierAt,
@@ -729,6 +730,16 @@ export class RewardsService {
     return Math.max(0, Number(row?.points ?? 0));
   }
 
+  /** The customer confirmed their email (or is staff). Points, app links and limited items need it. */
+  async emailConfirmed(userId: string, tx?: Queryable) {
+    const row = await this.db.one<{ ok: boolean }>(
+      `select (email_verified_at is not null or role::text = any($2::text[])) as ok from public.profiles where id = $1`,
+      [userId, rolesFrom('staff')],
+      tx,
+    );
+    return row?.ok === true;
+  }
+
   /** Every product with its own rule, for Admin > Rewards (ended promotions without a requirement are left out). */
   async productRules() {
     const rows = await this.db.many<ProductRuleRow & { name: string | null }>(
@@ -817,7 +828,9 @@ export class RewardsService {
         : null;
     const earned =
       requirement?.minEarnedPoints && userId ? await this.purchasePoints(userId) : null;
-    if (!settings.enabled) return { enabled: false as const, requirement, earned };
+    const emailConfirmed =
+      requirement?.minEarnedPoints && userId ? await this.emailConfirmed(userId) : null;
+    if (!settings.enabled) return { enabled: false as const, requirement, earned, emailConfirmed };
     const price = await this.db.one<{ cents: number | null }>(
       'select min(price_cents)::int as cents from public.catalog_variations where square_item_id = $1 and price_cents > 0',
       [itemId],
@@ -835,6 +848,7 @@ export class RewardsService {
       endsAt: rule && multiplier !== 1 ? rule.endsAt : null,
       requirement,
       earned,
+      emailConfirmed,
     };
   }
 
