@@ -25,6 +25,7 @@ import { checkCutout } from './photo-jobs.service.js';
 import { SeriesService } from '../series/series.service.js';
 import { isOfficialUrl, parseDraft, type DraftInput, type OfficialPhoto } from './draft.js';
 import { likelySameProducts, type ProductMatch, type ShopProduct } from './duplicates.js';
+import { reviewDraft } from './review.js';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 export const TOKEN_PREFIX = 'gst_';
@@ -533,6 +534,19 @@ export class ImportsService {
       [id, adminId],
     );
     if (!claimed) throw new AppError('Someone else just handled this draft.', 409);
+    // what the person changed from the draft, for the dashboard's "accepted without edits" (worked out now: the product can change later)
+    const market = (row.details as Partial<DraftInput['details']>).market;
+    const review = reviewDraft(
+      {
+        title: row.title,
+        description: row.description,
+        series: row.series,
+        categoryId: categoryOf(row, await this.categories()).categoryId,
+        photosEdited: Object.keys(editsOf(row)).length,
+        market: market ? { low: market.low, high: market.high } : null,
+      },
+      dto,
+    );
     const made: string[] = []; // files made for this add (the official copy, the photo on its background, eBay's copies): removed if it fails
     try {
       // each chosen photo as a file in our storage
@@ -636,6 +650,7 @@ export class ImportsService {
         square: square.map((c) => c.key),
         ebay: choices.filter((c) => c.ebay).map((c) => c.key),
         transparent: choices.some((c) => c.key === 'background'),
+        review,
       });
       return product;
     } catch (error) {

@@ -114,6 +114,9 @@ You don't deploy by hand. Pushing to a branch deploys it on Render:
 | `staging` | staging (sandbox payments, sample data) | https://spin-hobby-server-staging.onrender.com |
 | `production` | **production** (real customers, real money) | https://spin-hobby-server.onrender.com |
 
+The live API is moving to `https://api.spinhobby.com`; the steps, in order, are in
+[`docs/API-DOMAIN.md`](docs/API-DOMAIN.md).
+
 New work goes to `staging` first, is tested there, and only then merged to `production`. Details in
 [`STAGING.md`](STAGING.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md). `render.yaml` and
 `render.staging.yaml` describe the two Render services, and the `Dockerfile` builds the image

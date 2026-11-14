@@ -1,7 +1,10 @@
 import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { RateLimit } from '../../common/guards/rate-limit.guard.js';
-import { Access } from './access.js';
+import { Access, CurrentUser } from './access.js';
+import type { AppUser } from './auth.service.js';
+import { EmailCodeDto } from './dto/email-code.dto.js';
+import { EmailCheckService } from './email-check.service.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { OauthUrlQuery } from './dto/oauth-url.dto.js';
@@ -17,7 +20,10 @@ import { SignInService } from './sign-in.service.js';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly signIn: SignInService) {}
+  constructor(
+    private readonly signIn: SignInService,
+    private readonly emailCheck: EmailCheckService,
+  ) {}
 
   /** Which sign-in methods to show. */
   @Get('providers')
@@ -33,11 +39,29 @@ export class AuthController {
     return this.signIn.login(dto.email, dto.password);
   }
 
-  /** Creates a customer account that is already confirmed (no email is sent), then signs it in. */
+  /** Creates a customer account, signs it in and emails a 6-digit code to confirm the address. */
   @Post('signup')
   @HttpCode(201)
   signup(@Body() dto: SignupDto, @Ip() ip: string) {
     return this.signIn.signup(dto, ip);
+  }
+
+  /** Emails a new 6-digit code to confirm the signed-in customer's email (the last one stops working). */
+  @RateLimit({ limit: 5, windowMs: 60 * 60_000 })
+  @Post('email-code')
+  @Access('user')
+  @HttpCode(200)
+  sendEmailCode(@CurrentUser() user: AppUser) {
+    return this.emailCheck.send(user);
+  }
+
+  /** Confirms the signed-in customer's email with the code they were sent. */
+  @RateLimit({ limit: 20, windowMs: 60 * 60_000 })
+  @Post('email-code/confirm')
+  @Access('user')
+  @HttpCode(200)
+  confirmEmailCode(@CurrentUser() user: AppUser, @Body() dto: EmailCodeDto) {
+    return this.emailCheck.confirm(user, dto.code);
   }
 
   /** Emails a password-reset link. Always answers OK for a well-formed address, so addresses can't be probed. */

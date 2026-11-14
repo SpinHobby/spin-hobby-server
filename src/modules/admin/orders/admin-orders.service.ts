@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { RewardsService } from '../../rewards/rewards.service.js';
 import { AppError, notFound } from '../../../common/errors.js';
 import { positiveInteger } from '../../../common/validation/rules.js';
 import { Db } from '../../../database/db.service.js';
@@ -34,6 +35,7 @@ export class AdminOrdersService {
     private readonly email: EmailService,
     private readonly paypal: PayPalClient,
     private readonly square: SquareHttpClient,
+    private readonly rewards: RewardsService,
   ) {}
 
   /** Newest first, with their items; optionally only one status. */
@@ -96,6 +98,8 @@ export class AdminOrdersService {
         ],
         tx,
       );
+      // the order's rewards points become usable once its return window has passed
+      await this.rewards.startReturnClock(orderId, tx);
       await this.log.write(
         adminId,
         'order.shipped',
@@ -160,6 +164,8 @@ export class AdminOrdersService {
         tx,
       );
       await this.log.write(adminId, 'order.refunded', String(orderId), { amountCents }, tx);
+      // the refunded share of the rewards points the order earned
+      await this.rewards.takeBackForRefund(orderId, amountCents, adminId, tx);
     });
     const customerEmailed =
       !!order.billing_email && this.email.configured

@@ -4,6 +4,7 @@
 // catalog + category tree + a few orders, then runs the API against it with dev sign-in.
 //
 //   API:      http://localhost:8080
+//   Emails:   http://localhost:8025  (Mailpit, a pretend inbox, if installed: `brew install mailpit`)
 //   Sign in:  owner@spinhobby.test / spinhobby   (owner)
 //             staff@spinhobby.test / spinhobby   (staff)
 //             hana@spinhobby.test, daniel@... / spinhobby   (sample customers with a year of orders, favourites and
@@ -108,6 +109,8 @@ if (ownDatabase) {
   seeded = await seedSample(db, imageBase, { more: MORE_PRODUCTS });
   // ---- seed: sample shoppers with past orders, favourites, addresses and alerts (local only)
   people = await seedSampleAccounts(db, imageBase);
+  // seeded accounts behave like long-time customers: email confirmed, welcome step done (local sign-ups start fresh)
+  await db.query('update public.profiles set email_verified_at = now(), welcomed_at = now()');
 
   // ---- seed: the storefront's Shop playlist (Admin > Settings), so its player shows from the first start
   await db.query('update public.store_settings set music_playlist_id = $1 where id = true', [
@@ -172,6 +175,25 @@ const paypalReady =
 if (!squareReady && !paypalReady)
   console.log('  Checkout: test payments (no payment keys set; no money is involved)\n');
 
+// ---- email: a pretend inbox (Mailpit) so every email can be read here and none reaches a real person
+// Mailpit is free (https://mailpit.axllent.org; Mac: `brew install mailpit`). If it's installed it is started with the API; if it's
+// already running it's used as is. Without it, emails are not delivered and sign-up codes are printed in this window instead.
+const mailpitPort = process.env.MAILPIT_PORT ?? '8025';
+const mailpitBase = `http://localhost:${mailpitPort}`;
+const mailpitAnswers = () =>
+  fetch(`${mailpitBase}/api/v1/info`)
+    .then((r) => r.ok)
+    .catch(() => false);
+let mailpit = null;
+if (!(await mailpitAnswers())) {
+  mailpit = spawn('mailpit', ['--listen', `127.0.0.1:${mailpitPort}`, '--smtp', '127.0.0.1:1025'], {
+    stdio: 'ignore',
+  });
+  mailpit.on('error', () => {
+    mailpit = null; // not installed
+  });
+}
+
 // Run the Nest CLI with this same Node binary rather than `npx`: on Windows `npx` is a .cmd shim that
 // spawn() can't launch without a shell, and a shell wrapper would leave the API running after Ctrl+C.
 const nestCli = join(root, 'node_modules', '@nestjs', 'cli', 'bin', 'nest.js');
@@ -197,11 +219,17 @@ const api = spawn(process.execPath, [nestCli, 'start', '--watch'], {
     ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:4173',
     // checkout completes with a test payment (no money) when no payment keys are set
     DEV_TEST_PAYMENTS: 'true',
+    // links and pictures in emails (mascots, icons) point at the local website, which has them before the live site does
+    STOREFRONT_URL: setting('DEV_STOREFRONT_URL') || 'http://localhost:3000',
+    // every email goes to the local Mailpit inbox, even with a Resend key in .env
+    MAIL_TRANSPORT: 'mailpit',
+    MAILPIT_URL: mailpitBase,
     ...blanked,
   },
 });
 const stop = async () => {
   api.kill('SIGTERM');
+  mailpit?.kill('SIGTERM');
   await server?.stop();
   await db?.close();
   process.exit(0);
@@ -310,6 +338,9 @@ async function announceReady() {
     if (!(await apiAnswers(base, 600))) return;
   }
   await connectSquare();
+  const inbox = (await mailpitAnswers())
+    ? `    Emails:   ${mailpitBase}  (a pretend inbox: every email lands here, none is really sent)`
+    : '    Emails:   not delivered. Install Mailpit (Mac: brew install mailpit) to read them; codes are printed here meanwhile';
   const line = '  ' + '-'.repeat(72);
   console.log(
     [
@@ -319,6 +350,7 @@ async function announceReady() {
       `    API docs: ${base}/docs`,
       '    Website:  in the spin-hobby folder run `npm run dev`, then open http://localhost:3000',
       '    Sign in:  owner@spinhobby.test / spinhobby  (or staff@, or a customer like hana@spinhobby.test)',
+      inbox,
       '  Leave this window open: the server runs here. Ctrl+C stops it.',
       line,
       '',

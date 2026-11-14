@@ -60,6 +60,9 @@ Tips for `dev:local`:
   runs, use [your own database](#your-own-database-optional).
 - You can also run the website against it: in the `spin-hobby` repo run
   `VITE_API_URL=http://localhost:8080 npm run dev`.
+- Emails (sign-up codes, order confirmations…) land in a pretend inbox at http://localhost:8025 if you install
+  [Mailpit](https://mailpit.axllent.org/docs/install/) once (Mac: `brew install mailpit`). Nothing is really sent. See
+  [EMAIL.md](EMAIL.md).
 
 ## Your own keys (only if you need them)
 

@@ -17,11 +17,13 @@ import { AuthModule } from './modules/auth/auth.module.js';
 import { CashierModule } from './modules/cashier/cashier.module.js';
 import { CatalogModule } from './modules/catalog/catalog.module.js';
 import { CheckoutModule } from './modules/checkout/checkout.module.js';
+import { GlossaryModule } from './modules/glossary/glossary.module.js';
 import { HealthModule } from './modules/health/health.module.js';
 import { OpsModule } from './modules/ops/ops.module.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { PaymentsModule } from './modules/payments/payments.module.js';
 import { RemindersModule } from './modules/reminders/reminders.module.js';
+import { RewardsModule } from './modules/rewards/rewards.module.js';
 import { ReviewsModule } from './modules/reviews/reviews.module.js';
 import { SampleModule } from './modules/sample/sample.module.js';
 import { SquareSyncModule } from './modules/square-sync/square-sync.module.js';
@@ -50,12 +52,14 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     CatalogModule,
     CheckoutModule,
     EbayModule,
+    GlossaryModule,
     HealthModule,
     OpsModule,
     OrdersModule,
     PaymentsModule,
     RemindersModule,
     ReviewsModule,
+    RewardsModule,
     SampleModule,
     SquareSyncModule,
     StoreModule,

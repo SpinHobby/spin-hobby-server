@@ -7,6 +7,7 @@ import type { OrderItemRow, OrderRow } from '../../database/rows.js';
 import { OrdersService, type OrderDetails } from '../orders/orders.service.js';
 import { PayPalClient } from '../../integrations/paypal/paypal.client.js';
 import { isManualId } from '../catalog/manual-id.js';
+import { SAMPLE_PREFIX } from '../sample/catalog.js';
 import { SquareHttpClient } from '../../integrations/square/square-http.client.js';
 import { squareLocationId } from '../../config/square.config.js';
 import { testPaymentsActive } from './test-payments.js';
@@ -183,7 +184,11 @@ export class PaymentsService {
           location_id: locationId,
           reference_id: `spin-hobby-${order.id}`,
           line_items: lines.map((l) => ({
-            ...(isManualId(l.square_item_id) ? {} : { catalog_object_id: l.square_variation_id }),
+            // hand-entered products, and the local sample catalog (dev:local with Square sandbox keys), aren't in Square's
+            // catalog: they go as plain named lines with their price
+            ...(isManualId(l.square_item_id) || l.square_item_id.startsWith(SAMPLE_PREFIX)
+              ? {}
+              : { catalog_object_id: l.square_variation_id }),
             name: l.name,
             quantity: String(l.quantity),
             base_price_money: { amount: l.unit_price_cents, currency: 'CAD' },
@@ -201,17 +206,26 @@ export class PaymentsService {
                 ],
               }
             : {}),
+          // Square requires a calculation phase on every service charge (MISSING_REQUIRED_PARAMETER without it). Shipping and
+          // tax are flat amounts we already worked out, so they go on at the end: TOTAL_PHASE (never taxed again by Square).
           service_charges: [
             ...(order.shipping_cents
               ? [
                   {
                     name: 'Shipping',
                     amount_money: { amount: order.shipping_cents, currency: 'CAD' },
+                    calculation_phase: 'TOTAL_PHASE',
                   },
                 ]
               : []),
             ...(order.tax_cents
-              ? [{ name: 'Sales tax', amount_money: { amount: order.tax_cents, currency: 'CAD' } }]
+              ? [
+                  {
+                    name: 'Sales tax',
+                    amount_money: { amount: order.tax_cents, currency: 'CAD' },
+                    calculation_phase: 'TOTAL_PHASE',
+                  },
+                ]
               : []),
           ],
         },
