@@ -120,6 +120,7 @@ describe('registration', () => {
         firstName: 'Hana',
         lastName: 'Sato',
         phone: '+1 (416) 555-0123',
+        birthday: null,
         address: null,
         welcomed: true,
       },
@@ -129,12 +130,66 @@ describe('registration', () => {
       firstName: 'Hana',
       lastName: null,
       phone: null,
+      birthday: null,
       address: null,
       welcomed: true,
     });
     expect(
       (await http.get('/auth/me').set('Authorization', fresh.auth).expect(200)).body.user,
     ).toMatchObject({ firstName: 'Hana', welcomed: true });
+  });
+
+  it('saves a birthday: month and day, never a year', async () => {
+    const fresh = await signUp(pglite, 'birthday@example.com', undefined, { fresh: true });
+    const save = (body: object) =>
+      http.patch('/account/profile').set('Authorization', fresh.auth).send(body);
+    await save({ birthday: { month: 13, day: 1 } }).expect(400, {
+      success: false,
+      error: 'Choose the month of your birthday.',
+    });
+    await save({ birthday: { month: 4, day: 31 } }).expect(400);
+    expect(
+      (await save({ birthday: { month: 2, day: 29 } }).expect(200)).body.profile.birthday,
+    ).toEqual({
+      month: 2,
+      day: 29,
+    });
+    // leaving it out keeps it; null clears it
+    expect((await save({ phone: '' }).expect(200)).body.profile.birthday).toEqual({
+      month: 2,
+      day: 29,
+    });
+    expect((await save({ birthday: null }).expect(200)).body.profile.birthday).toBeNull();
+  });
+
+  it('sends the welcome email once, when the welcome step is first finished', async () => {
+    const fresh = await signUp(pglite, 'hello@example.com', undefined, { fresh: true });
+    const mail = mockFetch({ 'api.resend.com': () => ({ id: 'w' }) });
+    const saved = {
+      RESEND_API_KEY: process.env.RESEND_API_KEY,
+      FROM_EMAIL: process.env.FROM_EMAIL,
+    };
+    process.env.RESEND_API_KEY ??= 're_test';
+    process.env.FROM_EMAIL ??= 'shop@spinhobby.test';
+    try {
+      const save = (body: object) =>
+        http.patch('/account/profile').set('Authorization', fresh.auth).send(body).expect(200);
+      await save({ firstName: 'Mio' });
+      await save({ phone: '416 555 0123' });
+      await new Promise((r) => setTimeout(r, 50)); // sent after the reply
+      const welcomes = mail.calls.filter((c) => c.url.includes('api.resend.com'));
+      expect(welcomes).toHaveLength(1);
+      expect(welcomes[0].body.to).toEqual(['hello@example.com']);
+      expect(welcomes[0].body.subject).toBe('Welcome to Spin Hobby, Mio! ✨');
+      expect(welcomes[0].body.html).toContain('Join our Discord');
+      expect(welcomes[0].body.html).toContain('Instagram');
+    } finally {
+      mail.restore();
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
   });
 
   it('saves the welcome address as the default one, for checkout to fill in', async () => {

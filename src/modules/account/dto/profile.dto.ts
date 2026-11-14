@@ -49,6 +49,25 @@ export const addressValue = (v: unknown): SavedAddress | null => {
   return { address1, address2: line(a.address2) || null, city, province, postalCode, country };
 };
 
+/** Month and day, no year (February 29 is allowed). Empty clears it. */
+export interface Birthday {
+  month: number;
+  day: number;
+}
+const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+export const birthdayValue = (v: unknown): Birthday | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const b = (typeof v === 'object' ? v : {}) as Record<string, unknown>;
+  const month = Number(b.month);
+  const day = Number(b.day);
+  if (!month && !day) return null;
+  if (!Number.isInteger(month) || month < 1 || month > 12)
+    throw new AppError('Choose the month of your birthday.');
+  if (!Number.isInteger(day) || day < 1 || day > DAYS_IN_MONTH[month - 1])
+    throw new AppError('Choose a day that exists in that month.');
+  return { month, day };
+};
+
 /** The signed-in customer's own details. Only what is sent changes; any save also marks the welcome step as seen. */
 export class ProfileDto {
   @Provided()
@@ -62,6 +81,11 @@ export class ProfileDto {
   @Provided()
   @Rule(phoneValue)
   phone?: string | null;
+
+  /** `{ month, day }`; null or empty clears it. */
+  @Provided()
+  @Rule(birthdayValue)
+  birthday?: Birthday | null;
 
   /** Saved as the customer's default shipping address. Left out or empty: their saved address stays as it is. */
   @Provided()

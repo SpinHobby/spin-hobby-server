@@ -141,3 +141,7 @@ export const rewardsAllowed = () => {
   const v = env('REWARDS');
   return v ? v === 'on' : !isProduction() || isStaging();
 };
+
+/** The shop's Discord invite and Instagram, linked from the welcome email (the website has its own copy in src/v3/links.ts). */
+export const discordUrl = () => env('DISCORD_URL') ?? 'https://discord.gg/7wGWc7AGcd';
+export const instagramUrl = () => env('INSTAGRAM_URL') ?? 'https://www.instagram.com/spinhobby';

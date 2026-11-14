@@ -273,7 +273,7 @@ describe('weekly digest of every new pre-order', () => {
       mail.restore();
     }
     const digest = sent(mail).find((e) => e.to[0] === 'digest@example.com')!;
-    expect(digest.subject).toBe('New pre-order this week: Ram 1/7 Scale Figure');
+    expect(digest.subject).toBe('New pre-order at Spin Hobby: Ram 1/7 Scale Figure');
     expect(digest.html).toContain("This week's new pre-order at Spin Hobby");
     expect(digest.html).not.toContain('Emilia'); // announced before they signed up
     expect(digest.html).toContain('Stop news about every new pre-order');

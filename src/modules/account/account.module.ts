@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EmailModule } from '../../integrations/email/email.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { AccountController } from './account.controller.js';
 import { ProfileService } from './profile.service.js';
@@ -7,7 +8,7 @@ import { WishlistService } from './wishlist.service.js';
 
 /** A signed-in customer: profile, wishlist and restock alerts. */
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, EmailModule],
   controllers: [AccountController],
   providers: [WishlistService, RestockAlertService, ProfileService],
 })

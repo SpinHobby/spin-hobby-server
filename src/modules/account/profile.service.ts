@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { Db, type Queryable } from '../../database/db.service.js';
+import { EmailService } from '../../integrations/email/email.service.js';
 import type { ProfileDto, SavedAddress } from './dto/profile.dto.js';
 
 interface AddressRow {
@@ -17,23 +18,39 @@ interface AddressRow {
 /** A customer's own name, phone and saved shipping address, and whether they have been through the welcome step. */
 @Injectable()
 export class ProfileService {
-  constructor(private readonly db: Db) {}
+  private readonly logger = new Logger(ProfileService.name);
+  constructor(
+    private readonly db: Db,
+    private readonly email: EmailService,
+  ) {}
 
-  /** Saves what was sent (a field left out stays as it is) and marks the welcome step as seen. */
+  /**
+   * Saves what was sent (a field left out stays as it is) and marks the welcome step as seen. The first time it is seen, the
+   * welcome email goes out (once per account, after the transaction, never holding up the save).
+   */
   async update(userId: string, dto: ProfileDto) {
-    return this.db.transaction(async (tx) => {
+    const result = await this.db.transaction(async (tx) => {
+      const before = await this.db.one<{ welcomed_at: string | null; email: string | null }>(
+        'select welcomed_at, email from public.profiles where id = $1 for update',
+        [userId],
+        tx,
+      );
       const row = await this.db.one<{
         first_name: string | null;
         last_name: string | null;
         phone: string | null;
+        birth_month: number | null;
+        birth_day: number | null;
       }>(
         `update public.profiles
             set first_name = case when $2 then $3 else first_name end,
                 last_name = case when $4 then $5 else last_name end,
                 phone = case when $6 then $7 else phone end,
+                birth_month = case when $8 then $9::smallint else birth_month end,
+                birth_day = case when $8 then $10::smallint else birth_day end,
                 welcomed_at = coalesce(welcomed_at, now())
           where id = $1
-          returning first_name, last_name, phone`,
+          returning first_name, last_name, phone, birth_month, birth_day`,
         [
           userId,
           dto.firstName !== undefined,
@@ -42,6 +59,9 @@ export class ProfileService {
           dto.lastName ?? null,
           dto.phone !== undefined,
           dto.phone ?? null,
+          dto.birthday !== undefined,
+          dto.birthday?.month ?? null,
+          dto.birthday?.day ?? null,
         ],
         tx,
       );
@@ -79,13 +99,32 @@ export class ProfileService {
           );
       }
       return {
-        firstName: row?.first_name ?? null,
-        lastName: row?.last_name ?? null,
-        phone: row?.phone ?? null,
-        address: await this.address(userId, tx),
-        welcomed: true,
+        profile: {
+          firstName: row?.first_name ?? null,
+          lastName: row?.last_name ?? null,
+          phone: row?.phone ?? null,
+          birthday:
+            row?.birth_month && row.birth_day
+              ? { month: row.birth_month, day: row.birth_day }
+              : null,
+          address: await this.address(userId, tx),
+          welcomed: true,
+        },
+        firstWelcome: !before?.welcomed_at && before?.email ? before.email : null,
       };
     });
+    if (result.firstWelcome) void this.sendWelcome(result.firstWelcome, result.profile.firstName);
+    return result.profile;
+  }
+
+  /** The welcome email: best effort, a failure is only logged. */
+  private async sendWelcome(to: string, firstName: string | null) {
+    try {
+      const { subject, html } = this.email.welcomeEmail(firstName);
+      await this.email.send(to, subject, html);
+    } catch (e) {
+      this.logger.warn(`Welcome email not sent: ${String(e)}`);
+    }
   }
 
   /** The customer's default shipping address, for checkout to fill in; null when none is saved. */

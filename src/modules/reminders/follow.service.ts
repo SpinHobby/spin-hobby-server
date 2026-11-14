@@ -176,8 +176,8 @@ export class FollowService {
       if (!products.length) continue;
       const subject =
         products.length === 1
-          ? `New pre-order this week: ${products[0].name}`
-          : `${products.length} new pre-orders this week at Spin Hobby`;
+          ? `New pre-order at Spin Hobby: ${products[0].name}`
+          : `${products.length} new pre-orders at Spin Hobby`;
       const ok = await this.email
         .send(
           f.email,
