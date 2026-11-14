@@ -96,10 +96,10 @@ export function addressParts(value: string) {
 }
 
 /**
- * Addresses that can never receive mail (RFC 2606 reserved names): the sample shoppers (@spinhobby.test, @example.com). Sending
+ * Addresses that can never receive mail (RFC 2606 reserved names): the sample shoppers (@spinhobby.test). Sending
  * to them through Resend only bounces and hurts the shop's sender reputation, so they never leave (Mailpit still shows them locally).
  */
-const UNDELIVERABLE = /(\.test|\.example|\.invalid|\.localhost|@example\.(com|net|org))$/;
+const UNDELIVERABLE = /\.(test|example|invalid|localhost)$/;
 
 /** May real email reach this address? Yes, unless it is a made-up sample address, or EMAIL_ALLOWLIST is set and doesn't name it. */
 export function mayEmail(to: string) {

@@ -36,7 +36,7 @@ owner deletes that account in Admin > Accounts, and the email can sign up fresh.
 
 Two kinds of address never get real email, anywhere:
 
-- made-up sample addresses (`@spinhobby.test`, `@example.com` and other reserved names): they can't receive mail, and sending to
+- made-up sample addresses (`@spinhobby.test` and other reserved endings: `.example`, `.invalid`, `.localhost`): they can't receive mail, and sending to
   them would only bounce and hurt the shop's sender reputation;
 - anyone not on `EMAIL_ALLOWLIST`, **only if** that list is set. It is optional and normally left empty. Set it (addresses
   and/or `@domain`s; `OWNER_EMAILS` and `STAFF_EMAILS` always pass) only to limit email on purpose, for example while trying
