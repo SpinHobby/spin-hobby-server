@@ -207,62 +207,59 @@ export class EmailService {
 
   /**
    * The welcome email, sent once when a new customer finishes (or skips) the welcome step after signing up: the mascot, a warm
-   * hello, where to start, and invites to the Discord and Instagram. Colours only from EMAIL_COLORS.
+   * hello, the Discord and Instagram icons near the top (so a quick glance finds them), and where to start. Few emoji on purpose:
+   * a wall of them reads as machine-written. Colours only from EMAIL_COLORS; the icon PNGs (website public/assets/email) are drawn
+   * in EMAIL_COLORS.primary.
    */
   welcomeEmail(firstName: string | null) {
     const C = EMAIL_COLORS;
     const name = firstName?.trim() ? escape(firstName.trim()) : '';
     const mascot = `${site()}/assets/transparent%20mascot%20chibi%20rotated.png`;
-    const step = (icon: string, title: string, text: string, href: string) =>
-      `<tr><td style="padding:8px 12px 8px 0;font-size:24px;vertical-align:top;width:32px">${icon}</td>` +
-      `<td style="padding:8px 0;vertical-align:top"><a href="${escape(href)}" style="color:${C.primary};font-weight:700;text-decoration:none">${title} →</a>` +
+    const social = (href: string, icon: string, label: string) =>
+      `<td style="padding:0 14px;text-align:center;vertical-align:top">` +
+      `<a href="${escape(href)}" style="text-decoration:none;color:${C.primary};font-weight:700;font-size:13px">` +
+      `<img src="${site()}/assets/email/${icon}.png" alt="${label}" width="48" height="48" style="display:block;margin:0 auto 6px;width:48px;height:48px;border:0">${label}</a></td>`;
+    const step = (title: string, text: string, href: string) =>
+      `<tr><td style="padding:8px 0;vertical-align:top"><a href="${escape(href)}" style="color:${C.primary};font-weight:700;text-decoration:none">${title} →</a>` +
       `<br><span style="color:${C.muted};font-size:14px">${text}</span></td></tr>`;
-    const outlineButton = (href: string, label: string) =>
-      `<a href="${escape(href)}" style="display:inline-block;margin:4px 6px 4px 0;border:2px solid ${C.primary};color:${C.primary};text-decoration:none;font-weight:700;padding:10px 18px;border-radius:10px">${label}</a>`;
-    const solidButton = (href: string, label: string) =>
-      `<a href="${escape(href)}" style="display:inline-block;margin:4px 6px 4px 0;background:${C.primary};border:2px solid ${C.primary};color:${C.surface};text-decoration:none;font-weight:700;padding:10px 18px;border-radius:10px">${label}</a>`;
     const html =
       `<div style="text-align:center">` +
       `<p style="margin:0 0 4px;font-size:13px;letter-spacing:3px;color:${C.muted};font-weight:700">ようこそ · WELCOME</p>` +
       `<img src="${escape(mascot)}" alt="" width="150" height="177" style="width:150px;height:auto;display:block;margin:8px auto 4px;border:0">` +
-      `<h1 style="margin:8px 0 6px;font-size:26px;line-height:1.25;color:${C.text}">${name ? `Welcome to the Spin Hobby family, ${name}!` : 'Welcome to the Spin Hobby family!'} ✨</h1>` +
-      `<p style="margin:0;color:${C.gold};font-size:18px;letter-spacing:6px">✦ ✧ ✦</p>` +
+      `<h1 style="margin:8px 0 6px;font-size:26px;line-height:1.25;color:${C.text}">${name ? `Welcome to the Spin Hobby family, ${name}!` : 'Welcome to the Spin Hobby family!'}</h1>` +
       `</div>` +
-      `<p>We're so happy you're here! Spin Hobby is a small Canadian shop run by anime fans, for anime fans. Every figure, plush and card is the real, officially licensed thing, packed with care as if it were going on our own shelf.</p>` +
-      `<p style="margin:20px 0 4px;font-weight:700">Where to start your adventure</p>` +
+      `<p>We're so happy you're here. Spin Hobby is a small Canadian shop run by anime fans, for anime fans. Every figure, plush and card is the real, officially licensed thing, packed with care as if it were going on our own shelf.</p>` +
+      `<div style="margin:22px 0;padding:18px;border-radius:12px;background:${C.bg};border:1px solid ${C.border};text-align:center">` +
+      `<p style="margin:0 0 4px;font-weight:700;font-size:18px">Join our community</p>` +
+      `<p style="margin:0 0 14px;font-size:14px;color:${C.text}">Shelf photos, restock news and con meetups on Discord. New arrivals and moments from the shop on Instagram.</p>` +
+      `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="border-collapse:collapse;margin:0 auto"><tr>` +
+      social(discordUrl(), 'discord', 'Discord') +
+      social(instagramUrl(), 'instagram', 'Instagram') +
+      `</tr></table>` +
+      `</div>` +
+      `<p style="margin:20px 0 4px;font-weight:700">Where to start</p>` +
       `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
       step(
-        '🎀',
         'Pre-orders',
         'Reserve upcoming figures before they sell out. They ship on release.',
         `${site()}/pre-orders`,
       ) +
       step(
-        '🌟',
         'New arrivals',
         'Fresh figures, plushies and goods, ready to ship.',
         `${site()}/new-arrivals`,
       ) +
       step(
-        '🎪',
         'Meet us at conventions',
         'Come say hi at our booth at anime cons across Canada.',
         `${site()}/events`,
       ) +
       `</table>` +
-      `<div style="margin:22px 0 6px;padding:18px;border-radius:12px;background:${C.bg};border:1px solid ${C.border}">` +
-      `<p style="margin:0 0 6px;font-weight:700;font-size:17px">Come hang out with us 💬</p>` +
-      `<p style="margin:0 0 12px;font-size:14px;color:${C.text}">Our Discord is where collectors share shelf photos, hear about restocks and plan con meetups. On Instagram we post new arrivals and little moments from the shop. We'd love to see you there!</p>` +
-      solidButton(discordUrl(), 'Join our Discord') +
-      outlineButton(instagramUrl(), 'Follow us on Instagram') +
-      `</div>` +
       emailButton(site(), 'Start exploring') +
-      `<p style="margin:0">Happy hunting, and welcome home! 🌸<br><strong>The Spin Hobby team</strong></p>` +
+      `<p style="margin:0">Happy hunting, and welcome home!<br><strong>The Spin Hobby team</strong></p>` +
       `<p style="font-size:12px;color:${C.muted};margin-top:20px">You're getting this one-time email because you just made an account at Spin Hobby. Questions? Just reply, a real person will answer.</p>`;
     return {
-      subject: name
-        ? `Welcome to Spin Hobby, ${firstName!.trim()}! ✨`
-        : 'Welcome to Spin Hobby! ✨',
+      subject: name ? `Welcome to Spin Hobby, ${firstName!.trim()}!` : 'Welcome to Spin Hobby!',
       html,
     };
   }

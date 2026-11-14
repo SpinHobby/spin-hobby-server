@@ -180,9 +180,9 @@ describe('registration', () => {
       const welcomes = mail.calls.filter((c) => c.url.includes('api.resend.com'));
       expect(welcomes).toHaveLength(1);
       expect(welcomes[0].body.to).toEqual(['hello@example.com']);
-      expect(welcomes[0].body.subject).toBe('Welcome to Spin Hobby, Mio! ✨');
-      expect(welcomes[0].body.html).toContain('Join our Discord');
-      expect(welcomes[0].body.html).toContain('Instagram');
+      expect(welcomes[0].body.subject).toBe('Welcome to Spin Hobby, Mio!');
+      expect(welcomes[0].body.html).toContain('Join our community');
+      expect(welcomes[0].body.html).toContain('assets/email/discord.png');
     } finally {
       mail.restore();
       for (const [k, v] of Object.entries(saved)) {
