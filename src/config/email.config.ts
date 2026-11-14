@@ -1,4 +1,3 @@
-import { isStaging } from './app.config.js';
 import { env, envList } from './env.js';
 
 /** Resend API key and the From address. Email is skipped (not an error) when either is missing. */
@@ -23,9 +22,9 @@ export const mailTransport = (): MailTransport => {
 export const mailpitUrl = () => (env('MAILPIT_URL') || 'http://localhost:8025').replace(/\/$/, '');
 
 /**
- * Who real email may reach, as addresses or `@domain` (comma separated). Staging holds copies of real customers' addresses, so there
- * only this list plus OWNER_EMAILS and STAFF_EMAILS get real email; everyone else's is held back and logged. Production sends to
- * everyone unless the list is set.
+ * Optional: limit real email to these addresses or `@domain`s (comma separated), plus OWNER_EMAILS and STAFF_EMAILS; everyone else's
+ * is held back and logged. Empty (the usual, staging included): everyone gets email. Staging has its own database with sample
+ * data, so testers sign up with their real email; admin deletes the account so the same email can sign up again.
  */
 export const emailAllowlist = () => envList('EMAIL_ALLOWLIST').map((e) => e.toLowerCase());
-export const emailAllowlistOn = () => isStaging() || emailAllowlist().length > 0;
+export const emailAllowlistOn = () => emailAllowlist().length > 0;

@@ -95,10 +95,17 @@ export function addressParts(value: string) {
     : { Name: '', Email: value.trim() };
 }
 
-/** May real email reach this address? Always, unless EMAIL_ALLOWLIST applies (staging, or set by hand). */
+/**
+ * Addresses that can never receive mail (RFC 2606 reserved names): the sample shoppers (@spinhobby.test). Sending
+ * to them through Resend only bounces and hurts the shop's sender reputation, so they never leave (Mailpit still shows them locally).
+ */
+const UNDELIVERABLE = /\.(test|example|invalid|localhost)$/;
+
+/** May real email reach this address? Yes, unless it is a made-up sample address, or EMAIL_ALLOWLIST is set and doesn't name it. */
 export function mayEmail(to: string) {
-  if (!emailAllowlistOn()) return true;
   const address = to.trim().toLowerCase();
+  if (UNDELIVERABLE.test(address)) return false;
+  if (!emailAllowlistOn()) return true;
   const domain = address.slice(address.lastIndexOf('@'));
   const allowed = [...emailAllowlist(), ...ownerEmails(), ...staffEmails()].map((e) =>
     e.toLowerCase(),
@@ -133,8 +140,10 @@ export class EmailService {
     });
     if (transport === 'mailpit') return this.toMailpit(to, subject, page);
     if (!mayEmail(to)) {
-      // staging: a copy of a real customer's address must never get a test email
-      this.logger.log(`Held back "${subject}" to ${masked(to)}: not on EMAIL_ALLOWLIST.`);
+      // a made-up sample address, or not on EMAIL_ALLOWLIST when that is set
+      this.logger.log(
+        `Held back "${subject}" to ${masked(to)}: sample address or not on EMAIL_ALLOWLIST.`,
+      );
       return true;
     }
     const res = await fetch('https://api.resend.com/emails', {

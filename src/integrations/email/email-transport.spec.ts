@@ -29,22 +29,26 @@ describe('who real email may reach', () => {
     expect(mayEmail('customer@gmail.com')).toBe(true);
   });
 
-  it('on staging, reaches only the allow-list, owners and staff', () => {
+  it('reaches every tester on staging (its own database, sample data only)', () => {
     process.env.APP_ENV = 'staging';
-    process.env.EMAIL_ALLOWLIST = 'aidi@example.com, @spinhobby.com';
+    expect(mayEmail('tester@gmail.com')).toBe(true);
+  });
+
+  it('never sends to made-up sample addresses', () => {
+    process.env.APP_ENV = 'staging';
+    for (const a of ['hana@spinhobby.test', 'z@host.localhost', 'x@shop.example', 'y@a.invalid'])
+      expect(mayEmail(a)).toBe(false);
+    expect(mayEmail('real@example.co.jp')).toBe(true);
+  });
+
+  it('with EMAIL_ALLOWLIST set, reaches only the list, owners and staff', () => {
+    process.env.EMAIL_ALLOWLIST = 'aidi@gmail.com, @spinhobby.com';
     process.env.OWNER_EMAILS = 'boss@gmail.com';
     expect(mayEmail('customer@gmail.com')).toBe(false);
-    expect(mayEmail('Aidi@Example.com')).toBe(true);
+    expect(mayEmail('Aidi@Gmail.com')).toBe(true);
     expect(mayEmail('anyone@spinhobby.com')).toBe(true);
     expect(mayEmail('boss@gmail.com')).toBe(true);
     expect(mayEmail('x@notspinhobby.com')).toBe(false);
-  });
-
-  it('on staging with no list, reaches only owners and staff', () => {
-    process.env.APP_ENV = 'staging';
-    process.env.STAFF_EMAILS = 'jay@example.com';
-    expect(mayEmail('jay@example.com')).toBe(true);
-    expect(mayEmail('hana@example.com')).toBe(false);
   });
 });
 
@@ -88,7 +92,7 @@ describe('sending', () => {
     expect(await new EmailService().send('hana@example.com', 'Hello', '<p>Hi</p>')).toBe(false);
   });
 
-  it('on staging, holds back email to a customer and sends to the team', async () => {
+  it('holds back email outside EMAIL_ALLOWLIST and sends to the team', async () => {
     process.env.APP_ENV = 'staging';
     process.env.EMAIL_ALLOWLIST = '@spinhobby.com';
     process.env.RESEND_API_KEY = 're_test';
