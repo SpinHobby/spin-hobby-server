@@ -56,6 +56,21 @@ const doodle = (file: 'sparkle' | 'sparkle-small' | 'heart-pink' | 'heart-red', 
 /** Aidi's sparkle · heart · sparkle, centred: a soft divider under a heading or greeting. */
 const doodleDivider = () =>
   `<p style="margin:0 0 6px;text-align:center">${doodle('sparkle', 18)}&nbsp;&nbsp;${doodle('heart-pink', 16)}&nbsp;&nbsp;${doodle('sparkle-small', 18)}</p>`;
+/** One round Discord or Instagram icon with its name under it, linked (icons in the website's public/assets/email). */
+const socialIcon = (href: string, icon: string, label: string) =>
+  `<td style="padding:0 14px;text-align:center;vertical-align:top">` +
+  `<a href="${escape(href)}" style="text-decoration:none;color:${EMAIL_COLORS.primary};font-weight:700;font-size:13px">` +
+  `<img src="${site()}/assets/email/${icon}.png" alt="${label}" width="48" height="48" style="display:block;margin:0 auto 6px;width:48px;height:48px;border:0">${label}</a></td>`;
+/** "Join our community": the Discord and Instagram invites with their icons, in a soft box (welcome and order emails). */
+const communityBox = () =>
+  `<div style="margin:22px 0;padding:18px;border-radius:12px;background:${EMAIL_COLORS.bg};border:1px solid ${EMAIL_COLORS.border};text-align:center">` +
+  `<p style="margin:0 0 4px;font-weight:700;font-size:18px">${doodle('heart-red', 18)}&nbsp; Join our community &nbsp;${doodle('heart-pink', 18)}</p>` +
+  `<p style="margin:0 0 14px;font-size:14px;color:${EMAIL_COLORS.text}">Shelf photos, restock news and con meetups on Discord. New arrivals and moments from the shop on Instagram.</p>` +
+  `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="border-collapse:collapse;margin:0 auto"><tr>` +
+  socialIcon(discordUrl(), 'discord', 'Discord') +
+  socialIcon(instagramUrl(), 'instagram', 'Instagram') +
+  `</tr></table>` +
+  `</div>`;
 const COUNTRY_NAMES: Record<string, string> = { CA: 'Canada', US: 'United States' };
 /** Where a stop link lands: a small page on the API itself (works even if the website is down). */
 const api = () =>
@@ -230,10 +245,6 @@ export class EmailService {
     const C = EMAIL_COLORS;
     const name = firstName?.trim() ? escape(firstName.trim()) : '';
     const mascot = `${site()}/assets/mascot/mascot-wave.png`; // by frui2par10r, from SpinHobby/official-assets
-    const social = (href: string, icon: string, label: string) =>
-      `<td style="padding:0 14px;text-align:center;vertical-align:top">` +
-      `<a href="${escape(href)}" style="text-decoration:none;color:${C.primary};font-weight:700;font-size:13px">` +
-      `<img src="${site()}/assets/email/${icon}.png" alt="${label}" width="48" height="48" style="display:block;margin:0 auto 6px;width:48px;height:48px;border:0">${label}</a></td>`;
     const step = (
       bullet: Parameters<typeof doodle>[0],
       title: string,
@@ -251,14 +262,7 @@ export class EmailService {
       doodleDivider() +
       `</div>` +
       `<p>We're so happy you're here. Spin Hobby is a small Canadian shop run by anime fans, for anime fans. Every figure, plush and card is the real, officially licensed thing, packed with care as if it were going on our own shelf.</p>` +
-      `<div style="margin:22px 0;padding:18px;border-radius:12px;background:${C.bg};border:1px solid ${C.border};text-align:center">` +
-      `<p style="margin:0 0 4px;font-weight:700;font-size:18px">${doodle('heart-red', 18)}&nbsp; Join our community &nbsp;${doodle('heart-pink', 18)}</p>` +
-      `<p style="margin:0 0 14px;font-size:14px;color:${C.text}">Shelf photos, restock news and con meetups on Discord. New arrivals and moments from the shop on Instagram.</p>` +
-      `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="border-collapse:collapse;margin:0 auto"><tr>` +
-      social(discordUrl(), 'discord', 'Discord') +
-      social(instagramUrl(), 'instagram', 'Instagram') +
-      `</tr></table>` +
-      `</div>` +
+      communityBox() +
       `<p style="margin:20px 0 4px;font-weight:700;font-size:17px">Where to start</p>` +
       `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
       step(
@@ -347,7 +351,7 @@ export class EmailService {
         (i) =>
           `<tr><td style="padding:4px 8px 4px 0;vertical-align:middle;width:20px">${doodle(i.is_preorder ? 'sparkle' : 'heart-pink', 16)}</td>` +
           `<td style="padding:4px 12px 4px 0">${escape(i.name)}${i.is_preorder ? ' <em>(pre-order)</em>' : ''}</td>` +
-          `<td style="padding:4px 12px">× ${escape(i.quantity)}</td><td style="padding:4px 0;text-align:right">${money(Number(i.unit_price_cents) * Number(i.quantity))}</td></tr>`,
+          `<td style="padding:4px 12px;white-space:nowrap">× ${escape(i.quantity)}</td><td style="padding:4px 0;text-align:right;white-space:nowrap">${money(Number(i.unit_price_cents) * Number(i.quantity))}</td></tr>`,
       )
       .join('');
     const total = (label: string, cents: unknown, bold = false) =>
@@ -371,6 +375,7 @@ export class EmailService {
         ? `<p>Your pre-order items ship when they arrive from the manufacturer; we'll let you know as soon as we have a date.</p>`
         : '') +
       statusLink(Number(order.id)) +
+      communityBox() +
       `<p>Questions? Reply to this email with your order number.</p><p><a href="${escape(site)}">Back to Spin Hobby</a></p>`
     );
   }

@@ -219,6 +219,8 @@ const api = spawn(process.execPath, [nestCli, 'start', '--watch'], {
     ALLOWED_ORIGINS: 'http://localhost:5173,http://localhost:4173',
     // checkout completes with a test payment (no money) when no payment keys are set
     DEV_TEST_PAYMENTS: 'true',
+    // links and pictures in emails (mascots, icons) point at the local website, which has them before the live site does
+    STOREFRONT_URL: setting('DEV_STOREFRONT_URL') || 'http://localhost:3000',
     // every email goes to the local Mailpit inbox, even with a Resend key in .env
     MAIL_TRANSPORT: 'mailpit',
     MAILPIT_URL: mailpitBase,
