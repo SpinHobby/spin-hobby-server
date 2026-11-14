@@ -197,7 +197,11 @@ describe('registration', () => {
     const save = (body: object) =>
       http.patch('/account/profile').set('Authorization', fresh.auth).send(body);
     const saved = () => http.get('/account/address').set('Authorization', fresh.auth).expect(200);
-    expect((await saved()).body).toEqual({ success: true, address: null });
+    expect((await saved()).body).toEqual({
+      success: true,
+      address: null,
+      profile: { firstName: null, lastName: null, phone: null },
+    });
     await http.get('/account/address').expect(401);
 
     const home = {
@@ -244,6 +248,68 @@ describe('registration', () => {
       [fresh.id],
     );
     expect(rows.rows).toEqual([{ city: 'Seattle' }]);
+  });
+
+  it("saves checkout's address for next time without renaming the account", async () => {
+    const fresh = await signUp(pglite, 'saver@example.com', undefined, { fresh: true });
+    await http
+      .patch('/account/profile')
+      .set('Authorization', fresh.auth)
+      .send({ firstName: 'Kei', lastName: 'Mori', phone: '416-555-0100' })
+      .expect(200);
+    // no address yet: checkout still gets the account's own name and phone to fill in
+    const before = await http.get('/account/address').set('Authorization', fresh.auth).expect(200);
+    expect(before.body).toMatchObject({
+      address: null,
+      profile: { firstName: 'Kei', lastName: 'Mori', phone: '416-555-0100' },
+    });
+
+    const put = (body: object) =>
+      http.put('/account/address').set('Authorization', fresh.auth).send(body);
+    const gift = {
+      firstName: 'Aya',
+      lastName: 'Sato',
+      phone: '+1 604-555-0199',
+      address: {
+        address1: '2 Main St',
+        city: 'Vancouver',
+        province: 'BC',
+        postalCode: 'v6b1a1',
+        country: 'CA',
+      },
+    };
+    await http.put('/account/address').send(gift).expect(401);
+    await put({ ...gift, firstName: '' }).expect(400, {
+      success: false,
+      error: 'Enter the first name.',
+    });
+    await put({ ...gift, address: { ...gift.address, address1: '' } }).expect(400);
+    await put({ ...gift, phone: 'call me' }).expect(400);
+    const saved = await put(gift).expect(200);
+    expect(saved.body.address).toEqual({
+      firstName: 'Aya',
+      lastName: 'Sato',
+      address1: '2 Main St',
+      address2: null,
+      city: 'Vancouver',
+      province: 'BC',
+      postalCode: 'V6B 1A1',
+      country: 'CA',
+      phone: '+1 604-555-0199',
+    });
+    // saving again replaces it; the account keeps its own name
+    await put({ ...gift, firstName: 'Ren' }).expect(200);
+    const after = await http.get('/account/address').set('Authorization', fresh.auth).expect(200);
+    expect(after.body.address.firstName).toBe('Ren');
+    expect(after.body.profile).toEqual({
+      firstName: 'Kei',
+      lastName: 'Mori',
+      phone: '416-555-0100',
+    });
+    const rows = await pglite.query('select 1 from public.customer_addresses where user_id = $1', [
+      fresh.id,
+    ]);
+    expect(rows.rows).toHaveLength(1);
   });
 
   it('lets an unconfirmed account shop, but not use points', async () => {

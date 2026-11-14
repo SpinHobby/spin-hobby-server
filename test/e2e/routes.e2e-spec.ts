@@ -277,6 +277,7 @@ const EXPECTED: string[] = [
   'POST /webhooks/paypal [public] no-limit',
   'POST /webhooks/square [public] no-limit',
   'POST /wishlist [user]',
+  'PUT /account/address [user]',
   'PUT /admin/accounts/:id/restriction [owner]',
   'PUT /admin/accounts/:id/role [owner]',
   'PUT /admin/audit/access/:id [owner]',

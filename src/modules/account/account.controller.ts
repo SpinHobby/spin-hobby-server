@@ -8,13 +8,14 @@ import {
   Param,
   Patch,
   Post,
+  Put,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../auth/access.js';
 import { AuthService, type AppUser } from '../auth/auth.service.js';
 import { AddWishlistDto } from './dto/add-wishlist.dto.js';
 import { CreateAlertDto } from './dto/create-alert.dto.js';
-import { ProfileDto } from './dto/profile.dto.js';
+import { ProfileDto, SaveAddressDto } from './dto/profile.dto.js';
 import { ProfileService } from './profile.service.js';
 import { RestockAlertService } from './restock-alert.service.js';
 import { WishlistService } from './wishlist.service.js';
@@ -44,11 +45,21 @@ export class AccountController {
     return { success: true, profile: await this.profiles.update(user.id, dto) };
   }
 
-  /** The customer's saved shipping address (null when none), which checkout fills in. */
+  /**
+   * What checkout fills in: the saved shipping address (null when none), plus the customer's own name and phone for when there
+   * is no saved address yet.
+   */
   @Get('account/address')
   @Access('user')
   async address(@CurrentUser() user: AppUser) {
-    return { success: true, address: await this.profiles.address(user.id) };
+    return { success: true, ...(await this.profiles.checkoutDetails(user.id)) };
+  }
+
+  /** Checkout's "Save for next time": the recipient, phone and address become the default shipping address. */
+  @Put('account/address')
+  @Access('user')
+  async saveAddress(@CurrentUser() user: AppUser, @Body() dto: SaveAddressDto) {
+    return { success: true, address: await this.profiles.saveAddress(user.id, dto) };
   }
 
   /** Signs the person out on every device. */

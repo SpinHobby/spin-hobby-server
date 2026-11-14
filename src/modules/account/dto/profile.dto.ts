@@ -92,3 +92,34 @@ export class ProfileDto {
   @Rule(addressValue)
   address?: SavedAddress | null;
 }
+
+/** A name the checkout needs (who the parcel is for): required, at most 80 characters. */
+const requiredName = (label: string) => (v: unknown) => {
+  const name = optionalName(v);
+  if (!name) throw new AppError(`Enter the ${label}.`);
+  return name;
+};
+const requiredAddress = (v: unknown) => {
+  const a = addressValue(v);
+  if (!a) throw new AppError('Enter the street address.');
+  return a;
+};
+
+/**
+ * `PUT /account/address`: checkout's "Save for next time". Who the parcel is for, their phone and the address become the
+ * customer's default shipping address. The account's own name and phone are left alone (the parcel may be a gift).
+ */
+export class SaveAddressDto {
+  @Rule(requiredName('first name'))
+  firstName!: string;
+
+  @Rule(requiredName('last name'))
+  lastName!: string;
+
+  @Provided()
+  @Rule(phoneValue)
+  phone?: string | null;
+
+  @Rule(requiredAddress)
+  address!: SavedAddress;
+}

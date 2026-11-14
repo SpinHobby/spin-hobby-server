@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Db, type Queryable } from '../../database/db.service.js';
 import { EmailService } from '../../integrations/email/email.service.js';
-import type { ProfileDto, SavedAddress } from './dto/profile.dto.js';
+import type { ProfileDto, SaveAddressDto, SavedAddress } from './dto/profile.dto.js';
 
 interface AddressRow {
   first_name: string;
@@ -147,5 +147,61 @@ export class ProfileService {
       country: a.country,
       phone: a.phone,
     };
+  }
+
+  /** What checkout fills in for a signed-in customer: their saved address, and their own name and phone (for when no address is saved). */
+  async checkoutDetails(userId: string) {
+    const [address, profile] = await Promise.all([
+      this.address(userId),
+      this.db.one<{ first_name: string | null; last_name: string | null; phone: string | null }>(
+        'select first_name, last_name, phone from public.profiles where id = $1',
+        [userId],
+      ),
+    ]);
+    return {
+      address,
+      profile: {
+        firstName: profile?.first_name ?? null,
+        lastName: profile?.last_name ?? null,
+        phone: profile?.phone ?? null,
+      },
+    };
+  }
+
+  /** Checkout's "Save for next time": replaces the default shipping address (recipient, phone and address); the profile is untouched. */
+  async saveAddress(userId: string, dto: SaveAddressDto) {
+    const a = dto.address;
+    const values = [
+      userId,
+      dto.firstName,
+      dto.lastName,
+      a.address1,
+      a.address2,
+      a.city,
+      a.province,
+      a.postalCode,
+      a.country,
+      dto.phone ?? null,
+    ];
+    await this.db.transaction(async (tx) => {
+      const updated = await this.db.many(
+        `update public.customer_addresses
+            set first_name = $2, last_name = $3, address1 = $4, address2 = $5, city = $6, province = $7,
+                postal_code = $8, country = $9, phone = $10, updated_at = now()
+          where user_id = $1 and is_default
+          returning id`,
+        values,
+        tx,
+      );
+      if (!updated.length)
+        await this.db.exec(
+          `insert into public.customer_addresses
+             (user_id, first_name, last_name, address1, address2, city, province, postal_code, country, phone, is_default)
+           values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)`,
+          values,
+          tx,
+        );
+    });
+    return this.address(userId);
   }
 }
