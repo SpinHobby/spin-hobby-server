@@ -41,6 +41,12 @@ const preheaderOf = (html: string) =>
     .trim()
     .slice(0, 120);
 const site = () => storefrontUrl().replace(/\/$/, '');
+/**
+ * Official mascot art for emails, centred: the web copies in the website's public/assets/mascot (originals in
+ * SpinHobby/official-assets). Official art only, never generated pictures.
+ */
+const mascotImage = (file: string, alt: string, width: number) =>
+  `<img src="${site()}/assets/mascot/${file}" alt="${alt}" width="${width}" style="display:block;margin:0 auto 12px;width:${width}px;height:auto;border:0">`;
 const COUNTRY_NAMES: Record<string, string> = { CA: 'Canada', US: 'United States' };
 /** Where a stop link lands: a small page on the API itself (works even if the website is down). */
 const api = () =>
@@ -214,7 +220,7 @@ export class EmailService {
   welcomeEmail(firstName: string | null) {
     const C = EMAIL_COLORS;
     const name = firstName?.trim() ? escape(firstName.trim()) : '';
-    const mascot = `${site()}/assets/transparent%20mascot%20chibi%20rotated.png`;
+    const mascot = `${site()}/assets/mascot/mascot-wave.png`; // by frui2par10r, from SpinHobby/official-assets
     const social = (href: string, icon: string, label: string) =>
       `<td style="padding:0 14px;text-align:center;vertical-align:top">` +
       `<a href="${escape(href)}" style="text-decoration:none;color:${C.primary};font-weight:700;font-size:13px">` +
@@ -225,7 +231,7 @@ export class EmailService {
     const html =
       `<div style="text-align:center">` +
       `<p style="margin:0 0 4px;font-size:13px;letter-spacing:3px;color:${C.muted};font-weight:700">ようこそ · WELCOME</p>` +
-      `<img src="${escape(mascot)}" alt="" width="150" height="177" style="width:150px;height:auto;display:block;margin:8px auto 4px;border:0">` +
+      `<img src="${escape(mascot)}" alt="" width="180" height="180" style="width:180px;height:auto;display:block;margin:8px auto 4px;border:0">` +
       `<h1 style="margin:8px 0 6px;font-size:26px;line-height:1.25;color:${C.text}">${name ? `Welcome to the Spin Hobby family, ${name}!` : 'Welcome to the Spin Hobby family!'}</h1>` +
       `</div>` +
       `<p>We're so happy you're here. Spin Hobby is a small Canadian shop run by anime fans, for anime fans. Every figure, plush and card is the real, officially licensed thing, packed with care as if it were going on our own shelf.</p>` +
@@ -256,7 +262,8 @@ export class EmailService {
       ) +
       `</table>` +
       emailButton(site(), 'Start exploring') +
-      `<p style="margin:0">Happy hunting, and welcome home!<br><strong>The Spin Hobby team</strong></p>` +
+      mascotImage('clover-good-luck.png', 'Good luck!', 120) +
+      `<p style="margin:0;text-align:center">Happy hunting, and welcome home!<br><strong>The Spin Hobby team</strong></p>` +
       `<p style="font-size:12px;color:${C.muted};margin-top:20px">You're getting this one-time email because you just made an account at Spin Hobby. Questions? Just reply, a real person will answer.</p>`;
     return {
       subject: name ? `Welcome to Spin Hobby, ${firstName!.trim()}!` : 'Welcome to Spin Hobby!',
@@ -278,6 +285,7 @@ export class EmailService {
   shippedHtml(orderId: number, carrier: string | null, tracking: string) {
     const track = trackingUrl(carrier, tracking);
     return (
+      mascotImage('clover.png', '', 110) +
       `<p>Good news! Your Spin Hobby order <strong>#${orderId}</strong> is on its way.</p>` +
       `<p>${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
       (track ? emailButton(track, 'Track your package') : statusLink(orderId)) +
@@ -329,6 +337,7 @@ export class EmailService {
         ? `${handling.days_min}`
         : `${handling.days_min}–${handling.days_max}`;
     return (
+      mascotImage('clover-thank-you.png', 'Thank you!', 140) +
       `<p>Thanks for your order! We've received your payment for order <strong>#${escape(order.id)}</strong>.</p>` +
       `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${Number(order.discount_cents) ? total(`Discount${order.discount_code ? ` (${escape(order.discount_code)})` : ''}`, -Number(order.discount_cents)) : ''}${total(`Shipping (${order.shipping_carrier ? escape(`${order.shipping_carrier} ${order.shipping_service ?? ''}`.trim()) : order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
       `${total('Tax', order.tax_cents)}${total('Total (CAD)', order.total_cents, true)}</table>` +
