@@ -53,6 +53,9 @@ const mascotImage = (file: string, alt: string, width: number) =>
  */
 const doodle = (file: 'sparkle' | 'sparkle-small' | 'heart-pink' | 'heart-red', height: number) =>
   `<img src="${site()}/assets/mascot/${file}.png" alt="" height="${height}" style="height:${height}px;width:auto;border:0;vertical-align:middle;display:inline-block">`;
+/** Aidi's sparkle · heart · sparkle, centred: a soft divider under a heading or greeting. */
+const doodleDivider = () =>
+  `<p style="margin:0 0 6px;text-align:center">${doodle('sparkle', 18)}&nbsp;&nbsp;${doodle('heart-pink', 16)}&nbsp;&nbsp;${doodle('sparkle-small', 18)}</p>`;
 const COUNTRY_NAMES: Record<string, string> = { CA: 'Canada', US: 'United States' };
 /** Where a stop link lands: a small page on the API itself (works even if the website is down). */
 const api = () =>
@@ -245,7 +248,7 @@ export class EmailService {
       `<p style="margin:0 0 4px;font-size:13px;letter-spacing:3px;color:${C.muted};font-weight:700">ようこそ · WELCOME</p>` +
       `<img src="${escape(mascot)}" alt="" width="180" height="180" style="width:180px;height:auto;display:block;margin:8px auto 4px;border:0">` +
       `<h1 style="margin:8px 0 6px;font-size:26px;line-height:1.25;color:${C.text}">${name ? `Welcome to the Spin Hobby family, ${name}!` : 'Welcome to the Spin Hobby family!'}</h1>` +
-      `<p style="margin:0 0 6px">${doodle('sparkle', 18)}&nbsp;&nbsp;${doodle('heart-pink', 16)}&nbsp;&nbsp;${doodle('sparkle-small', 18)}</p>` +
+      doodleDivider() +
       `</div>` +
       `<p>We're so happy you're here. Spin Hobby is a small Canadian shop run by anime fans, for anime fans. Every figure, plush and card is the real, officially licensed thing, packed with care as if it were going on our own shelf.</p>` +
       `<div style="margin:22px 0;padding:18px;border-radius:12px;background:${C.bg};border:1px solid ${C.border};text-align:center">` +
@@ -302,8 +305,9 @@ export class EmailService {
     const track = trackingUrl(carrier, tracking);
     return (
       mascotImage('clover.png', '', 110) +
+      doodleDivider() +
       `<p>Good news! Your Spin Hobby order <strong>#${orderId}</strong> is on its way.</p>` +
-      `<p>${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
+      `<p>${doodle('sparkle', 18)}&nbsp; ${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
       (track ? emailButton(track, 'Track your package') : statusLink(orderId)) +
       `<p>Questions? Reply to this email with your order number.</p>`
     );
@@ -341,12 +345,13 @@ export class EmailService {
     const rows = items
       .map(
         (i) =>
-          `<tr><td style="padding:4px 12px 4px 0">${escape(i.name)}${i.is_preorder ? ' <em>(pre-order)</em>' : ''}</td>` +
+          `<tr><td style="padding:4px 8px 4px 0;vertical-align:middle;width:20px">${doodle(i.is_preorder ? 'sparkle' : 'heart-pink', 16)}</td>` +
+          `<td style="padding:4px 12px 4px 0">${escape(i.name)}${i.is_preorder ? ' <em>(pre-order)</em>' : ''}</td>` +
           `<td style="padding:4px 12px">× ${escape(i.quantity)}</td><td style="padding:4px 0;text-align:right">${money(Number(i.unit_price_cents) * Number(i.quantity))}</td></tr>`,
       )
       .join('');
     const total = (label: string, cents: unknown, bold = false) =>
-      `<tr><td colspan="2" style="padding:2px 12px 2px 0;text-align:right">${bold ? `<strong>${label}</strong>` : label}</td><td style="padding:2px 0;text-align:right">${bold ? `<strong>${money(cents)}</strong>` : money(cents)}</td></tr>`;
+      `<tr><td colspan="3" style="padding:2px 12px 2px 0;text-align:right">${bold ? `<strong>${label}</strong>` : label}</td><td style="padding:2px 0;text-align:right">${bold ? `<strong>${money(cents)}</strong>` : money(cents)}</td></tr>`;
     const hasPreorder = items.some((i) => i.is_preorder);
     const handling_ =
       handling.days_min === handling.days_max
@@ -354,10 +359,13 @@ export class EmailService {
         : `${handling.days_min}–${handling.days_max}`;
     return (
       mascotImage('clover-thank-you.png', 'Thank you!', 140) +
+      doodleDivider() +
       `<p>Thanks for your order! We've received your payment for order <strong>#${escape(order.id)}</strong>.</p>` +
       `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${Number(order.discount_cents) ? total(`Discount${order.discount_code ? ` (${escape(order.discount_code)})` : ''}`, -Number(order.discount_cents)) : ''}${total(`Shipping (${order.shipping_carrier ? escape(`${order.shipping_carrier} ${order.shipping_service ?? ''}`.trim()) : order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
       `${total('Tax', order.tax_cents)}${total('Total (CAD)', order.total_cents, true)}</table>` +
-      (address ? `<p><strong>Shipping to</strong><br>${address}</p>` : '') +
+      (address
+        ? `<p>${doodle('heart-red', 16)}&nbsp; <strong>Shipping to</strong><br>${address}</p>`
+        : '') +
       `<p>We'll pack your order within ${handling_} business days and email you tracking once it ships.</p>` +
       (hasPreorder
         ? `<p>Your pre-order items ship when they arrive from the manufacturer; we'll let you know as soon as we have a date.</p>`
