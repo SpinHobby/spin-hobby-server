@@ -47,6 +47,12 @@ const site = () => storefrontUrl().replace(/\/$/, '');
  */
 const mascotImage = (file: string, alt: string, width: number) =>
   `<img src="${site()}/assets/mascot/${file}" alt="${alt}" width="${width}" style="display:block;margin:0 auto 12px;width:${width}px;height:auto;border:0">`;
+/**
+ * A small hand-drawn sparkle or heart cut from Aidi's clover drawing (website public/assets/mascot), used inline as a
+ * bullet or divider instead of emoji: `height` in px, the width follows.
+ */
+const doodle = (file: 'sparkle' | 'sparkle-small' | 'heart-pink' | 'heart-red', height: number) =>
+  `<img src="${site()}/assets/mascot/${file}.png" alt="" height="${height}" style="height:${height}px;width:auto;border:0;vertical-align:middle;display:inline-block">`;
 const COUNTRY_NAMES: Record<string, string> = { CA: 'Canada', US: 'United States' };
 /** Where a stop link lands: a small page on the API itself (works even if the website is down). */
 const api = () =>
@@ -225,37 +231,47 @@ export class EmailService {
       `<td style="padding:0 14px;text-align:center;vertical-align:top">` +
       `<a href="${escape(href)}" style="text-decoration:none;color:${C.primary};font-weight:700;font-size:13px">` +
       `<img src="${site()}/assets/email/${icon}.png" alt="${label}" width="48" height="48" style="display:block;margin:0 auto 6px;width:48px;height:48px;border:0">${label}</a></td>`;
-    const step = (title: string, text: string, href: string) =>
-      `<tr><td style="padding:8px 0;vertical-align:top"><a href="${escape(href)}" style="color:${C.primary};font-weight:700;text-decoration:none">${title} →</a>` +
+    const step = (
+      bullet: Parameters<typeof doodle>[0],
+      title: string,
+      text: string,
+      href: string,
+    ) =>
+      `<tr><td style="padding:10px 12px 8px 0;vertical-align:top;width:24px;text-align:center">${doodle(bullet, 22)}</td>` +
+      `<td style="padding:8px 0;vertical-align:top"><a href="${escape(href)}" style="color:${C.primary};font-weight:700;text-decoration:none">${title} →</a>` +
       `<br><span style="color:${C.muted};font-size:14px">${text}</span></td></tr>`;
     const html =
       `<div style="text-align:center">` +
       `<p style="margin:0 0 4px;font-size:13px;letter-spacing:3px;color:${C.muted};font-weight:700">ようこそ · WELCOME</p>` +
       `<img src="${escape(mascot)}" alt="" width="180" height="180" style="width:180px;height:auto;display:block;margin:8px auto 4px;border:0">` +
       `<h1 style="margin:8px 0 6px;font-size:26px;line-height:1.25;color:${C.text}">${name ? `Welcome to the Spin Hobby family, ${name}!` : 'Welcome to the Spin Hobby family!'}</h1>` +
+      `<p style="margin:0 0 6px">${doodle('sparkle', 18)}&nbsp;&nbsp;${doodle('heart-pink', 16)}&nbsp;&nbsp;${doodle('sparkle-small', 18)}</p>` +
       `</div>` +
       `<p>We're so happy you're here. Spin Hobby is a small Canadian shop run by anime fans, for anime fans. Every figure, plush and card is the real, officially licensed thing, packed with care as if it were going on our own shelf.</p>` +
       `<div style="margin:22px 0;padding:18px;border-radius:12px;background:${C.bg};border:1px solid ${C.border};text-align:center">` +
-      `<p style="margin:0 0 4px;font-weight:700;font-size:18px">Join our community</p>` +
+      `<p style="margin:0 0 4px;font-weight:700;font-size:18px">${doodle('heart-red', 18)}&nbsp; Join our community &nbsp;${doodle('heart-pink', 18)}</p>` +
       `<p style="margin:0 0 14px;font-size:14px;color:${C.text}">Shelf photos, restock news and con meetups on Discord. New arrivals and moments from the shop on Instagram.</p>` +
       `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="border-collapse:collapse;margin:0 auto"><tr>` +
       social(discordUrl(), 'discord', 'Discord') +
       social(instagramUrl(), 'instagram', 'Instagram') +
       `</tr></table>` +
       `</div>` +
-      `<p style="margin:20px 0 4px;font-weight:700">Where to start</p>` +
+      `<p style="margin:20px 0 4px;font-weight:700;font-size:17px">Where to start</p>` +
       `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
       step(
+        'sparkle',
         'Pre-orders',
         'Reserve upcoming figures before they sell out. They ship on release.',
         `${site()}/pre-orders`,
       ) +
       step(
+        'heart-pink',
         'New arrivals',
         'Fresh figures, plushies and goods, ready to ship.',
         `${site()}/new-arrivals`,
       ) +
       step(
+        'heart-red',
         'Meet us at conventions',
         'Come say hi at our booth at anime cons across Canada.',
         `${site()}/events`,
