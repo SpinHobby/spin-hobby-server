@@ -132,3 +132,12 @@ export const shopAssistantEnabled = () => {
   const v = env('SHOP_ASSISTANT');
   return v ? v === 'on' : !isProduction() || isStaging();
 };
+
+/**
+ * Whether the rewards programme may run here at all. `REWARDS=on` or `off`; on by default everywhere but the live site, where it is off
+ * until switched on (the website has its own switch in src/features.ts). While this is off, rewards stay off whatever Admin > Rewards says.
+ */
+export const rewardsAllowed = () => {
+  const v = env('REWARDS');
+  return v ? v === 'on' : !isProduction() || isStaging();
+};

@@ -37,11 +37,18 @@ export class AccountController {
     return { success: true, user };
   }
 
-  /** The customer's own name and phone (the welcome step after signing up, and Account). */
+  /** The customer's own name, phone and shipping address (the welcome step after signing up, and Account). */
   @Patch('account/profile')
   @Access('user')
   async profile(@CurrentUser() user: AppUser, @Body() dto: ProfileDto) {
     return { success: true, profile: await this.profiles.update(user.id, dto) };
+  }
+
+  /** The customer's saved shipping address (null when none), which checkout fills in. */
+  @Get('account/address')
+  @Access('user')
+  async address(@CurrentUser() user: AppUser) {
+    return { success: true, address: await this.profiles.address(user.id) };
   }
 
   /** Signs the person out on every device. */

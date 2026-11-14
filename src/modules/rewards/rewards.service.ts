@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { createHash, randomBytes, randomInt } from 'node:crypto';
 import { AppError, notFound } from '../../common/errors.js';
 import { Db, type Queryable } from '../../database/db.service.js';
+import { rewardsAllowed } from '../../config/app.config.js';
 import { rolesFrom } from '../auth/roles.js';
 import type { OrderRow } from '../../database/rows.js';
 import {
@@ -110,7 +111,7 @@ export class RewardsService {
       tx,
     );
     return {
-      enabled: Boolean(row?.enabled),
+      enabled: Boolean(row?.enabled) && rewardsAllowed(),
       pointsPerDollar: Number(row?.points_per_dollar ?? 3),
       centsPer100Points: Number(row?.cents_per_100_points ?? 100),
       minRedeemPoints: Number(row?.min_redeem_points ?? 500),
@@ -119,6 +120,12 @@ export class RewardsService {
   }
 
   async updateSettings(changes: Partial<RewardSettings>) {
+    if (changes.enabled && !rewardsAllowed())
+      throw new AppError(
+        'Rewards are not available on the live site yet.',
+        403,
+        'REWARDS_NOT_HERE',
+      );
     await this.db.exec(
       `insert into public.reward_settings (id) values (true) on conflict do nothing;`,
     );
@@ -359,7 +366,7 @@ export class RewardsService {
       [userId],
     );
     return {
-      enabled: Boolean(row?.enabled),
+      enabled: Boolean(row?.enabled) && rewardsAllowed(),
       balance: Number(row?.points ?? 0),
       pending: Math.max(0, Number(row?.pending ?? 0)),
     };
@@ -409,13 +416,12 @@ export class RewardsService {
       enabled: settings.enabled,
       balance,
       pending,
+      // What points are worth is not shown to customers: they see it when they turn points into a code. It can change for a promotion.
       rates: {
         pointsPerDollar: settings.pointsPerDollar,
-        centsPer100Points: settings.centsPer100Points,
         minRedeemPoints: settings.minRedeemPoints,
         returnWindowDays: settings.returnWindowDays,
       },
-      worthCents: pointsValueCents(balance, settings.centsPer100Points),
       entries: entries.map((e) => ({
         id: e.id,
         app: e.app,
@@ -554,7 +560,6 @@ export class RewardsService {
     ]);
     return {
       balance,
-      worthCents: pointsValueCents(balance, settings.centsPer100Points),
       firstName: profile?.first_name ?? null,
       enabled: settings.enabled,
     };

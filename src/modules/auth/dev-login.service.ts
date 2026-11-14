@@ -53,7 +53,7 @@ export class DevLogin {
         randomUUID(),
         email,
         JSON.stringify({
-          first_name: dto.firstName,
+          ...(dto.firstName && { first_name: dto.firstName }),
           ...(dto.lastName && { last_name: dto.lastName }),
         }),
       ],

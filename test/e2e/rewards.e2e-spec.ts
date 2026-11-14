@@ -83,12 +83,41 @@ describe('rewards', () => {
     await http.get('/account/rewards').expect(401);
   });
 
+  it('stays off on the live site, whatever Admin > Rewards says', async () => {
+    const saved = {
+      NODE_ENV: process.env.NODE_ENV,
+      APP_ENV: process.env.APP_ENV,
+      REWARDS: process.env.REWARDS,
+    };
+    process.env.NODE_ENV = 'production';
+    delete process.env.APP_ENV;
+    delete process.env.REWARDS;
+    try {
+      await settings({ enabled: true }).expect(403, {
+        success: false,
+        error: 'Rewards are not available on the live site yet.',
+        code: 'REWARDS_NOT_HERE',
+      });
+      expect((await mine()).enabled).toBe(false);
+      process.env.REWARDS = 'on';
+      expect((await mine()).enabled).toBe(true);
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+    }
+  });
+
   it('gives a paid order its points on the way, usable once it has shipped and its return window has passed', async () => {
     orderId = await buy();
     const header = () =>
       http.get('/account/rewards/balance').set('Authorization', shopper.auth).expect(200);
     let me = await mine();
-    expect(me).toMatchObject({ balance: 0, pending: 780, worthCents: 0 });
+    expect(me).toMatchObject({ balance: 0, pending: 780 });
+    // customers never see what points are worth in money (it can change for a promotion)
+    expect(me).not.toHaveProperty('worthCents');
+    expect(me.rates).not.toHaveProperty('centsPer100Points');
     expect(me.entries).toEqual([
       expect.objectContaining({
         app: 'shop',
@@ -126,7 +155,7 @@ describe('rewards', () => {
     );
     expect((await header()).body).toMatchObject({ balance: 780, pending: 0 });
     me = await mine();
-    expect(me).toMatchObject({ balance: 780, pending: 0, worthCents: 780 });
+    expect(me).toMatchObject({ balance: 780, pending: 0 });
     expect(me.entries[0]).toMatchObject({ points: 780, pending: false });
   });
 
@@ -206,7 +235,8 @@ describe('rewards', () => {
         .send({ code: ` ${made.code.replace('-', '').toLowerCase()} ` })
         .expect(200)
     ).body;
-    expect(linked).toMatchObject({ balance: 280, worthCents: 280, enabled: true });
+    expect(linked).toMatchObject({ balance: 280, enabled: true });
+    expect(linked).not.toHaveProperty('worthCents');
     expect(JSON.stringify(linked)).not.toContain('fan@example.com');
     memberId = linked.memberId;
     await app('/rewards/link').send({ code: made.code }).expect(404); // used once

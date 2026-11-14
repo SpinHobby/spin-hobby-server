@@ -1,11 +1,8 @@
 import { AppError } from '../../../common/errors.js';
 import { Provided, Rule } from '../../../common/validation/decorators.js';
+import { normalizePostal } from '../../shipping/shipping-math.js';
 
-const name = (v: unknown) => {
-  const text = typeof v === 'string' ? v.trim().slice(0, 80) : '';
-  if (!text) throw new AppError('Enter your first name.');
-  return text;
-};
+/** A name as typed, at most 80 characters; empty clears it. */
 const optionalName = (v: unknown) =>
   typeof v === 'string' && v.trim() ? v.trim().slice(0, 80) : null;
 /** A phone number as people type it: digits with + ( ) - . and spaces; empty clears it. */
@@ -18,11 +15,45 @@ export const phoneValue = (v: unknown): string | null => {
   return text;
 };
 
+/** A shipping address saved for next time (checkout fills it in). */
+export interface SavedAddress {
+  address1: string;
+  address2: string | null;
+  city: string;
+  province: string;
+  postalCode: string;
+  country: 'CA' | 'US';
+}
+
+const line = (v: unknown, max = 120) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+/** The welcome step's address: all of it or none of it (an empty street means "no address"). */
+export const addressValue = (v: unknown): SavedAddress | null => {
+  if (v === null || v === undefined) return null;
+  if (typeof v !== 'object')
+    throw new AppError('Enter the address as street, city, province and postal code.');
+  const a = v as Record<string, unknown>;
+  const address1 = line(a.address1);
+  if (!address1) return null;
+  const country = a.country === 'US' ? 'US' : a.country === 'CA' ? 'CA' : null;
+  if (!country) throw new AppError('We ship to Canada and the United States.');
+  const city = line(a.city, 80);
+  if (!city) throw new AppError('Enter the city.');
+  const province = line(a.province, 3).toUpperCase();
+  if (!/^[A-Z]{2}$/.test(province))
+    throw new AppError(country === 'CA' ? 'Choose the province.' : 'Choose the state.');
+  const postalCode = normalizePostal(country, a.postalCode);
+  if (!postalCode)
+    throw new AppError(
+      country === 'CA' ? 'Enter the postal code like A1A 1A1.' : 'Enter the ZIP code like 12345.',
+    );
+  return { address1, address2: line(a.address2) || null, city, province, postalCode, country };
+};
+
 /** The signed-in customer's own details. Only what is sent changes; any save also marks the welcome step as seen. */
 export class ProfileDto {
   @Provided()
-  @Rule(name)
-  firstName?: string;
+  @Rule(optionalName)
+  firstName?: string | null;
 
   @Provided()
   @Rule(optionalName)
@@ -31,4 +62,9 @@ export class ProfileDto {
   @Provided()
   @Rule(phoneValue)
   phone?: string | null;
+
+  /** Saved as the customer's default shipping address. Left out or empty: their saved address stays as it is. */
+  @Provided()
+  @Rule(addressValue)
+  address?: SavedAddress | null;
 }

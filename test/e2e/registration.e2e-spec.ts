@@ -111,23 +111,84 @@ describe('registration', () => {
       success: false,
       error: 'Enter a phone number like 416 555 0123.',
     });
-    await save({ firstName: ' ' }).expect(400);
     expect(
-      (await save({ firstName: 'Hana', phone: '+1 (416) 555-0123' }).expect(200)).body,
+      (await save({ firstName: 'Hana', lastName: 'Sato', phone: '+1 (416) 555-0123' }).expect(200))
+        .body,
     ).toEqual({
       success: true,
-      profile: { firstName: 'Hana', lastName: null, phone: '+1 (416) 555-0123', welcomed: true },
+      profile: {
+        firstName: 'Hana',
+        lastName: 'Sato',
+        phone: '+1 (416) 555-0123',
+        address: null,
+        welcomed: true,
+      },
     });
-    // leaving a field out keeps it; an empty phone clears it
-    expect((await save({ phone: '' }).expect(200)).body.profile).toEqual({
+    // leaving a field out keeps it; an empty phone or name clears it
+    expect((await save({ phone: '', lastName: ' ' }).expect(200)).body.profile).toEqual({
       firstName: 'Hana',
       lastName: null,
       phone: null,
+      address: null,
       welcomed: true,
     });
     expect(
       (await http.get('/auth/me').set('Authorization', fresh.auth).expect(200)).body.user,
     ).toMatchObject({ firstName: 'Hana', welcomed: true });
+  });
+
+  it('saves the welcome address as the default one, for checkout to fill in', async () => {
+    const fresh = await signUp(pglite, 'address@example.com', undefined, { fresh: true });
+    const save = (body: object) =>
+      http.patch('/account/profile').set('Authorization', fresh.auth).send(body);
+    const saved = () => http.get('/account/address').set('Authorization', fresh.auth).expect(200);
+    expect((await saved()).body).toEqual({ success: true, address: null });
+    await http.get('/account/address').expect(401);
+
+    const home = {
+      address1: '1 Queen St W',
+      city: 'Toronto',
+      province: 'on',
+      postalCode: 'm5h2n2',
+      country: 'CA',
+    };
+    await save({ address: { ...home, postalCode: '12345' } }).expect(400, {
+      success: false,
+      error: 'Enter the postal code like A1A 1A1.',
+    });
+    await save({ address: { ...home, country: 'JP' } }).expect(400);
+    await save({ address: { ...home, city: '' } }).expect(400);
+    // an empty street means "no address": nothing saved, no error
+    await save({ address: { ...home, address1: ' ' } }).expect(200);
+    expect((await saved()).body.address).toBeNull();
+
+    await save({ firstName: 'Kei', address: home }).expect(200);
+    expect((await saved()).body.address).toEqual({
+      firstName: 'Kei',
+      lastName: '',
+      address1: '1 Queen St W',
+      address2: null,
+      city: 'Toronto',
+      province: 'ON',
+      postalCode: 'M5H 2N2',
+      country: 'CA',
+      phone: null,
+    });
+    // saving again replaces the default address instead of adding a second one
+    await save({
+      address: {
+        address1: '9 Pike St',
+        city: 'Seattle',
+        province: 'WA',
+        postalCode: '98101',
+        country: 'US',
+      },
+    }).expect(200);
+    const rows = await pglite.query<{ city: string }>(
+      'select city from public.customer_addresses where user_id = $1',
+      [fresh.id],
+    );
+    expect(rows.rows).toEqual([{ city: 'Seattle' }]);
   });
 
   it('lets an unconfirmed account shop, but not use points', async () => {

@@ -83,7 +83,6 @@ export class SignInService {
         409,
         'email_exists',
       );
-    if (!dto.firstName) throw new AppError('Enter your first name.', 400, 'first_name');
     if (!allowSignup(ip || 'unknown'))
       throw new AppError('Too many sign-ups from this network. Try again later.', 429);
     let session: Session;

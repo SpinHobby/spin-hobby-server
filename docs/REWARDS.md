@@ -18,7 +18,9 @@ One points balance per Spin Hobby account, shared by every Spin Hobby app.
   confirm with a 6-digit code emailed at sign-up (`POST /auth/email-code`, `POST /auth/email-code/confirm`); Google/Discord
   sign-ins, staff and accounts made before 2026-11-14 count as confirmed. Shopping and earning never wait for it.
 - **Customers** turn points into a one-time discount code (Account > Rewards). 100 points are worth _cents per 100 points_
-  (default $1). A code is good for a year and is used at checkout like any other code.
+  (default $1). A code is good for a year and is used at checkout like any other code. Customers are never told what points are
+  worth in money (no "worth $X" anywhere, and the API leaves it out): they find out when they make a code. That leaves room for
+  promotions that make points worth more for a while.
 - **Other apps** (Gleamshelf, Hangout, Shelved, …) give and spend points through the API below, with their own key.
 - **The owner** switches rewards on, sets the rates, connects apps and gives or takes points by hand (Admin > Rewards). The starting
   values (3 points per $1, 100 points = $1, so 3% back; 500 points to use; 14-day return window) are the table's defaults in the
@@ -26,6 +28,11 @@ One points balance per Spin Hobby account, shared by every Spin Hobby app.
 
 Rewards are **off** until the owner switches them on, because points are worth money. While off, nothing is earned or spent;
 balances can still be read.
+
+**Not on the live site yet.** The server setting `REWARDS` (on/off) is on by default locally and on staging and off on the live site;
+while it is off, Admin > Rewards can't switch rewards on (`403 REWARDS_NOT_HERE`). The website hides everything about rewards on the
+live site through `rewards` in its `src/features.ts`. To launch: set `REWARDS=on` on Render's live API, flip `production` to true in
+features.ts, then switch rewards on in Admin > Rewards.
 
 Code: `src/modules/rewards/` (the arithmetic is in `rewards-math.ts`). Tables: `reward_settings`, `reward_balances` (running total),
 `reward_entries` (every change, never edited), `reward_apps`, `reward_links`, `reward_link_codes`,
@@ -48,8 +55,8 @@ sentence you can show) with a status code.
 | Call                                     | Body                                     | Answer                                                     |
 | ---------------------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
 | `GET /rewards/app`                       |                                          | `{ app: { slug, name, dailyCap } }` (checks the key)       |
-| `POST /rewards/link`                     | `{ code }`                               | `{ memberId, balance, worthCents, firstName, enabled }`    |
-| `GET /rewards/members/:memberId`         |                                          | `{ balance, worthCents, firstName, enabled }`              |
+| `POST /rewards/link`                     | `{ code }`                               | `{ memberId, balance, firstName, enabled }`               |
+| `GET /rewards/members/:memberId`         |                                          | `{ balance, firstName, enabled }`                         |
 | `POST /rewards/members/:memberId/award`  | `{ points: 1-10000, reason, ref }`       | `{ balance, duplicate }`                                   |
 | `POST /rewards/members/:memberId/spend`  | `{ points: 1-10000, reason, ref }`       | `{ balance, duplicate }`                                   |
 

@@ -105,10 +105,6 @@ describe('sign-in through the API', () => {
         .post('/auth/signup')
         .send({ email: 'fan@example.com', password: 'longenough', firstName: 'Fan' })
         .expect(409);
-      await http
-        .post('/auth/signup')
-        .send({ email: 'x@example.com', password: 'longenough', firstName: '  ' })
-        .expect(400, { success: false, error: 'Enter your first name.', code: 'first_name' });
       const ok = await http
         .post('/auth/signup')
         .send({ email: 'Newbie@Example.com', password: 'longenough', firstName: 'Nia' })
