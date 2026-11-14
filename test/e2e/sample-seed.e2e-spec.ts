@@ -6,6 +6,7 @@ import {
   seedSampleAccounts,
 } from '../../src/modules/sample/accounts.js';
 import { sampleImageFor } from '../../src/modules/sample/images.js';
+import { SAMPLE_GLOSSARY } from '../../src/modules/sample/catalog.js';
 import {
   frameSamplePortraits,
   seedSample,
@@ -135,6 +136,20 @@ describe('frameSamplePortraits', () => {
       [one.rows[0].id],
     );
     expect(kept.rows[0].zoom).toBe(2);
+    await pglite.close();
+  });
+});
+
+describe('sample glossary', () => {
+  it('adds the glossary terms', async () => {
+    const { pglite } = await createDatabase();
+    const seeded = await seedSample(pglite, 'http://localhost:8080');
+    expect(seeded.glossaryTerms).toBe(SAMPLE_GLOSSARY.length);
+    const { rows } = await pglite.query<{ term: string }>(
+      'select term from public.glossary_terms order by lower(term)',
+    );
+    expect(rows.map((r) => r.term)).toContain('Nendoroid');
+    expect(rows).toHaveLength(SAMPLE_GLOSSARY.length);
     await pglite.close();
   });
 });

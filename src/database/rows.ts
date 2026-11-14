@@ -245,6 +245,14 @@ export interface StoreEventRow {
   updated_at: string;
 }
 
+export interface GlossaryTermRow {
+  id: string;
+  term: string;
+  meaning: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface TaxRateRow {
   country: 'CA' | 'US';
   province: string;
