@@ -4,7 +4,16 @@ import { escapeHtml as escape } from '../../common/html.js';
 import type { OrderItemRow, OrderRow, StorefrontProductRow } from '../../database/rows.js';
 import { slugify } from '../../modules/catalog/slug.js';
 import { port, publicApiUrl, renderExternalUrl, storefrontUrl } from '../../config/app.config.js';
-import { fromEmail, resendApiKey, supportEmail } from '../../config/email.config.js';
+import { ownerEmails, staffEmails } from '../../config/auth.config.js';
+import {
+  emailAllowlist,
+  emailAllowlistOn,
+  fromEmail,
+  mailpitUrl,
+  mailTransport,
+  resendApiKey,
+  supportEmail,
+} from '../../config/email.config.js';
 import { emailButton, emailLayout, trackingUrl } from './layout.js';
 
 const money = (cents: unknown) =>
@@ -40,39 +49,95 @@ const productRow = (p: StorefrontProductRow, quantity?: number) =>
 const optInFooter = (why: string, stopUrl: string, stopText: string) =>
   `<p style="font-size:12px">${why} <a href="${escape(stopUrl)}">${stopText}</a>. Spin Hobby, Canada · ${escape(site())}</p>`;
 
-/** Transactional email through Resend: order confirmations, shipping and refund notices, and restock alerts. */
+/** "Spin Hobby <shop@x.com>" or "shop@x.com" as Mailpit's { Name, Email }. */
+export function addressParts(value: string) {
+  const m = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(value);
+  return m
+    ? { Name: m[1].replace(/^"|"$/g, ''), Email: m[2].trim() }
+    : { Name: '', Email: value.trim() };
+}
+
+/** May real email reach this address? Always, unless EMAIL_ALLOWLIST applies (staging, or set by hand). */
+export function mayEmail(to: string) {
+  if (!emailAllowlistOn()) return true;
+  const address = to.trim().toLowerCase();
+  const domain = address.slice(address.lastIndexOf('@'));
+  const allowed = [...emailAllowlist(), ...ownerEmails(), ...staffEmails()].map((e) =>
+    e.toLowerCase(),
+  );
+  return allowed.includes(address) || allowed.includes(domain);
+}
+
+/** Hides most of an address for logs: "ha***@example.com". */
+const masked = (to: string) => to.replace(/^(.{0,2})[^@]*/, '$1***');
+
+/**
+ * Transactional email: order confirmations, shipping and refund notices, sign-up codes and restock alerts. Sent through Resend, or
+ * to a Mailpit inbox on this computer when MAIL_TRANSPORT=mailpit (see config/email.config.ts and docs/EMAIL.md).
+ */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
 
   get configured() {
-    return Boolean(resendApiKey() && fromEmail());
+    return mailTransport() !== 'off';
   }
 
   async send(to: string, subject: string, html: string): Promise<boolean> {
-    const apiKey = resendApiKey();
-    const from = fromEmail();
-    if (!apiKey || !from)
+    const transport = mailTransport();
+    if (transport === 'off')
       throw new AppError('Email is not configured (RESEND_API_KEY, FROM_EMAIL).', 503);
+    const page = emailLayout({
+      body: html,
+      preheader: preheaderOf(html),
+      site: site(),
+      supportEmail: supportEmail(),
+    });
+    if (transport === 'mailpit') return this.toMailpit(to, subject, page);
+    if (!mayEmail(to)) {
+      // staging: a copy of a real customer's address must never get a test email
+      this.logger.log(`Held back "${subject}" to ${masked(to)}: not on EMAIL_ALLOWLIST.`);
+      return true;
+    }
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${resendApiKey()}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from,
+        from: fromEmail(),
         to: [to],
         reply_to: supportEmail(), // "reply to this email" reaches the shop even when From is a no-reply address
         subject,
-        html: emailLayout({
-          body: html,
-          preheader: preheaderOf(html),
-          site: site(),
-          supportEmail: supportEmail(),
-        }),
+        html: page,
       }),
       signal: AbortSignal.timeout(8_000), // a slow mail provider must never hold up the caller for long
     });
-    if (!res.ok) this.logger.warn(`Resend rejected an email to ${to}: ${res.status}`);
+    if (!res.ok) this.logger.warn(`Resend rejected an email to ${masked(to)}: ${res.status}`);
     return res.ok;
+  }
+
+  /** Local: drops the email into Mailpit's inbox (open MAILPIT_URL in a browser to read it). */
+  private async toMailpit(to: string, subject: string, html: string) {
+    try {
+      const res = await fetch(`${mailpitUrl()}/api/v1/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          From: addressParts(fromEmail() ?? 'Spin Hobby <shop@spinhobby.test>'),
+          To: [{ Email: to }],
+          ReplyTo: [{ Email: supportEmail() }],
+          Subject: subject,
+          HTML: html,
+        }),
+        signal: AbortSignal.timeout(4_000),
+      });
+      if (!res.ok) this.logger.warn(`Mailpit refused an email to ${to}: ${res.status}`);
+      return res.ok;
+    } catch {
+      this.logger.warn(
+        `Mailpit isn't running at ${mailpitUrl()}, so "${subject}" to ${to} was not delivered. Start it with: mailpit`,
+      );
+      return false;
+    }
   }
 
   /** "It's back": the product's photo, name and price when it's on the shop, and a button straight to it. */

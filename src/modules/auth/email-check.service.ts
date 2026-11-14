@@ -60,7 +60,10 @@ export class EmailCheckService {
         `${code} is your Spin Hobby code`,
         this.email.emailCodeHtml(code, user.firstName, CODE_MINUTES),
       );
-      if (!ok) throw new AppError('The email could not be sent. Try again in a minute.', 502);
+      if (!ok && isProduction())
+        throw new AppError('The email could not be sent. Try again in a minute.', 502);
+      if (!ok)
+        this.logger.log(`Email code for ${user.email}: ${code} (the local inbox didn't take it)`);
     } else {
       this.logger.log(`Email code for ${user.email}: ${code} (no mailer set up; local only)`);
     }
