@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { escapeHtml as escape } from '../../common/html.js';
 import type { OrderItemRow, OrderRow, StorefrontProductRow } from '../../database/rows.js';
@@ -16,12 +16,14 @@ import { ownerEmails, staffEmails } from '../../config/auth.config.js';
 import {
   emailAllowlist,
   emailAllowlistOn,
+  emailQueueIntervalMinutes,
   fromEmail,
   mailpitUrl,
   mailTransport,
   resendApiKey,
   supportEmail,
 } from '../../config/email.config.js';
+import { EmailQuotaService, type EmailKind } from './email-quota.service.js';
 import { EMAIL_COLORS, emailButton, emailLayout, trackingUrl } from './layout.js';
 
 const money = (cents: unknown) =>
@@ -121,14 +123,49 @@ const masked = (to: string) => to.replace(/^(.{0,2})[^@]*/, '$1***');
  * to a Mailpit inbox on this computer when MAIL_TRANSPORT=mailpit (see config/email.config.ts and docs/EMAIL.md).
  */
 @Injectable()
-export class EmailService {
+export class EmailService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmailService.name);
+  private timer?: NodeJS.Timeout;
+  private draining: Promise<number> | null = null;
+
+  /** `quota` counts sends and queues what would go over Resend's limits; without it (unit tests) every email goes at once. */
+  constructor(@Optional() private readonly quota?: EmailQuotaService) {}
 
   get configured() {
     return mailTransport() !== 'off';
   }
 
-  async send(to: string, subject: string, html: string): Promise<boolean> {
+  onModuleInit() {
+    const minutes = emailQueueIntervalMinutes();
+    if (!this.quota || !minutes) return;
+    this.timer = setInterval(() => void this.drain().catch(() => undefined), minutes * 60_000);
+    this.timer.unref();
+  }
+
+  onModuleDestroy() {
+    clearInterval(this.timer);
+  }
+
+  /** Sends now, or queues it (near Resend's limit): true either way; false when it could not be sent or queued. */
+  async send(
+    to: string,
+    subject: string,
+    html: string,
+    kind: EmailKind = 'order',
+  ): Promise<boolean> {
+    return (await this.deliver(to, subject, html, kind)) !== 'failed';
+  }
+
+  /**
+   * Sends an email, or holds it in the queue when Resend's daily or monthly limit is near (news waits first, at 80% of the
+   * limit; codes and order emails go until the limit itself). Queued emails go out later, most important first (`drain`).
+   */
+  async deliver(
+    to: string,
+    subject: string,
+    html: string,
+    kind: EmailKind = 'order',
+  ): Promise<'sent' | 'queued' | 'failed'> {
     const transport = mailTransport();
     if (transport === 'off')
       throw new AppError('Email is not configured (RESEND_API_KEY, FROM_EMAIL).', 503);
@@ -138,14 +175,69 @@ export class EmailService {
       site: site(),
       supportEmail: supportEmail(),
     });
-    if (transport === 'mailpit') return this.toMailpit(to, subject, page);
+    if (transport === 'mailpit')
+      return (await this.toMailpit(to, subject, page)) ? 'sent' : 'failed';
     if (!mayEmail(to)) {
       // a made-up sample address, or not on EMAIL_ALLOWLIST when that is set
       this.logger.log(
         `Held back "${subject}" to ${masked(to)}: sample address or not on EMAIL_ALLOWLIST.`,
       );
-      return true;
+      return 'sent';
     }
+    if (this.quota && (await this.quota.room(kind)) <= 0) {
+      await this.quota.enqueue(to, subject, page, kind);
+      this.logger.warn(`Resend limit reached: "${subject}" to ${masked(to)} waits in the queue.`);
+      return 'queued';
+    }
+    const status = await this.toResend(to, subject, page);
+    if (status === 200) {
+      await this.quota?.count();
+      return 'sent';
+    }
+    // 429: Resend's own limit (rate or quota): keep it for later instead of losing it
+    if (status === 429 && this.quota) {
+      await this.quota.enqueue(to, subject, page, kind, 'Resend 429');
+      return 'queued';
+    }
+    return 'failed';
+  }
+
+  /** Would an email of this kind wait in the queue right now (Resend's limit reached)? */
+  async willQueue(kind: EmailKind) {
+    return (
+      Boolean(this.quota) && mailTransport() === 'resend' && (await this.quota!.room(kind)) <= 0
+    );
+  }
+
+  /** Sends waiting emails while there is room, most important and oldest first. Returns how many went. */
+  drain(): Promise<number> {
+    if (!this.quota || mailTransport() !== 'resend') return Promise.resolve(0);
+    this.draining ??= this.drainOnce().finally(() => (this.draining = null));
+    return this.draining;
+  }
+
+  private async drainOnce() {
+    const quota = this.quota!;
+    const batch = await quota.waiting(Math.min(50, await quota.room('code')));
+    let sent = 0;
+    for (const e of batch) {
+      if ((await quota.room(e.kind)) <= 0) continue;
+      const status = await this.toResend(e.to_email, e.subject, e.html).catch(() => 0);
+      if (status === 200) {
+        await quota.count();
+        await quota.markSent(e.id);
+        sent++;
+      } else {
+        await quota.markFailed(e.id, `Resend ${status}`);
+        if (status === 429) break; // Resend says wait: try again next round
+      }
+    }
+    if (sent) this.logger.log(`Sent ${sent} waiting email(s).`);
+    return sent;
+  }
+
+  /** One email through Resend's API; the HTTP status (200 = accepted). */
+  private async toResend(to: string, subject: string, page: string): Promise<number> {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${resendApiKey()}`, 'Content-Type': 'application/json' },
@@ -159,7 +251,7 @@ export class EmailService {
       signal: AbortSignal.timeout(8_000), // a slow mail provider must never hold up the caller for long
     });
     if (!res.ok) this.logger.warn(`Resend rejected an email to ${masked(to)}: ${res.status}`);
-    return res.ok;
+    return res.ok ? 200 : res.status;
   }
 
   /** Local: drops the email into Mailpit's inbox (open MAILPIT_URL in a browser to read it). */
@@ -309,7 +401,7 @@ export class EmailService {
       `<p>${firstName ? `Hi ${escape(firstName)},` : 'Hi,'}</p>` +
       `<p>Here is your code to confirm your email at Spin Hobby:</p>` +
       `<p style="font-size:28px;letter-spacing:6px;margin:16px 0"><strong>${escape(code)}</strong></p>` +
-      `<p>It works for ${minutes} minutes. Once your email is confirmed you can buy limited releases${rewardsAllowed() ? ' and use your rewards points' : ''}.</p>` +
+      `<p>It works for ${minutes >= 1440 ? `${Math.round(minutes / 1440)} days` : `${minutes} minutes`}. Once your email is confirmed you can buy limited releases${rewardsAllowed() ? ' and use your rewards points' : ''}.</p>` +
       `<p style="font-size:12px">If you didn't make an account at Spin Hobby, you can ignore this email.</p>`
     );
   }

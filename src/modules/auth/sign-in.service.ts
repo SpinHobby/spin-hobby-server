@@ -72,7 +72,7 @@ export class SignInService {
    * Creates a customer account, signs it in and emails a 6-digit code to confirm the address. The account can shop at once (Supabase
    * marks it confirmed so it can sign in); the shop's own `email_verified_at` waits for the code.
    */
-  async signup(dto: SignupDto, ip: string): Promise<Session> {
+  async signup(dto: SignupDto, ip: string): Promise<Session & { emailCodeQueued: boolean }> {
     const local = this.devLogin.enabled();
     if (!local && (!this.supabase.config() || !this.supabase.serviceKey()))
       throw new AppError('Creating accounts is not available right now.', 503);
@@ -91,13 +91,14 @@ export class SignInService {
       await this.supabase.createCustomer(dto);
       session = await this.signInWithPassword(dto.email, dto.password);
     }
-    // The first code goes out now; if the mailer is down the customer can ask again from the welcome step.
-    await this.emailCheck
+    // The first code goes out now; if the mailer is down the customer can ask again from the welcome step. Over the shop's
+    // email limit it waits in the queue, and the website tells the customer it will arrive later.
+    const code = await this.emailCheck
       .send(session.user)
       .catch((e: unknown) =>
         this.logger.warn(`First email code for a new account was not sent: ${String(e)}`),
       );
-    return session;
+    return { ...session, emailCodeQueued: Boolean(code && code.queued) };
   }
 
   /**

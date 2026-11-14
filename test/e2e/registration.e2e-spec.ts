@@ -26,7 +26,7 @@ describe('registration', () => {
     ).toMatchObject({ emailVerified: false, welcomed: false, phone: null });
 
     const { res, code } = await sendCode(fresh.auth);
-    expect(res.body).toEqual({ success: true, verified: false, sent: true });
+    expect(res.body).toEqual({ success: true, verified: false, sent: true, queued: false });
     expect(code).toMatch(/^\d{6}$/);
     // a second code within the minute waits
     const again = await http.post('/auth/email-code').set('Authorization', fresh.auth).expect(429);

@@ -53,6 +53,24 @@ To set it up:
    - `STOREFRONT_URL` to `https://spin-hobby-staging.netlify.app`, so links and pictures in the emails open staging, not the live shop.
 3. Redeploy. To check it, sign up on the staging site with your email; the 6-digit code should arrive within a minute.
 
-**Resend's free plan:** at the time of writing it allowed about 3,000 emails a month and 100 a day, on one domain. Check resend.com/pricing for the current limits. Staging traffic from the team is far below that, but production and staging share the limit if they use the same Resend account.
+## Resend's limits: counted, and queued when reached
+
+Resend's free plan allows about 100 emails a day and 3,000 a month (check resend.com/pricing). The API counts every email it sends
+(`email_usage`, per UTC day) and, near a limit, keeps emails in a queue (`email_queue`) instead of losing them:
+
+- news and reminders (restock alerts, cart reminders, pre-order news) stop at 80% of the limit, leaving the rest for what matters;
+- sign-up codes and order emails (receipts, shipped, refunds) keep going until the limit itself;
+- anything Resend turns away with 429 is queued too;
+- every 10 minutes (`EMAIL_QUEUE_INTERVAL_MINUTES`) waiting emails go out while there is room: codes first, then orders, welcome
+  emails, news; oldest first within each.
+
+A sign-up code that has to wait lasts 2 days instead of 30 minutes (its email says so), and the website tells the new customer
+their code is in line and they can shop meanwhile.
+
+**Admin > Dashboard > Email** shows today's and this month's count against the limits, a warning from 70%, and what is waiting.
+
+Settings: `RESEND_DAILY_LIMIT` (default 100) and `RESEND_MONTHLY_LIMIT` (default 3000); `0` means no limit (a paid plan). Staging
+and production count separately: if they share one Resend account, split the limits between them, e.g. production 80 / 2,500 and
+staging 20 / 500.
 
 **Spam folders:** whether email lands in the inbox depends on the domain's SPF/DKIM records, which Resend shows under Domains. Staging uses the same domain, so it will show a spam problem before customers would.

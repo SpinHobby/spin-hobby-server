@@ -231,6 +231,7 @@ export class AdminProductsService {
         r.email,
         `${product.name} is back at Spin Hobby`,
         this.email.restockHtml(product.name, listing),
+        'news',
       );
       if (ok) sent.push(r.id);
     }
