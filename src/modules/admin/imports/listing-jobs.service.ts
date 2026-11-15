@@ -175,6 +175,8 @@ export class ListingJobsService {
       lastSeen: r.last_used_at,
       online: !!r.last_used_at && now - Date.parse(r.last_used_at) < ONLINE_SECONDS * 1000,
       canCreateListings: r.features.includes('listing'),
+      // the clean product photo model (FLUX.2 klein) is set up on it
+      canCleanPhotos: r.features.includes('clean'),
       // why it cannot write drafts right now, in its own words (web search down, no vision model)
       note: r.status_note,
       working: r.running,
@@ -273,6 +275,7 @@ export class ListingJobsService {
     rawDetails: unknown,
     image: { buffer: Buffer; mimetype: string },
     cutout: { buffer: Buffer; mimetype: string } | null = null,
+    clean: { buffer: Buffer; mimetype: string } | null = null,
   ) {
     const job = await this.db.one<JobRow>('select * from public.listing_jobs where id = $1', [
       jobId,
@@ -285,10 +288,14 @@ export class ListingJobsService {
       );
     const details = parseJobDetails(rawDetails);
     // the uploaded photo goes on with the draft (offered as "as taken", and cropped to the product), instead of being deleted
-    const draft = await this.imports.receive(tokenId, rawDraft, image, cutout, {
-      originalUrl: job.source_url,
-      productRect: details.productRect,
-    });
+    const draft = await this.imports.receive(
+      tokenId,
+      rawDraft,
+      image,
+      cutout,
+      { originalUrl: job.source_url, productRect: details.productRect },
+      clean,
+    );
     const done = await this.db.one<{ source_url: string | null }>(
       `update public.listing_jobs set status = 'done', import_id = $2, details = $3, error = null, lease_until = null, source_url = null
         where id = $1 and status = 'running' and worker_id = $4 returning $5::text as source_url`,

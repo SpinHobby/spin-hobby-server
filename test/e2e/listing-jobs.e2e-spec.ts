@@ -49,13 +49,20 @@ async function worker(label = 'Gaming PC') {
         fileName: string;
         options: Record<string, unknown>;
       } | null,
-    submit: (id: string, d: unknown = draft(), details: unknown = { flags: [], seconds: 30 }) =>
-      http
+    submit: (
+      id: string,
+      d: unknown = draft(),
+      details: unknown = { flags: [], seconds: 30 },
+      clean = false,
+    ) => {
+      const r = http
         .post(`/gleamshelf/listing-jobs/${id}/result`)
         .set(as)
         .field('draft', JSON.stringify(d))
         .field('details', JSON.stringify(details))
-        .attach('photo', PHOTO, { filename: 'p.jpg', contentType: 'image/jpeg' }),
+        .attach('photo', PHOTO, { filename: 'p.jpg', contentType: 'image/jpeg' });
+      return clean ? r.attach('clean', PHOTO, { filename: 'c.jpg', contentType: 'image/jpeg' }) : r;
+    },
     fail: (id: string, error = 'the model crashed') =>
       http.post(`/gleamshelf/listing-jobs/${id}/fail`).set(as).send({ error }),
     progress: (id: string, percent: number, step?: string) =>
@@ -84,7 +91,13 @@ const list = async () =>
       heardAt: string | null;
     }[];
     counts: Record<string, number>;
-    workers: { label: string; online: boolean; canCreateListings: boolean; note: string | null }[];
+    workers: {
+      label: string;
+      online: boolean;
+      canCreateListings: boolean;
+      canCleanPhotos?: boolean;
+      note: string | null;
+    }[];
   };
 
 describe('uploading photos', () => {
@@ -123,6 +136,28 @@ describe('a photo computer', () => {
     expect(l.workers.find((x) => x.label === 'Listing PC')).toMatchObject({
       online: true,
       canCreateListings: true,
+    });
+  });
+
+  it('asks for a clean product photo and the official photos unless turned off, and offers the clean photo first', async () => {
+    const w = await worker('Clean PC');
+    await upload(['clean.jpg']).expect(200);
+    await upload(['plain.jpg'], { clean: false, official: false }).expect(200);
+    const jobs: Record<string, { id: string; options: Record<string, unknown> }> = {};
+    for (let job = await w.claim(); job; job = await w.claim()) jobs[job.fileName] = job;
+    expect(jobs['clean.jpg'].options).toMatchObject({ clean: true, official: true });
+    expect(jobs['plain.jpg'].options).toMatchObject({ clean: false, official: false });
+    await w.submit(jobs['clean.jpg'].id, draft(), { flags: [], seconds: 30 }, true).expect(200);
+    const done = (await list()).jobs.find((j) => j.id === jobs['clean.jpg'].id)!;
+    const inbox = (await http.get('/admin/imports').set(asStaff).expect(200)).body.imports as {
+      id: string;
+      photos: { key: string }[];
+    }[];
+    expect(inbox.find((d) => d.id === done.draftId)!.photos.map((p) => p.key)[0]).toBe('clean');
+    // the photo computer says whether it can make clean photos
+    await w.claim(['photo', 'listing', 'clean']);
+    expect((await list()).workers.find((x) => x.label === 'Clean PC')).toMatchObject({
+      canCleanPhotos: true,
     });
   });
 
