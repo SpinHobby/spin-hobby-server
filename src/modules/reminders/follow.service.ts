@@ -133,7 +133,7 @@ export class FollowService {
           ? `New pre-order: ${products[0].name}`
           : `${products.length} new pre-orders at Spin Hobby`;
       const ok = await this.email
-        .send(to, subject.slice(0, 150), this.email.preorderNewsHtml(products, theirs))
+        .send(to, subject.slice(0, 150), this.email.preorderNewsHtml(products, theirs), 'news')
         .catch(() => false);
       if (ok) sent++;
     }

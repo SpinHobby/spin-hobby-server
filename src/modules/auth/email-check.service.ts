@@ -8,6 +8,8 @@ import type { AppUser } from './auth.service.js';
 
 /** How long a code works. */
 export const CODE_MINUTES = 30;
+/** How long a code lasts when its email has to wait for the shop's email limit to reset. */
+export const QUEUED_CODE_MINUTES = 2 * 24 * 60;
 /** Wrong guesses before the code stops working (a new one must be sent). */
 export const CODE_TRIES = 5;
 /** The shortest wait between two codes. */
@@ -47,19 +49,27 @@ export class EmailCheckService {
     if (!this.email.configured && isProduction())
       throw new AppError("Email is not set up yet, so codes can't be sent. Try again later.", 503);
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    // Over today's email limit the code waits in the queue (sent first once the limit resets), so it must still work when it
+    // arrives: 2 days instead of 30 minutes, and the email says so.
+    const minutes = (await this.email.willQueue('code')) ? QUEUED_CODE_MINUTES : CODE_MINUTES;
     await this.db.exec(
       `insert into public.email_codes (user_id, code_hash, expires_at, attempts, sent_at)
        values ($1, $2, now() + make_interval(mins => $3), 0, now())
        on conflict (user_id) do update
          set code_hash = excluded.code_hash, expires_at = excluded.expires_at, attempts = 0, sent_at = now()`,
-      [user.id, hash(user.id, code), CODE_MINUTES],
+      [user.id, hash(user.id, code), minutes],
     );
+    let queued = false;
     if (this.email.configured) {
-      const ok = await this.email.send(
+      const result = await this.email.deliver(
         user.email,
         `${code} is your Spin Hobby code`,
-        this.email.emailCodeHtml(code, user.firstName, CODE_MINUTES),
+        this.email.emailCodeHtml(code, user.firstName, minutes),
+        'code',
       );
+      // over the shop's email limit for today: the code waits in the queue and goes out first once the limit resets
+      queued = result === 'queued';
+      const ok = result !== 'failed';
       if (!ok && isProduction())
         throw new AppError('The email could not be sent. Try again in a minute.', 502);
       if (!ok)
@@ -67,7 +77,7 @@ export class EmailCheckService {
     } else {
       this.logger.log(`Email code for ${user.email}: ${code} (no mailer set up; local only)`);
     }
-    return { success: true as const, verified: false, sent: true };
+    return { success: true as const, verified: false, sent: !queued, queued };
   }
 
   /** Checks a code; the right one confirms the email. */

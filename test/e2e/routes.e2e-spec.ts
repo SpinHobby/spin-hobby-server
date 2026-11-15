@@ -88,6 +88,7 @@ const EXPECTED: string[] = [
   'GET /admin/ebay/categories/:id/aspects [staff]',
   'GET /admin/ebay/products/:id [staff]',
   'GET /admin/ebay/setup [owner]',
+  'GET /admin/email-usage [staff]',
   'GET /admin/events [staff]',
   'GET /admin/homepage/slides [staff]',
   'GET /admin/imports [staff]',

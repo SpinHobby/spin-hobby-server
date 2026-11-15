@@ -100,6 +100,7 @@ export class CartReminderService {
           r.email,
           'You left something in your Spin Hobby cart',
           this.email.cartReminderHtml(items, r.token),
+          'news',
         )
         .catch(() => false);
       if (ok) sent++;

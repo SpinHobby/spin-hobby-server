@@ -1,4 +1,4 @@
-import { env, envList } from './env.js';
+import { env, envList, envNumber } from './env.js';
 
 /** Resend API key and the From address. Email is skipped (not an error) when either is missing. */
 export const resendApiKey = () => env('RESEND_API_KEY');
@@ -28,3 +28,14 @@ export const mailpitUrl = () => (env('MAILPIT_URL') || 'http://localhost:8025').
  */
 export const emailAllowlist = () => envList('EMAIL_ALLOWLIST').map((e) => e.toLowerCase());
 export const emailAllowlistOn = () => emailAllowlist().length > 0;
+
+/**
+ * Resend's plan limits (free plan at the time of writing: 100 a day, 3,000 a month). The API counts what it sends and, near a limit,
+ * holds emails in a queue until the limit resets (UTC day / month). 0 = no limit (a paid plan). Staging and production count
+ * separately, so if they share one Resend account, split the limits between them.
+ */
+export const resendDailyLimit = () => Math.max(0, envNumber('RESEND_DAILY_LIMIT', 100));
+export const resendMonthlyLimit = () => Math.max(0, envNumber('RESEND_MONTHLY_LIMIT', 3000));
+/** How often waiting emails are tried again (minutes; 0 = never, e.g. tests). */
+export const emailQueueIntervalMinutes = () =>
+  Math.max(0, envNumber('EMAIL_QUEUE_INTERVAL_MINUTES', 10));

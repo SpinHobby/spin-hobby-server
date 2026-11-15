@@ -121,7 +121,7 @@ export class ProfileService {
   private async sendWelcome(to: string, firstName: string | null) {
     try {
       const { subject, html } = this.email.welcomeEmail(firstName);
-      await this.email.send(to, subject, html);
+      await this.email.send(to, subject, html, 'welcome');
     } catch (e) {
       this.logger.warn(`Welcome email not sent: ${String(e)}`);
     }
