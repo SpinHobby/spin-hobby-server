@@ -10,6 +10,10 @@ services:
     branch: production
     autoDeploy: true
     healthCheckPath: /health/live   # GET /health shows detailed diagnostics
+    # Our own address for the API, beside Render's spin-hobby-server.onrender.com (which keeps working).
+    # It also needs a DNS record: see docs/API-DOMAIN.md.
+    domains:
+      - api.spinhobby.com
     envVars:
       # Public / non-secret
       - key: NODE_ENV
@@ -24,6 +28,9 @@ services:
         value: https://spinhobby.com
       - key: OWNER_EMAILS
         value: info@spinhobby.com,tingjayj@gmail.com
+      # Set to https://api.spinhobby.com once that address answers (docs/API-DOMAIN.md, step 6).
+      - key: PUBLIC_API_URL
+        sync: false
       - key: DATABASE_SSL
         value: "true"
 

@@ -6,7 +6,12 @@ import {
   seedSampleAccounts,
 } from '../../src/modules/sample/accounts.js';
 import { sampleImageFor } from '../../src/modules/sample/images.js';
-import { seedSample } from '../../src/modules/sample/seed.js';
+import { SAMPLE_GLOSSARY } from '../../src/modules/sample/catalog.js';
+import {
+  frameSamplePortraits,
+  seedSample,
+  tidySamplePictures,
+} from '../../src/modules/sample/seed.js';
 import { createDatabase } from '../support/harness.js';
 
 describe('sample shop', () => {
@@ -43,11 +48,108 @@ describe('sample shop', () => {
     expect(rows[0].jans).toBe(seeded.products);
     expect(rows[0].hidden).toBeGreaterThan(0);
     expect(rows[0].sold_out).toBeGreaterThan(0);
-    const pictures = await pglite.query<{ image_url: string }>(
-      "select image_url from public.product_images where square_item_id = 'sample-x1'",
+    const drawn = await pglite.query<{ image_url: string }>(
+      "select image_url from public.product_images where image_url like '%.svg' limit 1",
     );
-    const drawn = pictures.rows.map((r) => r.image_url).find((u) => u.endsWith('.svg'))!;
-    expect(sampleImageFor(drawn.split('/').pop()!)).toContain('<svg');
+    expect(sampleImageFor(drawn.rows[0].image_url.split('/').pop()!)).toContain('<svg');
+    // A product with a real photo has only that photo: no drawing to fade in over it on hover.
+    const overPhotos = await pglite.query<{ n: number }>(
+      `select count(*)::int as n from public.product_images d
+        where d.image_url like '%/sample-images/%'
+          and exists (select 1 from public.product_images o
+                       where o.square_item_id = d.square_item_id and o.image_url not like '%/sample-images/%')`,
+    );
+    expect(overPhotos.rows[0].n).toBe(0);
+    await pglite.close();
+  });
+});
+
+describe('tidySamplePictures', () => {
+  it('removes drawings that older seeds put after a real photo, and nothing else', async () => {
+    const { pglite } = await createDatabase();
+    await seedSample(pglite, 'http://localhost:8080');
+    const photo = await pglite.query<{ id: string }>(
+      "select square_item_id as id from public.product_images where image_url not like '%/sample-images/%' limit 1",
+    );
+    const drawnOnly = await pglite.query<{ id: string }>(
+      "select square_item_id as id from public.product_images where image_url like '%/sample-images/%' limit 1",
+    );
+    const id = photo.rows[0].id;
+    const add = (item: string, url: string, sort: number) =>
+      pglite.query(
+        'insert into public.product_images (square_item_id, image_url, alt_text, sort_order) values ($1, $2, $3, $4)',
+        [item, url, 'x', sort],
+      );
+    await add(id, `http://localhost:8080/sample-images/old-drawing.svg`, 1);
+    // a shop's own product with a sample-looking address is never touched
+    await pglite.query(
+      "insert into public.catalog_products (square_item_id, name, source) values ('REALITEM1', 'Rem Figure', 'square')",
+    );
+    await add('REALITEM1', 'https://cdn.example.com/a.jpg', 0);
+    await add('REALITEM1', 'http://localhost:8080/sample-images/b.svg', 1);
+    const count = async () =>
+      (await pglite.query<{ n: number }>('select count(*)::int as n from public.product_images'))
+        .rows[0].n;
+    const before = await count();
+
+    expect(await tidySamplePictures(pglite)).toBe(1);
+    expect(await count()).toBe(before - 1);
+    const left = await pglite.query<{ image_url: string }>(
+      'select image_url from public.product_images where square_item_id = $1',
+      [id],
+    );
+    expect(left.rows.every((r) => !r.image_url.includes('/sample-images/'))).toBe(true);
+    // a sample product whose only picture is its drawing keeps it
+    const kept = await pglite.query<{ n: number }>(
+      'select count(*)::int as n from public.product_images where square_item_id = $1',
+      [drawnOnly.rows[0].id],
+    );
+    expect(kept.rows[0].n).toBe(1);
+    expect(await tidySamplePictures(pglite)).toBe(0);
+    await pglite.close();
+  });
+});
+
+describe('frameSamplePortraits', () => {
+  it('zooms every sample portrait past its black edges once, and leaves a frame someone set alone', async () => {
+    const { pglite } = await createDatabase();
+    await seedSample(pglite, 'http://localhost:8080');
+    const portraits = await pglite.query<{ n: number }>(
+      "select count(*)::int as n from public.product_images where image_url like 'https://www.thiswaifudoesnotexist.net/%'",
+    );
+    const frames = await pglite.query<{ n: number; zooms: number[] }>(
+      'select count(*)::int as n, array_agg(distinct zoom) as zooms from public.photo_frames',
+    );
+    expect(portraits.rows[0].n).toBeGreaterThan(0);
+    expect(frames.rows[0].n).toBe(portraits.rows[0].n);
+    expect(frames.rows[0].zooms).toEqual([1.25]);
+
+    const one = await pglite.query<{ id: string; url: string }>(
+      'select square_item_id as id, image_url as url from public.photo_frames limit 1',
+    );
+    await pglite.query('update public.photo_frames set zoom = 2 where square_item_id = $1', [
+      one.rows[0].id,
+    ]);
+    expect(await frameSamplePortraits(pglite)).toBe(0);
+    const kept = await pglite.query<{ zoom: number }>(
+      'select zoom from public.photo_frames where square_item_id = $1',
+      [one.rows[0].id],
+    );
+    expect(kept.rows[0].zoom).toBe(2);
+    await pglite.close();
+  });
+});
+
+describe('sample glossary', () => {
+  it('adds the glossary terms', async () => {
+    const { pglite } = await createDatabase();
+    const seeded = await seedSample(pglite, 'http://localhost:8080');
+    expect(seeded.glossaryTerms).toBe(SAMPLE_GLOSSARY.length);
+    const { rows } = await pglite.query<{ term: string }>(
+      'select term from public.glossary_terms order by lower(term)',
+    );
+    expect(rows.map((r) => r.term)).toContain('Nendoroid');
+    expect(rows).toHaveLength(SAMPLE_GLOSSARY.length);
     await pglite.close();
   });
 });

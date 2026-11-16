@@ -39,19 +39,23 @@ import {
   AssistantProfileDto,
 } from '../../assistant/dto/assistant.dto.js';
 
-/** The finished photo, and (from Gleamshelf 0.2 on) the product alone on a transparent background, so the shop can put it on its own backgrounds. */
+/**
+ * The finished photo, and (from Gleamshelf 0.2 on) the product alone on a transparent background, so the shop can put it on its own backgrounds.
+ * A draft can also carry `clean`: the clean product photo (the figure alone, no box print), offered first among its photos.
+ */
 const PHOTO_AND_CUTOUT = FileFieldsInterceptor(
   [
     { name: 'photo', maxCount: 1 },
     { name: 'cutout', maxCount: 1 },
+    { name: 'clean', maxCount: 1 },
   ],
   { limits: { fileSize: 6 * 1024 * 1024 } },
 );
-type PhotoFiles = { photo?: Upload[]; cutout?: Upload[] };
+type PhotoFiles = { photo?: Upload[]; cutout?: Upload[]; clean?: Upload[] };
 const photoFiles = (files: PhotoFiles | undefined) => {
   const file = files?.photo?.[0];
   if (!file) throw new AppError('photo is required');
-  return { file, cutout: files?.cutout?.[0] ?? null };
+  return { file, cutout: files?.cutout?.[0] ?? null, clean: files?.clean?.[0] ?? null };
 };
 
 /**
@@ -135,8 +139,11 @@ export class GleamshelfController {
     @UploadedFiles() files: PhotoFiles | undefined,
     @Body() dto: ReceiveDraftDto,
   ) {
-    const { file, cutout } = photoFiles(files);
-    return { success: true, ...(await this.imports.receive(tokenId, dto.draft, file, cutout)) };
+    const { file, cutout, clean } = photoFiles(files);
+    return {
+      success: true,
+      ...(await this.imports.receive(tokenId, dto.draft, file, cutout, {}, clean)),
+    };
   }
 
   /** The next photo to improve, or no job. Asking also tells the shop this photo computer is awake and what it can do. */
@@ -202,10 +209,10 @@ export class GleamshelfController {
     @UploadedFiles() files: PhotoFiles | undefined,
     @Body() dto: ListingResultDto,
   ) {
-    const { file, cutout } = photoFiles(files);
+    const { file, cutout, clean } = photoFiles(files);
     return {
       success: true,
-      ...(await this.listings.submit(tokenId, id, dto.draft, dto.details, file, cutout)),
+      ...(await this.listings.submit(tokenId, id, dto.draft, dto.details, file, cutout, clean)),
     };
   }
 

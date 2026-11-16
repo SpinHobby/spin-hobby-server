@@ -136,6 +136,13 @@ export class RemindersController {
     return { success: true, ...(await this.follows.follow(email, b.kind, name, user?.id ?? null)) };
   }
 
+  /** The shop's biggest series, to choose from when following ("What do you collect?"). */
+  @Get('follows/series')
+  @Access('public')
+  async series() {
+    return { success: true, series: await this.follows.popularSeries() };
+  }
+
   /** A pre-order news email's stop link (one per follow): a page with a button first, then stopped (`&confirm=1`). */
   @Get('follows/stop')
   @Access('public')

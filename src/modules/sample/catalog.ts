@@ -62,7 +62,7 @@ export type Availability = 'auto' | 'preorder' | 'backorder' | 'hidden';
 /**
  * Character products and figures get a portrait of an anime character as their main picture, from
  * thiswaifudoesnotexist.net: AI-generated art with no rights holder, one fixed picture per seed, so
- * each product keeps the same face. The drawn illustration (images.ts) is their second picture.
+ * each product keeps the same face. Other products show the drawn illustration (images.ts) instead.
  */
 const PORTRAIT_KINDS = new Set<Kind>([
   'figure',
@@ -1480,4 +1480,29 @@ export const SAMPLE_PEOPLE: [string, string, string, string, string][] = [
   ['Ethan', 'Patel', '620 8 Ave SW', 'Calgary', 'AB'],
   ['Mia', 'Wong', '1055 W Georgia St', 'Vancouver', 'BC'],
   ['Lucas', 'Brown', '200 Yonge St', 'Toronto', 'ON'],
+];
+
+/** Collector's glossary terms for GET /glossary: [term, meaning]. */
+export const SAMPLE_GLOSSARY: [string, string][] = [
+  [
+    'Nendoroid',
+    'Good Smile Company’s small, chibi-style figures (about 10 cm) with swappable faces, hands and props.',
+  ],
+  [
+    'Scale figure',
+    'A detailed figure made to a fixed size ratio of the character, such as 1/7 or 1/8. Usually on a display base.',
+  ],
+  [
+    'Prize figure',
+    'A figure first made as a Japanese arcade crane-game prize. Simpler paint than a scale figure, and much cheaper.',
+  ],
+  [
+    'Blind box',
+    'A sealed box with one random item from a set, so you only find out which one when you open it.',
+  ],
+  [
+    'Pre-order',
+    'Reserving an item before it is released. It ships when it arrives from Japan, around its release month.',
+  ],
+  ['Bootleg', 'An unlicensed copy of an official figure. Spin Hobby sells official products only.'],
 ];

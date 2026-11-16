@@ -140,6 +140,10 @@ export async function prepareOwnDatabase(
       // sample shoppers too, unless this database has real (Supabase) sign-in: then it stays real people only
       try {
         seeded.people = await seedSampleAccounts(db, imageBase);
+        // sample shoppers behave like long-time customers: email confirmed, welcome step done
+        await db.query(
+          "update public.profiles set email_verified_at = now(), welcomed_at = now() where email like '%@spinhobby.test'",
+        );
       } catch (error) {
         console.log(`  Sample accounts skipped: ${error.message}`);
       }

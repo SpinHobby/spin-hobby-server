@@ -10,6 +10,13 @@ export interface PhotoJobOptions {
   enlarge: boolean;
   /** The brighter, more lively look. */
   look: boolean;
+  /**
+   * Polish into a clean product photo: the figure alone, with no box print, logos or stickers, on a studio backdrop, drawn by the local model
+   * (Gleamshelf's Clean product photo). For closed boxes with art on the front; a window box keeps its plastic. On unless turned off.
+   */
+  clean: boolean;
+  /** Drafts: look for the maker's own official photos on its website, offered as photos to choose. On unless turned off. */
+  official: boolean;
 }
 
 export const DEFAULT_PHOTO_OPTIONS: PhotoJobOptions = {
@@ -17,6 +24,8 @@ export const DEFAULT_PHOTO_OPTIONS: PhotoJobOptions = {
   stickers: true,
   enlarge: true,
   look: true,
+  clean: true,
+  official: true,
 };
 
 const flag = (value: unknown, fallback: boolean, name: string): boolean => {
@@ -39,6 +48,9 @@ export function parsePhotoOptions(raw: unknown): PhotoJobOptions {
     stickers: flag(o.stickers, true, 'stickers'),
     enlarge: flag(o.enlarge, true, 'enlarge'),
     look: flag(o.look, true, 'look'),
+    // options saved before the clean photo existed (or sent by an older admin) are read as they were done: no clean photo
+    clean: flag(o.clean, false, 'clean'),
+    official: flag(o.official, true, 'official'),
   };
 }
 

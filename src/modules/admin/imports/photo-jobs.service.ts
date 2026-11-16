@@ -220,6 +220,8 @@ export class PhotoJobsService {
       lastSeen: r.last_used_at,
       online: !!r.last_used_at && now - Date.parse(r.last_used_at) < ONLINE_SECONDS * 1000,
       canImprovePhotos: r.features.includes('photo'),
+      // the clean product photo model (FLUX.2 klein) is set up on it
+      canCleanPhotos: r.features.includes('clean'),
       note: r.status_note,
       working: r.running,
     }));

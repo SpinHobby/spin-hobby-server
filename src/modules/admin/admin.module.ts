@@ -1,4 +1,6 @@
 import { ChannelPhotosService } from './products/channel-photos.service.js';
+import { RewardsModule } from '../rewards/rewards.module.js';
+import { PhotoFramesService } from './products/photo-frames.service.js';
 import { AdminPhotoBackgroundsController } from './products/admin-photo-backgrounds.controller.js';
 import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js';
 import { ProductPhotosController } from './products/product-photos.controller.js';
@@ -23,6 +25,7 @@ import { AdminImportsController } from './imports/admin-imports.controller.js';
 import { GleamshelfController } from './imports/gleamshelf.controller.js';
 import { GleamshelfTokenGuard } from './imports/gleamshelf-token.guard.js';
 import { ImportsService } from './imports/imports.service.js';
+import { ImportsStatsService } from './imports/imports-stats.service.js';
 import { AdminPhotoJobsController } from './imports/admin-photo-jobs.controller.js';
 import { PhotoJobsService } from './imports/photo-jobs.service.js';
 import { AdminListingJobsController } from './imports/admin-listing-jobs.controller.js';
@@ -69,6 +72,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
 /** The staff/owner admin API: dashboard, products, orders, homepage, categories and merchandise. */
 @Module({
   imports: [
+    RewardsModule,
     AssistantModule,
     DiscountsModule,
     CatalogModule,
@@ -112,6 +116,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminAuditService,
     AdminAccountsService,
     ImportsService,
+    ImportsStatsService,
     PhotoJobsService,
     ListingJobsService,
     DescribeJobsService,
@@ -127,6 +132,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     SquarePhotosService,
     PhotoBackgroundsService,
     ChannelPhotosService,
+    PhotoFramesService,
     AdminMerchService,
     AdminCategoriesService,
     CategorySortingService,

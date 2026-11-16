@@ -32,8 +32,9 @@ export class CheckoutController {
   @RateLimit({ limit: 60, windowMs: 60_000 })
   @Post('cart/quote')
   @HttpCode(200)
-  async quote(@Body() dto: QuoteRequestDto) {
-    return { success: true, ...(await this.quotes.quote(dto)) };
+  async quote(@Body() dto: QuoteRequestDto, @CurrentUser() user: AppUser | null) {
+    // who is buying matters for products only some customers can buy (Admin > product > Rewards points)
+    return { success: true, ...(await this.quotes.quote({ ...dto, userId: user?.id ?? null })) };
   }
 
   /**

@@ -83,11 +83,24 @@ export async function createApp(driver: DbDriver) {
   return app;
 }
 
-/** Creates a Supabase-style auth user (the trigger makes the profile) and returns a bearer token. */
-export async function signUp(pglite: PGlite, email: string, role?: 'customer' | 'staff' | 'owner') {
+/**
+ * Creates a Supabase-style auth user (the trigger makes the profile) and returns a bearer token. It's an established customer
+ * (email confirmed, welcome step done) unless `fresh` is set, like an account just made through sign-up.
+ */
+export async function signUp(
+  pglite: PGlite,
+  email: string,
+  role?: 'customer' | 'staff' | 'owner',
+  options: { fresh?: boolean } = {},
+) {
   const id = randomUUID();
   await pglite.query('insert into auth.users (id, email) values ($1, $2)', [id, email]);
   if (role) await pglite.query('update public.profiles set role = $2 where id = $1', [id, role]);
+  if (!options.fresh)
+    await pglite.query(
+      'update public.profiles set email_verified_at = now(), welcomed_at = now() where id = $1',
+      [id],
+    );
   const token = await tokenFor(id, email);
   return { id, token, auth: `Bearer ${token}` };
 }

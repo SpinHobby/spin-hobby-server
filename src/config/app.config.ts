@@ -132,3 +132,16 @@ export const shopAssistantEnabled = () => {
   const v = env('SHOP_ASSISTANT');
   return v ? v === 'on' : !isProduction() || isStaging();
 };
+
+/**
+ * Whether the rewards programme may run here at all. `REWARDS=on` or `off`; on by default everywhere but the live site, where it is off
+ * until switched on (the website has its own switch in src/features.ts). While this is off, rewards stay off whatever Admin > Rewards says.
+ */
+export const rewardsAllowed = () => {
+  const v = env('REWARDS');
+  return v ? v === 'on' : !isProduction() || isStaging();
+};
+
+/** The shop's Discord invite and Instagram, linked from the welcome email (the website has its own copy in src/v3/links.ts). */
+export const discordUrl = () => env('DISCORD_URL') ?? 'https://discord.gg/7wGWc7AGcd';
+export const instagramUrl = () => env('INSTAGRAM_URL') ?? 'https://www.instagram.com/spinhobby';

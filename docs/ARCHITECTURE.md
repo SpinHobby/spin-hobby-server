@@ -243,6 +243,19 @@ Everything that costs money is a separate, optional step the admin ticks; nothin
 - The sync hides products deleted in Square (never hand-entered ones), unless that would hide more
   than `SQUARE_SYNC_RETIRE_MAX_RATIO` of them: that looks like a mistake, so it's skipped.
 
+## One copy of the server at a time
+
+The server is built to run as **one instance**. Three things live in that one process's memory, so a second
+instance (Render's "scale to 2") would not share them:
+
+- **Rate limits** (`common/guards/rate-limit.guard.ts`): each instance would count on its own, so every limit doubles.
+- **The timers**: the Square sync, the eBay order check and reconcile, and expiring unpaid orders
+  (`square-sync.service.ts`, `ebay-sync.service.ts`, `orders.service.ts`). Each instance would run its own.
+- **In-process signals** (`common/inventory-events.ts`, `common/photo-events.ts`): only heard on the instance that sent them.
+
+Before running two instances, move the rate limits and signals to something shared (Postgres or Redis) and give
+each timer a database lock so one instance does the work. Until then, scale up (a bigger instance), not out.
+
 ## Testing
 
 | Kind | Where | Speed | Use it for |
