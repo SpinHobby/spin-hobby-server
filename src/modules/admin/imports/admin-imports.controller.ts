@@ -159,7 +159,7 @@ export class AdminImportsController {
 }
 
 function photoKey(key: string): PhotoKey {
-  if (!/^(studio|background|original|cropped|official\d?)$/.test(key))
+  if (!/^(clean|studio|background|original|cropped|official\d?)$/.test(key))
     throw new AppError('No such photo.', 404);
   return key as PhotoKey;
 }
