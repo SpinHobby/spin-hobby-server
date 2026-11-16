@@ -1,9 +1,11 @@
-import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, Post, Put } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../auth/access.js';
 import { AuthService, type AppUser } from '../auth/auth.service.js';
 import { AddWishlistDto } from './dto/add-wishlist.dto.js';
 import { CreateAlertDto } from './dto/create-alert.dto.js';
+import { UpdateProfileDto } from './dto/update-profile.dto.js';
+import { ProfileService } from './profile.service.js';
 import { RestockAlertService } from './restock-alert.service.js';
 import { WishlistService } from './wishlist.service.js';
 
@@ -15,6 +17,7 @@ export class AccountController {
     private readonly auth: AuthService,
     private readonly wishlist: WishlistService,
     private readonly alerts: RestockAlertService,
+    private readonly profile: ProfileService,
   ) {}
 
   /** The signed-in person's profile and role. */
@@ -22,6 +25,20 @@ export class AccountController {
   @Access('user')
   me(@CurrentUser() user: AppUser) {
     return { success: true, user };
+  }
+
+  /** Changes the signed-in person's own name, and returns the user as `/auth/me` would. */
+  @Put('account/profile')
+  @Access('user')
+  async updateProfile(
+    @CurrentUser() user: AppUser,
+    @Headers('authorization') authorization: string,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    await this.profile.saveName(user.id, dto);
+    // `user` was built before the update, so re-read it; `?? user` only guards the types.
+    const fresh = (await this.auth.userFromAuthorization(authorization)) ?? user;
+    return { success: true, user: fresh };
   }
 
   /** Signs the person out on every device. */
