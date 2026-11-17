@@ -28,6 +28,12 @@ jobs:
       - run: npm install -g npm@11
       - run: npm ci
 
+      # A migration older than the newest one on the target branch would never be applied (see the script).
+      - if: github.event_name == 'pull_request'
+        run: |
+          git fetch --depth=1 origin "$GITHUB_BASE_REF"
+          node scripts/check-migration-order.mjs FETCH_HEAD
+
       - run: npm run typecheck
       - run: npm run lint
       - run: npm run format:check

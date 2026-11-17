@@ -156,7 +156,7 @@ describe('the photo computer', () => {
     expect(job).toMatchObject({
       sourceUrl: 'https://sq.example/a.jpg',
       productName: expect.any(String),
-      options: { mode: 'auto', stickers: false, enlarge: false, look: true },
+      options: { mode: 'auto', stickers: false, enlarge: false, look: true, clean: false },
     });
     expect(await w.claim()).toBeNull();
     expect((await jobsOf(b.batchId))[0].status).toBe('running');

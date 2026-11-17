@@ -23,6 +23,8 @@ import { QuickAddService } from './quick-add.service.js';
 import { SquarePhotosService } from './square-photos.service.js';
 import { PhotoBackgroundsService } from './photo-backgrounds.service.js';
 import { ChannelPhotosService } from './channel-photos.service.js';
+import { PhotoFramesService } from './photo-frames.service.js';
+import { PhotoFrameDto } from './dto/photo-frame.dto.js';
 import { ChannelPhotosDto } from './dto/channel-photos.dto.js';
 import { CatalogSearchService } from './catalog-search.service.js';
 import { LabelsService } from './labels.service.js';
@@ -51,6 +53,7 @@ export class AdminProductsController {
     private readonly labels: LabelsService,
     private readonly backgrounds: PhotoBackgroundsService,
     private readonly channels: ChannelPhotosService,
+    private readonly frames: PhotoFramesService,
   ) {}
 
   /**
@@ -173,6 +176,27 @@ export class AdminProductsController {
       cutouts: await this.backgrounds.cutouts(squareItemId),
       // the photos picked for eBay (not connected yet: kept for when it is)
       ebay: await this.channels.list(squareItemId, 'ebay'),
+    };
+  }
+
+  /** Where each of the product's photos sits in its square on the shop (moved or zoomed ones only), by address. */
+  @Get('products/:id/photo-frames')
+  async photoFrames(@Param('id') squareItemId: string) {
+    return { success: true, frames: await this.frames.list(squareItemId) };
+  }
+
+  /** Moves or zooms one photo inside its square on the shop (photos fill the square; this picks the part that shows). */
+  @Put('products/:id/photo-frame')
+  @HttpCode(200)
+  async photoFrame(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Body() dto: PhotoFrameDto,
+  ) {
+    const { url, x, y, zoom } = dto;
+    return {
+      success: true,
+      frames: await this.frames.set(admin.id, squareItemId, url, { x, y, zoom }),
     };
   }
 

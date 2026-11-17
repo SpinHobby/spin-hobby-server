@@ -2,7 +2,13 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PRODUCTION_SUPABASE_REF } from '../auth/staging-admin.js';
 import { Db, type Queryable } from '../../database/db.service.js';
 import { MigrationService } from '../../database/migrations/migration.service.js';
-import { countProducts, seedSample, type SampleDb } from './seed.js';
+import {
+  countProducts,
+  frameSamplePortraits,
+  seedSample,
+  tidySamplePictures,
+  type SampleDb,
+} from './seed.js';
 import { isProduction, isStaging } from '../../config/app.config.js';
 import { supabaseUrl } from '../../config/supabase.config.js';
 import { sampleDataDisabled, sampleImageBase } from '../../config/app.config.js';
@@ -40,7 +46,17 @@ export class SampleDataService implements OnModuleInit {
       query: async (sql, params = []) => ({ rows: await this.db.many(sql, params, tx) }),
     });
     try {
-      if ((await countProducts(adapter())) > 0) return;
+      if ((await countProducts(adapter())) > 0) {
+        const tidied = await tidySamplePictures(adapter());
+        if (tidied)
+          this.logger.log(
+            `Sample catalog: removed ${tidied} drawn pictures shown over real photos.`,
+          );
+        const framed = await frameSamplePortraits(adapter());
+        if (framed)
+          this.logger.log(`Sample catalog: zoomed ${framed} portraits past their black edges.`);
+        return;
+      }
       const base = sampleImageBase();
       const seeded = await this.db.transaction((tx) => seedSample(adapter(tx), base));
       this.logger.log(

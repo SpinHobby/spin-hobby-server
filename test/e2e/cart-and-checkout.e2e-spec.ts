@@ -206,6 +206,13 @@ describe('checkout', () => {
         })
         .expect(200);
       expect(paid.body.status).toBe('preorder_reserved');
+      // Square rejects a service charge without a calculation phase (MISSING_REQUIRED_PARAMETER)
+      const squareOrder = square.calls.find((c) => c.url.endsWith('/v2/orders'))!;
+      const charges = (squareOrder.body as { order: { service_charges: object[] } }).order
+        .service_charges;
+      expect(charges.length).toBeGreaterThan(0);
+      for (const charge of charges)
+        expect(charge).toMatchObject({ calculation_phase: 'TOTAL_PHASE' });
       const payment = square.calls.find((c) => c.url.endsWith('/v2/payments'))!;
       expect(payment.body).toMatchObject({
         source_id: 'cnon:ok',

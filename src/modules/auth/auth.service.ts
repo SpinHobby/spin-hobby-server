@@ -33,6 +33,14 @@ export interface AppUser {
   canAudit: boolean;
   /** Set when the owner suspended or banned the account; the access guard and sign-in refuse it then. */
   restriction: Restriction | null;
+  /**
+   * The customer proved they own the email (a code, or Google/Discord). Unconfirmed accounts can still shop; points, app links and
+   * limited items wait for it. Staff and owners always count as confirmed.
+   */
+  emailVerified: boolean;
+  /** Saw (or skipped) the welcome step after signing up. */
+  welcomed: boolean;
+  phone: string | null;
 }
 
 /** The suspension or ban in force on a profile, if any (a suspension that has run out is none). */
@@ -124,8 +132,13 @@ export class AuthService {
       suspended_until: string | null;
       banned_at: string | null;
       restriction_reason: string | null;
+      phone: string | null;
+      email_verified_at: string | null;
+      welcomed_at: string | null;
     }>(
-      'select id, email, role, first_name, last_name, can_audit, suspended_until, banned_at, restriction_reason from public.profiles where id = $1',
+      `select id, email, role, can_audit, suspended_until, banned_at, restriction_reason, first_name, last_name, phone,
+              email_verified_at, welcomed_at
+         from public.profiles where id = $1`,
       [payload.sub],
     );
     if (!profile) return null;
@@ -134,13 +147,24 @@ export class AuthService {
       await this.db.exec('update public.profiles set role = $2 where id = $1', [profile.id, role]);
       this.logger.log(`Promoted ${profile.email} to ${role} from OWNER_EMAILS/STAFF_EMAILS.`);
     }
+    let verified = Boolean(profile.email_verified_at);
+    if (!verified && viaTrustedProvider(payload)) {
+      // Google and Discord only hand over an address they have confirmed themselves.
+      await this.db.exec(
+        'update public.profiles set email_verified_at = now() where id = $1 and email_verified_at is null',
+        [profile.id],
+      );
+      verified = true;
+    }
     return {
       id: profile.id,
       email: profile.email,
       role,
-      // A saved first name wins; the token's name is the fallback for people who never set one.
-      firstName: profile.first_name ?? firstNameFrom(payload),
-      lastName: profile.last_name,
+      firstName: profile.first_name?.trim() || firstNameFrom(payload),
+      lastName: profile.last_name?.trim() || null,
+      emailVerified: verified || atLeast(role, 'staff'),
+      welcomed: Boolean(profile.welcomed_at) || atLeast(role, 'staff'),
+      phone: profile.phone,
       canAudit: atLeast(role, 'owner') || (atLeast(role, 'staff') && profile.can_audit === true),
       restriction: restrictionOf(profile),
     };
@@ -163,6 +187,13 @@ export function firstNameFrom(payload: JWTPayload): string | null {
     (v) => typeof v === 'string' && v.trim(),
   );
   return typeof pick === 'string' ? pick.trim().split(/\s+/)[0].slice(0, 80) : null;
+}
+
+/** Signed in through Google or Discord, which only share an email they have confirmed. */
+export function viaTrustedProvider(payload: JWTPayload): boolean {
+  const app = (payload.app_metadata ?? {}) as Record<string, unknown>;
+  const providers = Array.isArray(app.providers) ? app.providers : [app.provider];
+  return providers.some((p) => p === 'google' || p === 'discord');
 }
 
 /** Env-listed emails get at least that role. Never demotes a role set by hand. */

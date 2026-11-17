@@ -1,17 +1,79 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit, Optional } from '@nestjs/common';
 import { AppError } from '../../common/errors.js';
 import { escapeHtml as escape } from '../../common/html.js';
 import type { OrderItemRow, OrderRow, StorefrontProductRow } from '../../database/rows.js';
 import { slugify } from '../../modules/catalog/slug.js';
-import { port, publicApiUrl, renderExternalUrl, storefrontUrl } from '../../config/app.config.js';
-import { fromEmail, resendApiKey } from '../../config/email.config.js';
+import {
+  discordUrl,
+  instagramUrl,
+  port,
+  publicApiUrl,
+  renderExternalUrl,
+  rewardsAllowed,
+  storefrontUrl,
+} from '../../config/app.config.js';
+import { ownerEmails, staffEmails } from '../../config/auth.config.js';
+import {
+  emailAllowlist,
+  emailAllowlistOn,
+  emailQueueIntervalMinutes,
+  fromEmail,
+  mailpitUrl,
+  mailTransport,
+  resendApiKey,
+  supportEmail,
+} from '../../config/email.config.js';
+import { EmailQuotaService, type EmailKind } from './email-quota.service.js';
+import { EMAIL_COLORS, emailButton, emailLayout, trackingUrl } from './layout.js';
 
 const money = (cents: unknown) =>
   `${Number(cents) < 0 ? '-' : ''}$${(Math.abs(Number(cents)) / 100).toFixed(2)}`;
 /** A link to the website's order-status page with the order number filled in (the shopper adds their email there). */
 const statusLink = (orderId: number) =>
-  `<p><a href="${escape(`${storefrontUrl().replace(/\/$/, '')}/order-status?order=${orderId}`)}">Check your order status</a></p>`;
+  emailButton(
+    `${storefrontUrl().replace(/\/$/, '')}/order-status?order=${orderId}`,
+    'Check your order status',
+  );
+/** The inbox preview line: the email's first words, without the markup. */
+const preheaderOf = (html: string) =>
+  html
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-z#0-9]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
 const site = () => storefrontUrl().replace(/\/$/, '');
+/**
+ * Official mascot art for emails, centred: the web copies in the website's public/assets/mascot (originals in
+ * SpinHobby/official-assets). Official art only, never generated pictures.
+ */
+const mascotImage = (file: string, alt: string, width: number) =>
+  `<img src="${site()}/assets/mascot/${file}" alt="${alt}" width="${width}" style="display:block;margin:0 auto 12px;width:${width}px;height:auto;border:0">`;
+/**
+ * A small hand-drawn sparkle or heart cut from Aidi's clover drawing (website public/assets/mascot), used inline as a
+ * bullet or divider instead of emoji: `height` in px, the width follows.
+ */
+const doodle = (file: 'sparkle' | 'sparkle-small' | 'heart-pink' | 'heart-red', height: number) =>
+  `<img src="${site()}/assets/mascot/${file}.png" alt="" height="${height}" style="height:${height}px;width:auto;border:0;vertical-align:middle;display:inline-block">`;
+/** Aidi's sparkle · heart · sparkle, centred: a soft divider under a heading or greeting. */
+const doodleDivider = () =>
+  `<p style="margin:0 0 6px;text-align:center">${doodle('sparkle', 18)}&nbsp;&nbsp;${doodle('heart-pink', 16)}&nbsp;&nbsp;${doodle('sparkle-small', 18)}</p>`;
+/** One round Discord or Instagram icon with its name under it, linked (icons in the website's public/assets/email). */
+const socialIcon = (href: string, icon: string, label: string) =>
+  `<td style="padding:0 14px;text-align:center;vertical-align:top">` +
+  `<a href="${escape(href)}" style="text-decoration:none;color:${EMAIL_COLORS.primary};font-weight:700;font-size:13px">` +
+  `<img src="${site()}/assets/email/${icon}.png" alt="${label}" width="48" height="48" style="display:block;margin:0 auto 6px;width:48px;height:48px;border:0">${label}</a></td>`;
+/** "Join our community": the Discord and Instagram invites with their icons, in a soft box (welcome and order emails). */
+const communityBox = () =>
+  `<div style="margin:22px 0;padding:18px;border-radius:12px;background:${EMAIL_COLORS.bg};border:1px solid ${EMAIL_COLORS.border};text-align:center">` +
+  `<p style="margin:0 0 4px;font-weight:700;font-size:18px">${doodle('heart-red', 18)}&nbsp; Join our community &nbsp;${doodle('heart-pink', 18)}</p>` +
+  `<p style="margin:0 0 14px;font-size:14px;color:${EMAIL_COLORS.text}">Shelf photos, restock news and con meetups on Discord. New arrivals and moments from the shop on Instagram.</p>` +
+  `<table role="presentation" cellpadding="0" cellspacing="0" align="center" style="border-collapse:collapse;margin:0 auto"><tr>` +
+  socialIcon(discordUrl(), 'discord', 'Discord') +
+  socialIcon(instagramUrl(), 'instagram', 'Instagram') +
+  `</tr></table>` +
+  `</div>`;
+const COUNTRY_NAMES: Record<string, string> = { CA: 'Canada', US: 'United States' };
 /** Where a stop link lands: a small page on the API itself (works even if the website is down). */
 const api = () =>
   (publicApiUrl() ?? renderExternalUrl() ?? `http://localhost:${port()}`).replace(/\/$/, '');
@@ -27,33 +89,207 @@ const productRow = (p: StorefrontProductRow, quantity?: number) =>
 const optInFooter = (why: string, stopUrl: string, stopText: string) =>
   `<p style="font-size:12px">${why} <a href="${escape(stopUrl)}">${stopText}</a>. Spin Hobby, Canada · ${escape(site())}</p>`;
 
-/** Transactional email through Resend: order confirmations, shipping and refund notices, and restock alerts. */
+/** "Spin Hobby <shop@x.com>" or "shop@x.com" as Mailpit's { Name, Email }. */
+export function addressParts(value: string) {
+  const m = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(value);
+  return m
+    ? { Name: m[1].replace(/^"|"$/g, ''), Email: m[2].trim() }
+    : { Name: '', Email: value.trim() };
+}
+
+/**
+ * Addresses that can never receive mail (RFC 2606 reserved names): the sample shoppers (@spinhobby.test). Sending
+ * to them through Resend only bounces and hurts the shop's sender reputation, so they never leave (Mailpit still shows them locally).
+ */
+const UNDELIVERABLE = /\.(test|example|invalid|localhost)$/;
+
+/** May real email reach this address? Yes, unless it is a made-up sample address, or EMAIL_ALLOWLIST is set and doesn't name it. */
+export function mayEmail(to: string) {
+  const address = to.trim().toLowerCase();
+  if (UNDELIVERABLE.test(address)) return false;
+  if (!emailAllowlistOn()) return true;
+  const domain = address.slice(address.lastIndexOf('@'));
+  const allowed = [...emailAllowlist(), ...ownerEmails(), ...staffEmails()].map((e) =>
+    e.toLowerCase(),
+  );
+  return allowed.includes(address) || allowed.includes(domain);
+}
+
+/** Hides most of an address for logs: "ha***@example.com". */
+const masked = (to: string) => to.replace(/^(.{0,2})[^@]*/, '$1***');
+
+/**
+ * Transactional email: order confirmations, shipping and refund notices, sign-up codes and restock alerts. Sent through Resend, or
+ * to a Mailpit inbox on this computer when MAIL_TRANSPORT=mailpit (see config/email.config.ts and docs/EMAIL.md).
+ */
 @Injectable()
-export class EmailService {
+export class EmailService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EmailService.name);
+  private timer?: NodeJS.Timeout;
+  private draining: Promise<number> | null = null;
+
+  /** `quota` counts sends and queues what would go over Resend's limits; without it (unit tests) every email goes at once. */
+  constructor(@Optional() private readonly quota?: EmailQuotaService) {}
 
   get configured() {
-    return Boolean(resendApiKey() && fromEmail());
+    return mailTransport() !== 'off';
   }
 
-  async send(to: string, subject: string, html: string): Promise<boolean> {
-    const apiKey = resendApiKey();
-    const from = fromEmail();
-    if (!apiKey || !from)
+  onModuleInit() {
+    const minutes = emailQueueIntervalMinutes();
+    if (!this.quota || !minutes) return;
+    this.timer = setInterval(() => void this.drain().catch(() => undefined), minutes * 60_000);
+    this.timer.unref();
+  }
+
+  onModuleDestroy() {
+    clearInterval(this.timer);
+  }
+
+  /** Sends now, or queues it (near Resend's limit): true either way; false when it could not be sent or queued. */
+  async send(
+    to: string,
+    subject: string,
+    html: string,
+    kind: EmailKind = 'order',
+  ): Promise<boolean> {
+    return (await this.deliver(to, subject, html, kind)) !== 'failed';
+  }
+
+  /**
+   * Sends an email, or holds it in the queue when Resend's daily or monthly limit is near (news waits first, at 80% of the
+   * limit; codes and order emails go until the limit itself). Queued emails go out later, most important first (`drain`).
+   */
+  async deliver(
+    to: string,
+    subject: string,
+    html: string,
+    kind: EmailKind = 'order',
+  ): Promise<'sent' | 'queued' | 'failed'> {
+    const transport = mailTransport();
+    if (transport === 'off')
       throw new AppError('Email is not configured (RESEND_API_KEY, FROM_EMAIL).', 503);
+    const page = emailLayout({
+      body: html,
+      preheader: preheaderOf(html),
+      site: site(),
+      supportEmail: supportEmail(),
+    });
+    if (transport === 'mailpit')
+      return (await this.toMailpit(to, subject, page)) ? 'sent' : 'failed';
+    if (!mayEmail(to)) {
+      // a made-up sample address, or not on EMAIL_ALLOWLIST when that is set
+      this.logger.log(
+        `Held back "${subject}" to ${masked(to)}: sample address or not on EMAIL_ALLOWLIST.`,
+      );
+      return 'sent';
+    }
+    if (this.quota && (await this.quota.room(kind)) <= 0) {
+      await this.quota.enqueue(to, subject, page, kind);
+      this.logger.warn(`Resend limit reached: "${subject}" to ${masked(to)} waits in the queue.`);
+      return 'queued';
+    }
+    const status = await this.toResend(to, subject, page);
+    if (status === 200) {
+      await this.quota?.count();
+      return 'sent';
+    }
+    // 429: Resend's own limit (rate or quota): keep it for later instead of losing it
+    if (status === 429 && this.quota) {
+      await this.quota.enqueue(to, subject, page, kind, 'Resend 429');
+      return 'queued';
+    }
+    return 'failed';
+  }
+
+  /** Would an email of this kind wait in the queue right now (Resend's limit reached)? */
+  async willQueue(kind: EmailKind) {
+    return (
+      Boolean(this.quota) && mailTransport() === 'resend' && (await this.quota!.room(kind)) <= 0
+    );
+  }
+
+  /** Sends waiting emails while there is room, most important and oldest first. Returns how many went. */
+  drain(): Promise<number> {
+    if (!this.quota || mailTransport() !== 'resend') return Promise.resolve(0);
+    this.draining ??= this.drainOnce().finally(() => (this.draining = null));
+    return this.draining;
+  }
+
+  private async drainOnce() {
+    const quota = this.quota!;
+    const batch = await quota.waiting(Math.min(50, await quota.room('code')));
+    let sent = 0;
+    for (const e of batch) {
+      if ((await quota.room(e.kind)) <= 0) continue;
+      const status = await this.toResend(e.to_email, e.subject, e.html).catch(() => 0);
+      if (status === 200) {
+        await quota.count();
+        await quota.markSent(e.id);
+        sent++;
+      } else {
+        await quota.markFailed(e.id, `Resend ${status}`);
+        if (status === 429) break; // Resend says wait: try again next round
+      }
+    }
+    if (sent) this.logger.log(`Sent ${sent} waiting email(s).`);
+    return sent;
+  }
+
+  /** One email through Resend's API; the HTTP status (200 = accepted). */
+  private async toResend(to: string, subject: string, page: string): Promise<number> {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html }),
+      headers: { Authorization: `Bearer ${resendApiKey()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: fromEmail(),
+        to: [to],
+        reply_to: supportEmail(), // "reply to this email" reaches the shop even when From is a no-reply address
+        subject,
+        html: page,
+      }),
       signal: AbortSignal.timeout(8_000), // a slow mail provider must never hold up the caller for long
     });
-    if (!res.ok) this.logger.warn(`Resend rejected an email to ${to}: ${res.status}`);
-    return res.ok;
+    if (!res.ok) this.logger.warn(`Resend rejected an email to ${masked(to)}: ${res.status}`);
+    return res.ok ? 200 : res.status;
   }
 
-  restockHtml(productName: string) {
-    const site = storefrontUrl();
-    return `<p><strong>${escape(productName)}</strong> is back in stock at Spin Hobby.</p><p><a href="${escape(site)}">Shop now</a></p>`;
+  /** Local: drops the email into Mailpit's inbox (open MAILPIT_URL in a browser to read it). */
+  private async toMailpit(to: string, subject: string, html: string) {
+    try {
+      const res = await fetch(`${mailpitUrl()}/api/v1/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          From: addressParts(fromEmail() ?? 'Spin Hobby <shop@spinhobby.test>'),
+          To: [{ Email: to }],
+          ReplyTo: [{ Email: supportEmail() }],
+          Subject: subject,
+          HTML: html,
+        }),
+        signal: AbortSignal.timeout(4_000),
+      });
+      if (!res.ok) this.logger.warn(`Mailpit refused an email to ${to}: ${res.status}`);
+      return res.ok;
+    } catch {
+      this.logger.warn(
+        `Mailpit isn't running at ${mailpitUrl()}, so "${subject}" to ${to} was not delivered. Start it with: mailpit`,
+      );
+      return false;
+    }
+  }
+
+  /** "It's back": the product's photo, name and price when it's on the shop, and a button straight to it. */
+  restockHtml(productName: string, product?: StorefrontProductRow | null) {
+    return (
+      `<p><strong>${escape(productName)}</strong> is back in stock at Spin Hobby. Restocks can sell out again quickly.</p>` +
+      (product ? `<table style="border-collapse:collapse">${productRow(product)}</table>` : '') +
+      emailButton(
+        product ? productUrl(product) : site(),
+        product ? 'View the product' : 'Shop now',
+      ) +
+      `<p style="font-size:12px">You asked us to tell you when this came back. This was a one-time alert.</p>`
+    );
   }
 
   /** "You left something in your cart": the items still for sale, a link that opens the same cart again, and a stop link. */
@@ -61,7 +297,7 @@ export class EmailService {
     return (
       `<p>You left these in your Spin Hobby cart. They're still here, but popular items and pre-orders can go fast.</p>` +
       `<table style="border-collapse:collapse">${items.map((i) => productRow(i.product, i.quantity)).join('')}</table>` +
-      `<p><a href="${escape(`${site()}/checkout?restore=${token}`)}"><strong>Finish checking out</strong></a></p>` +
+      emailButton(`${site()}/checkout?restore=${token}`, 'Finish checking out') +
       optInFooter(
         "You're getting this one reminder because you asked for it at checkout.",
         `${api()}/reminders/stop?token=${token}`,
@@ -90,18 +326,94 @@ export class EmailService {
       )
       .join(' · ');
     return (
-      `<p>New pre-order${products.length === 1 ? '' : 's'} at Spin Hobby from what you follow:</p>` +
+      (follows.some((f) => f.kind === 'all')
+        ? `<p>New pre-order${products.length === 1 ? '' : 's'} at Spin Hobby:</p>`
+        : `<p>New pre-order${products.length === 1 ? '' : 's'} at Spin Hobby from what you follow:</p>`) +
       `<table style="border-collapse:collapse">${rows}</table>` +
       `<p>Pre-orders are reserved now and ship on release.</p>` +
+      emailButton(`${site()}/pre-orders`, 'See all pre-orders') +
       `<p style="font-size:12px">You're getting this because you asked for news about ${follows.map((f) => escape(f.name)).join(', ')}. ${stops}. Spin Hobby, Canada · ${escape(site())}</p>`
     );
   }
 
-  shippedHtml(orderId: number, carrier: string | null, tracking: string) {
+  /**
+   * The welcome email, sent once when a new customer finishes (or skips) the welcome step after signing up: the mascot, a warm
+   * hello, the Discord and Instagram icons near the top (so a quick glance finds them), and where to start. Few emoji on purpose:
+   * a wall of them reads as machine-written. Colours only from EMAIL_COLORS; the icon PNGs (website public/assets/email) are drawn
+   * in EMAIL_COLORS.primary.
+   */
+  welcomeEmail(firstName: string | null) {
+    const C = EMAIL_COLORS;
+    const name = firstName?.trim() ? escape(firstName.trim()) : '';
+    const mascot = `${site()}/assets/mascot/mascot-wave.png`; // by frui2par10r, from SpinHobby/official-assets
+    const step = (
+      bullet: Parameters<typeof doodle>[0],
+      title: string,
+      text: string,
+      href: string,
+    ) =>
+      `<tr><td style="padding:10px 12px 8px 0;vertical-align:top;width:24px;text-align:center">${doodle(bullet, 22)}</td>` +
+      `<td style="padding:8px 0;vertical-align:top"><a href="${escape(href)}" style="color:${C.primary};font-weight:700;text-decoration:none">${title} →</a>` +
+      `<br><span style="color:${C.muted};font-size:14px">${text}</span></td></tr>`;
+    const html =
+      `<div style="text-align:center">` +
+      `<p style="margin:0 0 4px;font-size:13px;letter-spacing:3px;color:${C.muted};font-weight:700">ようこそ · WELCOME</p>` +
+      `<img src="${escape(mascot)}" alt="" width="180" height="180" style="width:180px;height:auto;display:block;margin:8px auto 4px;border:0">` +
+      `<h1 style="margin:8px 0 6px;font-size:26px;line-height:1.25;color:${C.text}">${name ? `Welcome to the Spin Hobby family, ${name}!` : 'Welcome to the Spin Hobby family!'}</h1>` +
+      doodleDivider() +
+      `</div>` +
+      `<p>We're so happy you're here. Spin Hobby is a small Canadian shop run by anime fans, for anime fans. Every figure, plush and card is the real, officially licensed thing, packed with care as if it were going on our own shelf.</p>` +
+      communityBox() +
+      `<p style="margin:20px 0 4px;font-weight:700;font-size:17px">Where to start</p>` +
+      `<table role="presentation" cellpadding="0" cellspacing="0" style="border-collapse:collapse">` +
+      step(
+        'sparkle',
+        'Pre-orders',
+        'Reserve upcoming figures before they sell out. They ship on release.',
+        `${site()}/pre-orders`,
+      ) +
+      step(
+        'heart-pink',
+        'New arrivals',
+        'Fresh figures, plushies and goods, ready to ship.',
+        `${site()}/new-arrivals`,
+      ) +
+      step(
+        'heart-red',
+        'Meet us at conventions',
+        'Come say hi at our booth at anime cons across Canada.',
+        `${site()}/events`,
+      ) +
+      `</table>` +
+      emailButton(site(), 'Start exploring') +
+      mascotImage('clover-good-luck.png', 'Good luck!', 120) +
+      `<p style="margin:0;text-align:center">Happy hunting, and welcome home!<br><strong>The Spin Hobby team</strong></p>` +
+      `<p style="font-size:12px;color:${C.muted};margin-top:20px">You're getting this one-time email because you just made an account at Spin Hobby. Questions? Just reply, a real person will answer.</p>`;
+    return {
+      subject: name ? `Welcome to Spin Hobby, ${firstName!.trim()}!` : 'Welcome to Spin Hobby!',
+      html,
+    };
+  }
+
+  /** The 6-digit code that confirms a new account's email. */
+  emailCodeHtml(code: string, firstName: string | null, minutes: number) {
     return (
+      `<p>${firstName ? `Hi ${escape(firstName)},` : 'Hi,'}</p>` +
+      `<p>Here is your code to confirm your email at Spin Hobby:</p>` +
+      `<p style="font-size:28px;letter-spacing:6px;margin:16px 0"><strong>${escape(code)}</strong></p>` +
+      `<p>It works for ${minutes >= 1440 ? `${Math.round(minutes / 1440)} days` : `${minutes} minutes`}. Once your email is confirmed you can buy limited releases${rewardsAllowed() ? ' and use your rewards points' : ''}.</p>` +
+      `<p style="font-size:12px">If you didn't make an account at Spin Hobby, you can ignore this email.</p>`
+    );
+  }
+
+  shippedHtml(orderId: number, carrier: string | null, tracking: string) {
+    const track = trackingUrl(carrier, tracking);
+    return (
+      mascotImage('clover.png', '', 110) +
+      doodleDivider() +
       `<p>Good news! Your Spin Hobby order <strong>#${orderId}</strong> is on its way.</p>` +
-      `<p>${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
-      statusLink(orderId) +
+      `<p>${doodle('sparkle', 18)}&nbsp; ${carrier ? `${escape(carrier)} tracking` : 'Tracking'}: <strong>${escape(tracking)}</strong></p>` +
+      (track ? emailButton(track, 'Track your package') : statusLink(orderId)) +
       `<p>Questions? Reply to this email with your order number.</p>`
     );
   }
@@ -130,7 +442,7 @@ export class EmailService {
       a.address1,
       a.address2,
       [a.city, a.province].filter(Boolean).join(', ') + (a.postalCode ? ` ${a.postalCode}` : ''),
-      a.country,
+      COUNTRY_NAMES[a.country as string] ?? a.country,
     ]
       .filter((line) => typeof line === 'string' && line.trim())
       .map((line) => escape(line))
@@ -138,27 +450,33 @@ export class EmailService {
     const rows = items
       .map(
         (i) =>
-          `<tr><td style="padding:4px 12px 4px 0">${escape(i.name)}${i.is_preorder ? ' <em>(pre-order)</em>' : ''}</td>` +
-          `<td style="padding:4px 12px">× ${escape(i.quantity)}</td><td style="padding:4px 0;text-align:right">${money(Number(i.unit_price_cents) * Number(i.quantity))}</td></tr>`,
+          `<tr><td style="padding:4px 8px 4px 0;vertical-align:middle;width:20px">${doodle(i.is_preorder ? 'sparkle' : 'heart-pink', 16)}</td>` +
+          `<td style="padding:4px 12px 4px 0">${escape(i.name)}${i.is_preorder ? ' <em>(pre-order)</em>' : ''}</td>` +
+          `<td style="padding:4px 12px;white-space:nowrap">× ${escape(i.quantity)}</td><td style="padding:4px 0;text-align:right;white-space:nowrap">${money(Number(i.unit_price_cents) * Number(i.quantity))}</td></tr>`,
       )
       .join('');
     const total = (label: string, cents: unknown, bold = false) =>
-      `<tr><td colspan="2" style="padding:2px 12px 2px 0;text-align:right">${bold ? `<strong>${label}</strong>` : label}</td><td style="padding:2px 0;text-align:right">${bold ? `<strong>${money(cents)}</strong>` : money(cents)}</td></tr>`;
+      `<tr><td colspan="3" style="padding:2px 12px 2px 0;text-align:right">${bold ? `<strong>${label}</strong>` : label}</td><td style="padding:2px 0;text-align:right">${bold ? `<strong>${money(cents)}</strong>` : money(cents)}</td></tr>`;
     const hasPreorder = items.some((i) => i.is_preorder);
     const handling_ =
       handling.days_min === handling.days_max
         ? `${handling.days_min}`
         : `${handling.days_min}–${handling.days_max}`;
     return (
+      mascotImage('clover-thank-you.png', 'Thank you!', 140) +
+      doodleDivider() +
       `<p>Thanks for your order! We've received your payment for order <strong>#${escape(order.id)}</strong>.</p>` +
       `<table style="border-collapse:collapse">${rows}${total('Subtotal', order.subtotal_cents)}${Number(order.discount_cents) ? total(`Discount${order.discount_code ? ` (${escape(order.discount_code)})` : ''}`, -Number(order.discount_cents)) : ''}${total(`Shipping (${order.shipping_carrier ? escape(`${order.shipping_carrier} ${order.shipping_service ?? ''}`.trim()) : order.shipping_method === 'express' ? 'express' : 'standard'})`, order.shipping_cents)}` +
       `${total('Tax', order.tax_cents)}${total('Total (CAD)', order.total_cents, true)}</table>` +
-      (address ? `<p><strong>Shipping to</strong><br>${address}</p>` : '') +
+      (address
+        ? `<p>${doodle('heart-red', 16)}&nbsp; <strong>Shipping to</strong><br>${address}</p>`
+        : '') +
       `<p>We'll pack your order within ${handling_} business days and email you tracking once it ships.</p>` +
       (hasPreorder
         ? `<p>Your pre-order items ship when they arrive from the manufacturer; we'll let you know as soon as we have a date.</p>`
         : '') +
       statusLink(Number(order.id)) +
+      communityBox() +
       `<p>Questions? Reply to this email with your order number.</p><p><a href="${escape(site)}">Back to Spin Hobby</a></p>`
     );
   }

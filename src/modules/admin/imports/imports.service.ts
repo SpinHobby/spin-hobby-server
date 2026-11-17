@@ -25,6 +25,7 @@ import { checkCutout } from './photo-jobs.service.js';
 import { SeriesService } from '../series/series.service.js';
 import { isOfficialUrl, parseDraft, type DraftInput, type OfficialPhoto } from './draft.js';
 import { likelySameProducts, type ProductMatch, type ShopProduct } from './duplicates.js';
+import { reviewDraft } from './review.js';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 export const TOKEN_PREFIX = 'gst_';
@@ -45,6 +46,8 @@ interface ImportRow {
   details: Record<string, unknown>;
   image_url: string | null;
   cutout_url: string | null;
+  /** The clean product photo: the figure alone, no box print, drawn by the photo computer's model. */
+  clean_url: string | null;
   original_url: string | null;
   cropped_url: string | null;
   edited_photos: Record<string, string> | null;
@@ -54,9 +57,9 @@ interface ImportRow {
   decided_at: string | null;
 }
 
-/** The draft's photos: the studio photo, the cut-out on a background, the crop, the photo as taken, and the maker's photos (`official`, `official2`...). */
+/** The draft's photos: the clean product photo, the studio photo, the cut-out on a background, the crop, the photo as taken, and the maker's photos (`official`, `official2`...). */
 export type PhotoKey =
-  'studio' | 'background' | 'original' | 'cropped' | 'official' | `official${number}`;
+  'clean' | 'studio' | 'background' | 'original' | 'cropped' | 'official' | `official${number}`;
 const isOfficialKey = (key: PhotoKey) => /^official\d*$/.test(key);
 export interface PhotoChoice {
   key: PhotoKey;
@@ -70,6 +73,7 @@ function draftPhotos(r: ImportRow): { key: PhotoKey; url: string; edited: boolea
   const edits = editsOf(r);
   // a photo a person edited in the admin's photo editor is offered as edited (the cut-out is placed on a background instead, so it is not edited)
   return [
+    r.clean_url && { key: 'clean' as const, url: r.clean_url },
     r.image_url && { key: 'studio' as const, url: r.image_url },
     r.cutout_url && { key: 'background' as const, url: r.cutout_url },
     r.cropped_url && { key: 'cropped' as const, url: r.cropped_url },
@@ -298,11 +302,14 @@ export class ImportsService {
     image: { buffer: Buffer; mimetype: string },
     cutout: { buffer: Buffer; mimetype: string } | null = null,
     source: { originalUrl?: string | null; productRect?: ProductRect | null } = {},
+    clean: { buffer: Buffer; mimetype: string } | null = null,
   ): Promise<{ id: string; created: boolean; status: ImportStatus; keptOriginal: boolean }> {
     const draft: DraftInput = parseDraft(rawDraft);
     if (!IMAGE_TYPES[image.mimetype])
       throw new AppError('The photo must be a WebP, JPEG or PNG image.');
     await checkCutout(cutout);
+    if (clean && !IMAGE_TYPES[clean.mimetype])
+      throw new AppError('The clean photo must be a WebP, JPEG or PNG image.');
     const existing = await this.db.one<ImportRow>(
       'select * from public.product_imports where source_key = $1',
       [draft.sourceKey],
@@ -312,6 +319,9 @@ export class ImportsService {
     const stored = await this.storage.uploadImage(image.buffer, image.mimetype, 'imports');
     const storedCutout = cutout
       ? (await this.storage.uploadImage(cutout.buffer, cutout.mimetype, 'imports')).url
+      : null;
+    const storedClean = clean
+      ? (await this.storage.uploadImage(clean.buffer, clean.mimetype, 'imports')).url
       : null;
     // the photo as taken, and that photo cropped to the product (no AI): offered next to the photo computer's own, for a person to choose
     const originalUrl = source.originalUrl ?? null;
@@ -323,7 +333,7 @@ export class ImportsService {
     const details = JSON.stringify({ ...draft.details, receivedAt: new Date().toISOString() });
     if (existing) {
       await this.db.exec(
-        'update public.product_imports set title = $2, description = $3, category = $4, series = $5, details = $6, image_url = $7, token_id = $8, cutout_url = $9, original_url = $10, cropped_url = $11 where id = $1',
+        'update public.product_imports set title = $2, description = $3, category = $4, series = $5, details = $6, image_url = $7, token_id = $8, cutout_url = $9, original_url = $10, cropped_url = $11, clean_url = $12 where id = $1',
         [
           existing.id,
           draft.title,
@@ -336,6 +346,7 @@ export class ImportsService {
           storedCutout,
           originalUrl,
           croppedUrl,
+          storedClean,
         ],
       );
       await this.storage
@@ -345,6 +356,7 @@ export class ImportsService {
             existing.cutout_url,
             existing.original_url,
             existing.cropped_url,
+            existing.clean_url,
           ].filter((u): u is string => !!u && u !== originalUrl),
         )
         .catch(() => undefined);
@@ -356,7 +368,7 @@ export class ImportsService {
       };
     }
     const row = await this.db.one<{ id: string }>(
-      'insert into public.product_imports (source_key, title, description, category, series, details, image_url, token_id, cutout_url, original_url, cropped_url) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) returning id',
+      'insert into public.product_imports (source_key, title, description, category, series, details, image_url, token_id, cutout_url, original_url, cropped_url, clean_url) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) returning id',
       [
         draft.sourceKey,
         draft.title,
@@ -369,6 +381,7 @@ export class ImportsService {
         storedCutout,
         originalUrl,
         croppedUrl,
+        storedClean,
       ],
     );
     return { id: row!.id, created: true, status: 'draft' as const, keptOriginal: !!originalUrl };
@@ -467,13 +480,13 @@ export class ImportsService {
       const stockCount = await this.quickAdd.addStock(adminId, productId, quantity);
       await this.storage
         .deleteImages(
-          [row.image_url, row.cutout_url, row.original_url, row.cropped_url].filter(
+          [row.image_url, row.cutout_url, row.original_url, row.cropped_url, row.clean_url].filter(
             (u): u is string => !!u,
           ),
         )
         .catch(() => undefined);
       await this.db.exec(
-        "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, edited_photos = '{}'::jsonb where id = $1",
+        "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb where id = $1",
         [id],
       );
       await this.log.write(adminId, 'imports.restocked', id, { productId, quantity, stockCount });
@@ -533,6 +546,19 @@ export class ImportsService {
       [id, adminId],
     );
     if (!claimed) throw new AppError('Someone else just handled this draft.', 409);
+    // what the person changed from the draft, for the dashboard's "accepted without edits" (worked out now: the product can change later)
+    const market = (row.details as Partial<DraftInput['details']>).market;
+    const review = reviewDraft(
+      {
+        title: row.title,
+        description: row.description,
+        series: row.series,
+        categoryId: categoryOf(row, await this.categories()).categoryId,
+        photosEdited: Object.keys(editsOf(row)).length,
+        market: market ? { low: market.low, high: market.high } : null,
+      },
+      dto,
+    );
     const made: string[] = []; // files made for this add (the official copy, the photo on its background, eBay's copies): removed if it fails
     try {
       // each chosen photo as a file in our storage
@@ -544,6 +570,7 @@ export class ImportsService {
         else if (c.key === 'studio') urls.set(c.key, row.image_url);
         else if (c.key === 'original') urls.set(c.key, row.original_url!);
         else if (c.key === 'cropped') urls.set(c.key, row.cropped_url!);
+        else if (c.key === 'clean') urls.set(c.key, row.clean_url!);
         else if (isOfficialKey(c.key)) {
           const offered = draftPhotos({ ...row, edited_photos: {} }).find(
             (p) => p.key === c.key,
@@ -597,7 +624,7 @@ export class ImportsService {
         ? await this.quickAdd.add(adminId, dto)
         : await this.merch.create(adminId, dto);
       await this.db.exec(
-        "update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null, edited_photos = '{}'::jsonb where id = $1",
+        "update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb where id = $1",
         [id, product.id],
       );
       for (const [i, e] of ebay.entries())
@@ -611,6 +638,7 @@ export class ImportsService {
         row.image_url,
         row.original_url,
         row.cropped_url,
+        row.clean_url,
         ...Object.values(editsOf(row)),
         ...made.filter((u) => !ebay.some((e) => e.url === u)),
       ].filter((u): u is string => !!u && !sent.has(u));
@@ -636,6 +664,7 @@ export class ImportsService {
         square: square.map((c) => c.key),
         ebay: choices.filter((c) => c.ebay).map((c) => c.key),
         transparent: choices.some((c) => c.key === 'background'),
+        review,
       });
       return product;
     } catch (error) {
@@ -763,13 +792,13 @@ export class ImportsService {
     }
     await this.storage
       .deleteImages(
-        [row.image_url, row.cutout_url, row.original_url, row.cropped_url].filter(
+        [row.image_url, row.cutout_url, row.original_url, row.cropped_url, row.clean_url].filter(
           (u): u is string => !!u,
         ),
       )
       .catch(() => undefined);
     await this.db.exec(
-      "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, edited_photos = '{}'::jsonb where id = $1",
+      "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb where id = $1",
       [id],
     );
     await this.log.write(adminId, 'imports.rejected', id, { reason });

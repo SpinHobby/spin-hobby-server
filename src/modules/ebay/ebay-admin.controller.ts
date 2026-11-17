@@ -5,6 +5,7 @@ import type { AppUser } from '../auth/auth.service.js';
 import {
   EbayCategoryQuery,
   EbayDisconnectDto,
+  EbayFinishDto,
   EbayListingDto,
   EbayLocationDto,
   EbaySetupDto,
@@ -35,6 +36,15 @@ export class EbayAdminController {
   @Access('owner')
   async connect(@CurrentUser() admin: AppUser) {
     return { success: true, ...(await this.connection.startConnect(admin.id)) };
+  }
+
+  /** Finishes connecting from the address of eBay's own "thank you" page (a local copy, where eBay cannot send the owner back). */
+  @Post('connect/finish')
+  @HttpCode(200)
+  @Access('owner')
+  async finish(@Body() dto: EbayFinishDto) {
+    await this.connection.finishFromAddress(dto.address);
+    return { success: true, ebay: await this.connection.status() };
   }
 
   @Delete('connection')

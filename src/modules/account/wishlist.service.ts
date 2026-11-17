@@ -4,6 +4,9 @@ import type { StorefrontProductRow } from '../../database/rows.js';
 import { Db } from '../../database/db.service.js';
 import { publicProduct } from '../catalog/product.mapper.js';
 
+/** A wishlist row: a storefront product plus when it was saved. */
+type WishlistRow = StorefrontProductRow & { addedAt: string };
+
 /** A signed-in customer's saved products. */
 @Injectable()
 export class WishlistService {
@@ -11,13 +14,13 @@ export class WishlistService {
 
   /** Newest first, in the same shape as the storefront catalog (products that are no longer for sale drop out). */
   async list(userId: string) {
-    const rows = await this.db.many<StorefrontProductRow>(
-      `select p.* from public.wishlist_items w
+    const rows = await this.db.many<WishlistRow>(
+      `select p.*, w.created_at as "addedAt" from public.wishlist_items w
          join public.storefront_products p on p.id = w.square_item_id
         where w.user_id = $1 order by w.created_at desc`,
       [userId],
     );
-    return rows.map(publicProduct);
+    return rows.map((r) => ({ ...publicProduct(r), addedAt: r.addedAt }));
   }
 
   async add(userId: string, squareItemId: string) {

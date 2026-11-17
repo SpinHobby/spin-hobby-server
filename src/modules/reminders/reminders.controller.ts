@@ -118,7 +118,10 @@ export class RemindersController {
     );
   }
 
-  /** "Email me new pre-orders": `{ email, kind: "series" | "maker", name }`. Open to guests; signed-in customers are linked. */
+  /**
+   * "Email me new pre-orders": `{ email, kind: "series" | "maker", name }`, or `{ email, kind: "all" }` for a weekly digest of every
+   * new pre-order. Open to guests; signed-in customers are linked.
+   */
   @Post('follows')
   @HttpCode(200)
   @Access('public')
@@ -126,11 +129,18 @@ export class RemindersController {
   async follow(@CurrentUser() user: AppUser | null, @Body() body: unknown) {
     const b = (body ?? {}) as { email?: unknown; kind?: unknown; name?: unknown };
     const email = emailValue(b.email);
-    if (b.kind !== 'series' && b.kind !== 'maker')
-      throw new AppError('kind must be "series" or "maker".');
+    if (b.kind !== 'series' && b.kind !== 'maker' && b.kind !== 'all')
+      throw new AppError('kind must be "series", "maker" or "all".');
     const name = typeof b.name === 'string' ? b.name.trim().slice(0, 120) : '';
-    if (!name) throw new AppError('name is required.');
+    if (!name && b.kind !== 'all') throw new AppError('name is required.');
     return { success: true, ...(await this.follows.follow(email, b.kind, name, user?.id ?? null)) };
+  }
+
+  /** The shop's biggest series, to choose from when following ("What do you collect?"). */
+  @Get('follows/series')
+  @Access('public')
+  async series() {
+    return { success: true, series: await this.follows.popularSeries() };
   }
 
   /** A pre-order news email's stop link (one per follow): a page with a button first, then stopped (`&confirm=1`). */

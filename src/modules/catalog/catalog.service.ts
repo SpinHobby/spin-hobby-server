@@ -6,6 +6,19 @@ import type { HeroSlideRow, StoreEventRow, StorefrontProductRow } from '../../da
 import type { ProductQuery } from './dto/product-query.dto.js';
 import { FRONT_PAGE_SLOTS } from './front-page.js';
 import { publicProduct } from './product.mapper.js';
+import {
+  addCloseWords,
+  didYouMean,
+  foldSearch,
+  mayBeTypo,
+  parseSearch,
+  searchableSql,
+  synonymIndex,
+  type SynonymIndex,
+  currentSynonymsVersion,
+  termSql,
+  vocabulary,
+} from './search.js';
 import { slugify } from './slug.js';
 
 const SORTS: Record<string, string> = {
@@ -28,6 +41,48 @@ export const GROUPS: Record<string, { status?: string[]; sale?: boolean; pattern
   goods: { pattern: 'badge|acrylic|keychain|blind|apparel|poster|tapestry|goods|sticker|stand' },
   media: { pattern: 'book|doujin|manga|video|music|media|\\mcd\\M|dvd|blu-?ray' }, // \\m \\M = Postgres word boundaries
 };
+
+// Everything a shopper might type to find a product, as one text, so a search's words can match across fields.
+// Folded like the search words (lower case, no accents, punctuation as spaces): see foldSearch in search.ts.
+const SEARCH_TEXT =
+  searchableSql(`concat_ws(' ', name, series, character, manufacturer, jan_code, category,
+  (select path from cat_paths where cat_paths.id = sp.category_id))`);
+/** How many products, and how many series or categories, the search box offers while typing. */
+const SUGGEST_PRODUCTS = 6;
+const SUGGEST_GROUPS = 3;
+const SEARCH_NAME = searchableSql('name');
+/** How long the typo-fix word list is kept before it's read again (new products add words). */
+const VOCAB_TTL_MS = 5 * 60_000;
+
+/**
+ * How popular each product is lately, for ordering search results that match equally well. Most of the shop is one of a kind,
+ * so a sale says more about the series than the item (which is then usually sold out): paid units count for every product in
+ * the same series, as well as for the product itself. Add-to-carts and product views from the anonymous daily counts
+ * (public.analytics_daily) count for the product. Weighted so one sale outweighs a handful of views.
+ */
+const POPULARITY_DAYS = 60;
+const POPULAR = `sold as (
+  select oi.square_item_id as product_id, m.series as sold_series, sum(oi.quantity)::int * 10 as points
+    from public.order_items oi
+    join public.orders o on o.id = oi.order_id
+    left join public.product_metadata m on m.square_item_id = oi.square_item_id
+   where o.status in ('paid', 'preorder_reserved', 'fulfilled', 'shipped')
+     and o.created_at > now() - interval '${POPULARITY_DAYS} days'
+   group by oi.square_item_id, m.series
+), series_sold as (
+  select sold_series, sum(points)::int as points from sold where sold_series is not null group by sold_series
+), interest as (
+  select product_id, sum(count * case event when 'add_to_cart' then 3 else 1 end)::int as points
+    from public.analytics_daily
+   where event in ('product_view', 'add_to_cart') and day > current_date - ${POPULARITY_DAYS}
+   group by product_id
+)`;
+/** A product's popularity from the POPULAR tables, joined as below. */
+const POPULARITY_JOINS = `left join interest pi on pi.product_id = sp.id
+  left join sold ps on ps.product_id = sp.id
+  left join series_sold pss on pss.sold_series = sp.series`;
+const POPULARITY_SCORE =
+  'coalesce(pi.points, 0) + coalesce(ps.points, 0) + coalesce(pss.points, 0)';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -80,7 +135,7 @@ const DEFAULT_EVENTS = [
 export class CatalogService {
   constructor(private readonly db: Db) {}
 
-  async productPage(query: ProductQuery) {
+  async productPage(query: ProductQuery, suggesting = false) {
     const limit = Math.min(Math.max(Number(query.limit ?? 24) || 24, 1), 60);
     const offset = Math.max(Number(query.cursor ?? 0) || 0, 0);
     const where: string[] = [];
@@ -129,36 +184,183 @@ export class CatalogService {
       add((n) => `price_cents < ${n}`, Math.round(max * 100));
     const seriesSlug = query.series?.trim().toLowerCase().slice(0, 100);
     if (seriesSlug) add((n) => `series = any(${n}::text[])`, await this.seriesNamed(seriesSlug));
-    const q = query.q?.trim();
-    if (q)
-      add(
-        (
-          n,
-        ) => `(name ilike ${n} or series ilike ${n} or character ilike ${n} or jan_code ilike ${n} or category ilike ${n}
-      or exists (select 1 from cat_paths where cat_paths.id = sp.category_id and cat_paths.path ilike ${n}))`,
-        likePattern(q),
+    const q = query.q?.trim().slice(0, 100);
+    // Every term has to appear somewhere on the product ("miku figure" finds a Miku in Prize Figures), as typed or as one of its
+    // synonyms or singular forms; filters written in the search ("under $50", "in stock") apply unless the page set its own.
+    const parsed = q ? parseSearch(q, await this.synonyms()) : null;
+    // words the catalogue doesn't know get the catalogue words a typo or two away ("hatsne" → hatsune)
+    const fuzzy =
+      parsed && parsed.terms.some((t) => mayBeTypo(t.typed))
+        ? addCloseWords(parsed, await this.words())
+        : false;
+    const at = (value: unknown) => {
+      params.push(value);
+      return `$${params.length}`;
+    };
+    const nameScores: string[] = [];
+    for (const term of parsed?.terms ?? []) {
+      let i = params.length;
+      where.push(termSql(term, SEARCH_TEXT, at));
+      // the same values, tested on the name alone, rank name matches first
+      nameScores.push(
+        `(case when ${termSql(term, SEARCH_NAME, () => `$${++i}`)} then 1 else 0 end)`,
       );
+    }
+    if (parsed?.maxCents != null && (query.max == null || query.max === ''))
+      add((n) => `price_cents < ${n}`, parsed.maxCents);
+    if (parsed?.minCents != null && (query.min == null || query.min === ''))
+      add((n) => `price_cents >= ${n}`, parsed.minCents);
+    if (parsed?.status && !statuses.length && !group?.status)
+      add((n) => `status = any(${n}::text[])`, parsed.status === 'in' ? ['in', 'low'] : ['pre']);
+
+    // the same terms without their close words: products that match as typed come before near-misses, in every sort
+    const exact =
+      fuzzy && parsed
+        ? parsed.terms
+            .filter((t) => t.close)
+            .map((t) => termSql({ ...t, close: undefined }, SEARCH_TEXT, at))
+            .join(' and ')
+        : 'true';
 
     const filter = where.length ? `where ${where.join(' and ')}` : '';
-    const order = SORTS[query.sort ?? 'new'] ?? SORTS.new;
+    let order = SORTS[query.sort ?? 'new'] ?? SORTS.new;
+    const listParams = [...params];
+    let popular = '';
+    // a search shown "Featured" puts names with the whole phrase first, then names that start with it
+    if (q && (query.sort ?? 'featured') === 'featured') {
+      listParams.push(likePattern(q), likePattern(q).slice(1));
+      const score = nameScores.length ? `(${nameScores.join(' + ')}) desc, ` : '';
+      // then what can still be bought, then what sells and gets looked at most, so equally good matches show the popular one first
+      order = `(name ilike $${listParams.length - 1}) desc, (name ilike $${listParams.length}) desc, ${score}(status in ('out', 'closed')), ${POPULARITY_SCORE} desc, ${order}`;
+      popular = `, ${POPULAR}`;
+    }
+    if (fuzzy) order = `(${exact}) desc, ${order}`;
     const [rows, count] = await Promise.all([
       this.db.many<StorefrontProductRow>(
-        `${CATEGORY_PATHS} select sp.* from public.storefront_products sp ${filter} order by ${order} limit ${limit} offset ${offset}`,
-        params,
+        `${CATEGORY_PATHS}${popular} select sp.* from public.storefront_products sp
+          ${popular ? POPULARITY_JOINS : ''}
+          ${filter} order by ${order} limit ${limit} offset ${offset}`,
+        listParams,
       ),
-      this.db.one<{ total: number }>(
-        `${CATEGORY_PATHS} select count(*)::int as total from public.storefront_products sp ${filter}`,
+      this.db.one<{ total: number; exact: number }>(
+        `${CATEGORY_PATHS} select count(*)::int as total, (count(*) filter (where ${exact}))::int as exact
+          from public.storefront_products sp ${filter}`,
         params,
       ),
     ]);
     const total = count?.total ?? 0;
+    const exactTotal = count?.exact ?? 0;
     const next = offset + rows.length;
+    // nothing found as typed: offer the search with its typos fixed (the results may already be close matches)
+    const suggestion =
+      parsed?.text && exactTotal === 0 && offset === 0 && !suggesting
+        ? await this.searchSuggestion(query, parsed.text)
+        : null;
     return {
       success: true as const,
       items: rows.map(publicProduct),
       total,
       ...(next < total ? { cursor: String(next) } : {}),
+      ...(suggestion ? { didYouMean: suggestion } : {}),
+      ...(total > 0 && exactTotal === 0 ? { closeMatches: true } : {}),
+      ...(parsed?.understood.length ? { understood: parsed.understood } : {}),
     };
+  }
+
+  /**
+   * What the search box offers while someone types: the first few products, and the series and shop categories whose name
+   * has every word, so "frie" offers Frieren products, the Frieren series page and nothing else.
+   */
+  async suggest(q: string | undefined) {
+    const parsed = parseSearch((q ?? '').slice(0, 100), await this.synonyms());
+    if (parsed.terms.some((t) => mayBeTypo(t.typed))) addCloseWords(parsed, await this.words());
+    const { terms } = parsed;
+    if (!terms.length) return { success: true as const, products: [], series: [], categories: [] };
+    // every term, as typed or as a synonym ("jjk" offers the Jujutsu Kaisen series)
+    const patterns: unknown[] = [];
+    const at = (value: unknown) => {
+      patterns.push(value);
+      return `$${patterns.length}`;
+    };
+    const matchAll = (expr: string) =>
+      terms.map((t) => termSql(t, searchableSql(expr), at)).join(' and ');
+    const seriesWhere = matchAll('series');
+    const seriesParams = patterns.splice(0);
+    const categoryWhere = matchAll('name');
+    const [page, series, categories] = await Promise.all([
+      this.productPage({ q, limit: String(SUGGEST_PRODUCTS), sort: 'featured' }, true),
+      this.db.many<{ series: string; count: number }>(
+        `select series, count(*)::int as count from public.storefront_products
+          where series is not null and ${seriesWhere}
+          group by series order by count(*) desc, series limit ${SUGGEST_GROUPS}`,
+        seriesParams,
+      ),
+      this.db.many<{ id: string; name: string }>(
+        `select id, name from public.store_categories where ${categoryWhere} order by sort_order, name limit ${SUGGEST_GROUPS}`,
+        patterns,
+      ),
+    ]);
+    return {
+      success: true as const,
+      products: page.items,
+      series: series.map((r) => ({ name: r.series, slug: slugify(r.series), count: r.count })),
+      categories,
+    };
+  }
+
+  /**
+   * Counts a shopper's search that found nothing, for Admin > Dashboard. Only the folded words are kept, and searches that look
+   * like personal details (an email address, a phone number) are skipped.
+   */
+  async recordMiss(q: string) {
+    const query = foldSearch(q).slice(0, 80);
+    if (!query || q.includes('@') || /\d[\d ()-]{8,}\d/.test(q.replace(/\b\d{13}\b/g, ''))) return;
+    await this.db.exec(
+      `insert into public.search_misses (query) values ($1)
+       on conflict (query) do update set times = search_misses.times + 1, last_at = now()`,
+      [query],
+    );
+  }
+
+  private synonymCache: { index: SynonymIndex; version: number; at: number } | null = null;
+
+  /** The shop's synonym groups (Admin > Search), read again after an edit or every few minutes. */
+  private async synonyms(): Promise<SynonymIndex> {
+    const c = this.synonymCache;
+    if (c && c.version === currentSynonymsVersion() && Date.now() - c.at < VOCAB_TTL_MS)
+      return c.index;
+    const version = currentSynonymsVersion();
+    const rows = await this.db.many<{ terms: string[] }>(
+      'select terms from public.search_synonyms',
+    );
+    const index = synonymIndex(rows.map((r) => r.terms));
+    this.synonymCache = { index, version, at: Date.now() };
+    this.vocab = null; // the typo-fix words include the synonyms
+    return index;
+  }
+
+  private vocab: { words: Set<string>; at: number } | null = null;
+
+  /** The catalogue's own words and the synonyms, for typo fixes; read again every few minutes (new products add words). */
+  private async words(): Promise<Set<string>> {
+    if (!this.vocab || Date.now() - this.vocab.at > VOCAB_TTL_MS) {
+      const rows = await this.db.many<{ text: string }>(
+        `select concat_ws(' ', name, series, character, manufacturer, category) as text from public.storefront_products`,
+      );
+      this.vocab = {
+        words: vocabulary([...rows.map((r) => r.text), ...(await this.synonyms()).terms.keys()]),
+        at: Date.now(),
+      };
+    }
+    return this.vocab.words;
+  }
+
+  /** `q` with its typos fixed against the catalogue's words, if that finds products under the same filters. */
+  private async searchSuggestion(query: ProductQuery, q: string): Promise<string | null> {
+    const fixed = didYouMean(q, await this.words());
+    if (!fixed) return null;
+    const found = await this.productPage({ ...query, q: fixed, limit: '1', cursor: null }, true);
+    return found.total > 0 ? fixed : null;
   }
 
   async facets() {

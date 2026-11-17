@@ -672,3 +672,103 @@ describe("the shop's own category tree", () => {
     expect(await get(none)).toMatchObject({ categoryId: scale, suggestedCategory: null });
   });
 });
+
+describe('Gleamshelf numbers for the dashboard', () => {
+  const stats = async () =>
+    (await http.get('/admin/imports/stats?days=30').set({ Authorization: staff.auth }).expect(200))
+      .body as {
+      received: number;
+      added: number;
+      rejected: number;
+      reviewed: number;
+      unedited: number;
+      changes: Record<string, number>;
+      priced: number;
+      priceInMarket: number;
+      medianHoursToDecide: number | null;
+      weeks: { week: string; received: number; added: number }[];
+    };
+
+  it('counts drafts received and decided, which went in as written, and what people changed', async () => {
+    const before = await stats();
+    const add = vi.spyOn(quickAdd, 'add').mockResolvedValue({ id: 'SQ_S', name: 'x', photos: 1 });
+    const { token } = await connectedApp();
+    const sent = async (key: string, over: Record<string, unknown> = {}) =>
+      (await send(token, draft({ sourceKey: key, ...over })).expect(200)).body.id as string;
+    const market = {
+      low: 30,
+      median: 40,
+      high: 55,
+      count: 4,
+      canadian: 1,
+      rate: 1,
+      rateIsEstimate: false,
+      note: null,
+      listings: [
+        {
+          title: 'Lamy',
+          url: 'https://www.ebay.ca/itm/1',
+          site: 'eBay',
+          price: 40,
+          currency: 'CAD',
+          cad: 40,
+        },
+      ],
+    };
+    const asWritten = await sent('stats-key-0001', { market });
+    const retitled = await sent('stats-key-0002');
+    const dropped = await sent('stats-key-0003');
+    const d = draft();
+    // the category the inbox offers (an earlier test may have made the draft's category, so ask)
+    const offered = async (id: string) =>
+      (await http.get(`/admin/imports/${id}`).set({ Authorization: staff.auth })).body.draft
+        .categoryId as string | null;
+    const categoryId = await offered(asWritten);
+    await http
+      .post(`/admin/imports/${asWritten}/add`)
+      .set({ Authorization: staff.auth })
+      .send({
+        name: d.title,
+        description: d.description,
+        series: d.series,
+        categoryId,
+        priceCents: 4500,
+      })
+      .expect(200);
+    await http
+      .post(`/admin/imports/${retitled}/add`)
+      .set({ Authorization: staff.auth })
+      .send({
+        name: 'Lamy (Relax Time)',
+        description: d.description,
+        series: d.series,
+        categoryId,
+        priceCents: 4500,
+      })
+      .expect(200);
+    await http
+      .post(`/admin/imports/${dropped}/reject`)
+      .set({ Authorization: staff.auth })
+      .send({ reason: 'blurry' })
+      .expect(200);
+    add.mockRestore();
+    const after = await stats();
+    expect(after.received - before.received).toBe(3);
+    expect(after.added - before.added).toBe(2);
+    expect(after.rejected - before.rejected).toBe(1);
+    expect(after.reviewed - before.reviewed).toBe(2);
+    expect(after.unedited - before.unedited).toBe(1);
+    expect(after.changes.title - before.changes.title).toBe(1);
+    expect(after.priced - before.priced).toBe(1);
+    expect(after.priceInMarket - before.priceInMarket).toBe(1);
+    expect(after.medianHoursToDecide).not.toBeNull();
+    expect(after.weeks).toHaveLength(8);
+    expect(after.weeks.at(-1)!.received).toBeGreaterThanOrEqual(3);
+  });
+
+  it('is for staff, and takes 1 to 365 days', async () => {
+    await http.get('/admin/imports/stats').set({ Authorization: shopper.auth }).expect(403);
+    await http.get('/admin/imports/stats?days=0').set({ Authorization: staff.auth }).expect(400);
+    await http.get('/admin/imports/stats?days=abc').set({ Authorization: staff.auth }).expect(400);
+  });
+});

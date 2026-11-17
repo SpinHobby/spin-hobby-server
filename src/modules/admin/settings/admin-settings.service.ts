@@ -4,6 +4,7 @@ import { Db } from '../../../database/db.service.js';
 import { StoreService } from '../../store/store.service.js';
 import { AdminLog } from '../admin-log.service.js';
 import { sentFields } from '../dto/defined-fields.js';
+import { storefrontLayout } from './layout.js';
 import type { TaxRateDto } from './dto/tax-rate.dto.js';
 import type { UpdateSettingsDto } from './dto/update-settings.dto.js';
 import type { StoreSettingsRow, TaxRateRow } from '../../../database/rows.js';
@@ -17,8 +18,8 @@ export class AdminSettingsService {
     private readonly log: AdminLog,
   ) {}
 
-  get() {
-    return this.store.settings();
+  async get() {
+    return withLayout(await this.store.settings());
   }
 
   /** Applies only the fields that were sent. Returns the settings as they are afterwards. */
@@ -26,18 +27,19 @@ export class AdminSettingsService {
     const changes = sentFields(dto);
     const keys = Object.keys(changes);
     const current = await this.store.settings();
-    if (!keys.length) return current;
+    if (!keys.length) return withLayout(current);
     const min = Number(changes.handling_days_min ?? current.handling_days_min);
     const max = Number(changes.handling_days_max ?? current.handling_days_max);
     if (max < min) throw new AppError('Handling max must be at least the min.');
     return this.db.transaction(async (tx) => {
       const row = await this.db.one<StoreSettingsRow>(
         `update public.store_settings set ${keys.map((k, i) => `${k} = $${i + 1}`).join(', ')} where id = true returning *`,
-        keys.map((k) => changes[k]),
+        // the layout is jsonb
+        keys.map((k) => (k === 'storefront_layout' ? JSON.stringify(changes[k]) : changes[k])),
         tx,
       );
       await this.log.write(adminId, 'settings.updated', 'store', changes, tx);
-      return row;
+      return withLayout(row!);
     });
   }
 
@@ -58,4 +60,9 @@ export class AdminSettingsService {
     });
     return taxRate;
   }
+}
+
+/** The settings with the layout always complete, so the admin screen never has to fill in defaults. */
+function withLayout(row: StoreSettingsRow) {
+  return { ...row, storefront_layout: storefrontLayout(row.storefront_layout) };
 }

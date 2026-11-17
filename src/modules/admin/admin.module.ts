@@ -1,4 +1,6 @@
 import { ChannelPhotosService } from './products/channel-photos.service.js';
+import { RewardsModule } from '../rewards/rewards.module.js';
+import { PhotoFramesService } from './products/photo-frames.service.js';
 import { AdminPhotoBackgroundsController } from './products/admin-photo-backgrounds.controller.js';
 import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js';
 import { ProductPhotosController } from './products/product-photos.controller.js';
@@ -23,6 +25,7 @@ import { AdminImportsController } from './imports/admin-imports.controller.js';
 import { GleamshelfController } from './imports/gleamshelf.controller.js';
 import { GleamshelfTokenGuard } from './imports/gleamshelf-token.guard.js';
 import { ImportsService } from './imports/imports.service.js';
+import { ImportsStatsService } from './imports/imports-stats.service.js';
 import { AdminPhotoJobsController } from './imports/admin-photo-jobs.controller.js';
 import { PhotoJobsService } from './imports/photo-jobs.service.js';
 import { AdminListingJobsController } from './imports/admin-listing-jobs.controller.js';
@@ -38,6 +41,13 @@ import { AdminDashboardController } from './dashboard/admin-dashboard.controller
 import { AdminDashboardService } from './dashboard/admin-dashboard.service.js';
 import { AdminEventsController } from './events/admin-events.controller.js';
 import { AdminEventsService } from './events/admin-events.service.js';
+import { AdminReviewsController } from './reviews/admin-reviews.controller.js';
+import {
+  AdminSearchController,
+  AdminSynonymsController,
+} from './search/admin-search.controller.js';
+import { AdminSearchService } from './search/admin-search.service.js';
+import { AdminReviewsService } from './reviews/admin-reviews.service.js';
 import { AdminHomepageController } from './homepage/admin-homepage.controller.js';
 import { AdminHomepageService } from './homepage/admin-homepage.service.js';
 import { AdminMerchController } from './merch/admin-merch.controller.js';
@@ -62,6 +72,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
 /** The staff/owner admin API: dashboard, products, orders, homepage, categories and merchandise. */
 @Module({
   imports: [
+    RewardsModule,
     AssistantModule,
     DiscountsModule,
     CatalogModule,
@@ -87,6 +98,9 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminSettingsController,
     AdminHomepageController,
     AdminEventsController,
+    AdminReviewsController,
+    AdminSearchController,
+    AdminSynonymsController,
     AdminSquareController,
     AdminSeriesController,
     AdminImportsController,
@@ -102,6 +116,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminAuditService,
     AdminAccountsService,
     ImportsService,
+    ImportsStatsService,
     PhotoJobsService,
     ListingJobsService,
     DescribeJobsService,
@@ -117,6 +132,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     SquarePhotosService,
     PhotoBackgroundsService,
     ChannelPhotosService,
+    PhotoFramesService,
     AdminMerchService,
     AdminCategoriesService,
     CategorySortingService,
@@ -124,6 +140,8 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminSettingsService,
     AdminHomepageService,
     AdminEventsService,
+    AdminReviewsService,
+    AdminSearchService,
     AdminSquareService,
   ],
   // what the eBay module builds on: product photos, the photos picked for eBay, and the admin log

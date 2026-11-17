@@ -16,6 +16,12 @@ export class EbaySetupDto {
   merchantLocationKey!: string;
 }
 
+/** The address of eBay's "thank you" page after signing in, pasted by the owner on a local copy (EBAY_PASTE_BACK). */
+export class EbayFinishDto {
+  @Text('address', 4000)
+  address!: string;
+}
+
 /** Where items ship from (eBay calls it a location). */
 export class EbayLocationDto {
   @Text('name', 100)

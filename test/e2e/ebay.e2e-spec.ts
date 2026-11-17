@@ -42,6 +42,15 @@ const body = (init: RequestInit | undefined) =>
       : init.body
     : undefined;
 const inventoryItems = new Map<string, unknown>();
+/** Business policies: whether the seller has them, and whether eBay switches them on as soon as the shop opts in. */
+const policyProgram = { optedIn: true, switchesOnAtOnce: true, optIns: 0 };
+const notEligible = () =>
+  new Response(
+    JSON.stringify({
+      errors: [{ errorId: 20403, message: 'The user is not eligible for Business Policy.' }],
+    }),
+    { status: 400 },
+  );
 const ebay = mockFetch({
   'https://api.sandbox.ebay.com/identity/v1/oauth2/token': (init) => {
     sent.push({ method: 'POST', url: 'token', body: body(init) });
@@ -55,9 +64,15 @@ const ebay = mockFetch({
   'https://apiz.sandbox.ebay.com/commerce/identity/v1/user/': () => ({
     username: 'spinhobby_seller',
   }),
-  'https://api.sandbox.ebay.com/sell/account/v1/fulfillment_policy': () => ({
-    fulfillmentPolicies: [{ fulfillmentPolicyId: 'F1', name: 'Canada Post' }],
-  }),
+  'https://api.sandbox.ebay.com/sell/account/v1/program/opt_in': () => {
+    policyProgram.optIns++;
+    policyProgram.optedIn = policyProgram.switchesOnAtOnce;
+    return {};
+  },
+  'https://api.sandbox.ebay.com/sell/account/v1/fulfillment_policy': () =>
+    policyProgram.optedIn
+      ? { fulfillmentPolicies: [{ fulfillmentPolicyId: 'F1', name: 'Canada Post' }] }
+      : notEligible(),
   'https://api.sandbox.ebay.com/sell/account/v1/payment_policy': () => ({
     paymentPolicies: [{ paymentPolicyId: 'P1', name: 'Managed payments' }],
   }),
@@ -94,7 +109,8 @@ const ebay = mockFetch({
     if (url.includes('/publish')) return { listingId: '110551234567' };
     if (url.includes('/withdraw')) return { listingId: '110551234567' };
     if (init?.method === 'POST') return { offerId: 'OFFER1' };
-    if (init?.method === 'PUT') return new Response(null, { status: 204 });
+    if (init?.method === 'PUT' || init?.method === 'DELETE')
+      return new Response(null, { status: 204 });
     return new Response(
       JSON.stringify({ errors: [{ errorId: 25713, message: 'This Offer is not available.' }] }),
       { status: 404 },
@@ -227,6 +243,54 @@ describe('connecting the seller account', () => {
     ).rows[0];
     expect(row.access_token).not.toContain('user-access-token');
     expect(row.refresh_token.startsWith('v1.')).toBe(true);
+  });
+
+  it("finishes connecting from the address of eBay's thank-you page, pasted by an owner", async () => {
+    const { url } = (await http.post('/admin/ebay/connect').set(asOwner).expect(200)).body as {
+      url: string;
+    };
+    const state = new URL(url).searchParams.get('state')!;
+    const thanks = `https://signin.sandbox.ebay.com/ws/eBayISAPI.dll?ThirdPartyAuthSucessFailure&isAuthSuccessful=true&state=${state}&code=v%5E1.1%23the-code&expires_in=299`;
+    await http
+      .post('/admin/ebay/connect/finish')
+      .set(asStaff)
+      .send({ address: thanks })
+      .expect(403);
+    expect(
+      (
+        await http
+          .post('/admin/ebay/connect/finish')
+          .set(asOwner)
+          .send({ address: 'not an address' })
+          .expect(400)
+      ).body.error,
+    ).toMatch(/isn't a web address/);
+    const done = (
+      await http
+        .post('/admin/ebay/connect/finish')
+        .set(asOwner)
+        .send({ address: thanks })
+        .expect(200)
+    ).body.ebay;
+    expect(done).toMatchObject({ connected: true, username: 'spinhobby_seller', pasteBack: false });
+    // the same address cannot be used twice
+    await http
+      .post('/admin/ebay/connect/finish')
+      .set(asOwner)
+      .send({ address: thanks })
+      .expect(400);
+  });
+
+  it('opts a seller in to business policies, and says so while eBay is still switching them on', async () => {
+    Object.assign(policyProgram, { optedIn: false, switchesOnAtOnce: false, optIns: 0 });
+    const waiting = await http.get('/admin/ebay/setup').set(asOwner).expect(409);
+    expect(waiting.body.error).toMatch(/switching on business policies/);
+    expect(policyProgram.optIns).toBe(1);
+
+    Object.assign(policyProgram, { switchesOnAtOnce: true, optIns: 0 });
+    const choices = (await http.get('/admin/ebay/setup').set(asOwner).expect(200)).body;
+    expect(choices.policies.fulfillment).toEqual([{ id: 'F1', name: 'Canada Post' }]);
+    expect(policyProgram.optIns).toBe(1);
   });
 
   it('saves the policies and location every listing uses, only ones the seller really has', async () => {
@@ -541,6 +605,30 @@ describe('photos on the shop background', () => {
 });
 
 describe('ending and disconnecting', () => {
+  it('lists an ended product again from a new offer', async () => {
+    await http.post('/admin/ebay/products/SQ_E/end').set(asStaff).expect(200);
+    const from = sent.length;
+    const again = (
+      await http
+        .put('/admin/ebay/products/SQ_E')
+        .set(asStaff)
+        .send({
+          title: 'SEGA prize figure',
+          categoryId: '158666',
+          condition: 'NEW',
+          priceCents: 4500,
+          aspects: { Brand: ['SEGA'], Type: ['Figure'] },
+        })
+        .expect(200)
+    ).body;
+    expect(again.listing.status).toBe('active');
+    const calls = sent.slice(from).map((s) => `${s.method} ${s.url.replace(/^.*\/v1\//, '')}`);
+    expect(calls).toEqual(
+      expect.arrayContaining(['DELETE offer/OFFER1', 'POST offer', 'POST offer/OFFER1/publish']),
+    );
+    expect(calls).not.toContain('PUT offer/OFFER1');
+  });
+
   it('will not disconnect while a listing is live, ends the listing, then disconnects', async () => {
     expect(
       (await http.delete('/admin/ebay/connection').set(asOwner).send({}).expect(409)).body.error,

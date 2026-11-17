@@ -35,7 +35,11 @@ export class RemindersScheduler implements OnModuleInit, OnModuleDestroy {
   async run(now = new Date()) {
     const carts = await this.carts.sendDue(now).catch((e) => this.fail('cart reminders', e));
     const news = await this.follows.announceDue(now).catch((e) => this.fail('pre-order news', e));
-    return { carts, news };
+    // after announceDue, so this week's new pre-orders are already recorded
+    const digests = await this.follows
+      .digestDue(now)
+      .catch((e) => this.fail('weekly pre-order digests', e));
+    return { carts, news, digests };
   }
 
   private fail(what: string, e: unknown) {
