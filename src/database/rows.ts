@@ -314,3 +314,10 @@ export interface SearchSynonymRow {
   created_at: Date;
   updated_at: Date;
 }
+
+/** `public.notes`: the sample REST API's notes (src/modules/hello). */
+export interface NoteRow {
+  id: string;
+  text: string;
+  created_at: Date;
+}

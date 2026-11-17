@@ -1481,3 +1481,10 @@ export const SAMPLE_PEOPLE: [string, string, string, string, string][] = [
   ['Mia', 'Wong', '1055 W Georgia St', 'Vancouver', 'BC'],
   ['Lucas', 'Brown', '200 Yonge St', 'Toronto', 'ON'],
 ];
+
+/** Notes for the sample REST API (GET /hello/notes), loaded into an empty `public.notes` table. */
+export const SAMPLE_NOTES: string[] = [
+  'Welcome! This note came from the seed in src/modules/sample/seed.ts.',
+  'GET /hello/notes lists every note, newest first. Anyone can read them.',
+  'Staff can add a note with POST /hello/notes and remove one with DELETE /hello/notes/:id.',
+];

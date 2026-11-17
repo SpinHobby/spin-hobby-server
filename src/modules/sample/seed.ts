@@ -1,10 +1,11 @@
 /**
  * Loads the sample catalog (catalog.ts) into a database: categories, products with pictures, homepage
- * banners and a month of orders. Used by the staging API on its first start, by `npm run dev:local`
+ * banners, notes for the sample REST API and a month of orders. Used by the staging API on its first start, by `npm run dev:local`
  * against its in-process Postgres, and by `npm run seed:staging`.
  */
 import {
   SAMPLE_CATEGORIES,
+  SAMPLE_NOTES,
   SAMPLE_PEOPLE,
   SAMPLE_PREFIX,
   SAMPLE_PRODUCTS,
@@ -140,6 +141,20 @@ export async function seedSample(db: SampleDb, imageBase: string, { more = 0 } =
     }
   }
 
+  // Notes for the sample REST API: only into an empty table, so starting again never adds them twice.
+  let notes = 0;
+  const noteCount = await db.query('select count(*)::int as n from public.notes');
+  if (noteCount.rows[0].n === 0) {
+    // A minute apart, the first one newest, so GET /hello/notes (newest first) shows them in the order written.
+    for (const [i, text] of SAMPLE_NOTES.entries()) {
+      await db.query(
+        'insert into public.notes (text, created_at) values ($1, now() - make_interval(mins => $2))',
+        [text, i],
+      );
+      notes++;
+    }
+  }
+
   // Orders: one per person over the last month, one to three items each, every status represented.
   const orderable = SAMPLE_PRODUCTS.filter(
     (p) =>
@@ -210,6 +225,7 @@ export async function seedSample(db: SampleDb, imageBase: string, { more = 0 } =
     categories: categoryIds.size,
     orders: SAMPLE_PEOPLE.length,
     slides,
+    notes,
   };
 }
 
@@ -222,4 +238,5 @@ export async function clearSample(db: SampleDb) {
   await db.query('delete from public.hero_slides where headline = any($1::text[])', [
     SAMPLE_SLIDES.map((s) => s.headline),
   ]);
+  await db.query('delete from public.notes where text = any($1::text[])', [SAMPLE_NOTES]);
 }

@@ -152,7 +152,7 @@ if (db) {
   server = new PGLiteSocketServer({ db, port: DB_PORT, host: '127.0.0.1' });
   await server.start();
   console.log(
-    `\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories, ${people.accounts} sample accounts with ${people.orders} orders and ${people.favourites} favourites (in memory: fresh on every start)`,
+    `\n  Local Postgres (PGlite) on :${DB_PORT} — ${seeded.products} products, ${seeded.categories} categories, ${seeded.notes} notes, ${people.accounts} sample accounts with ${people.orders} orders and ${people.favourites} favourites (in memory: fresh on every start)`,
   );
 }
 const ownHost = ownDatabase ? new URL(ownDatabase).hostname : '';
