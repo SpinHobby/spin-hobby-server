@@ -28,6 +28,7 @@ export interface AppUser {
   email: string;
   role: AppRole;
   firstName: string | null;
+  lastName: string | null;
   /** May open Audit (documents and sales records): every owner, and staff the owner has allowed. */
   canAudit: boolean;
   /** Set when the owner suspended or banned the account; the access guard and sign-in refuse it then. */
@@ -125,16 +126,17 @@ export class AuthService {
       id: string;
       email: string;
       role: AppRole;
+      first_name: string | null;
+      last_name: string | null;
       can_audit: boolean;
       suspended_until: string | null;
       banned_at: string | null;
       restriction_reason: string | null;
-      first_name: string | null;
       phone: string | null;
       email_verified_at: string | null;
       welcomed_at: string | null;
     }>(
-      `select id, email, role, can_audit, suspended_until, banned_at, restriction_reason, first_name, phone,
+      `select id, email, role, can_audit, suspended_until, banned_at, restriction_reason, first_name, last_name, phone,
               email_verified_at, welcomed_at
          from public.profiles where id = $1`,
       [payload.sub],
@@ -159,6 +161,7 @@ export class AuthService {
       email: profile.email,
       role,
       firstName: profile.first_name?.trim() || firstNameFrom(payload),
+      lastName: profile.last_name?.trim() || null,
       emailVerified: verified || atLeast(role, 'staff'),
       welcomed: Boolean(profile.welcomed_at) || atLeast(role, 'staff'),
       phone: profile.phone,

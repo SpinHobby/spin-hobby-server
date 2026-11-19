@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AppValidationPipe } from '../../../common/validation/validation.pipe.js';
 import { AddWishlistDto } from './add-wishlist.dto.js';
 import { CreateAlertDto } from './create-alert.dto.js';
+import { UpdateProfileDto } from './update-profile.dto.js';
 
 const pipe = new AppValidationPipe();
 const body = (metatype: new () => object, value: unknown) =>
@@ -32,5 +33,30 @@ describe('CreateAlertDto', () => {
     await expect(body(CreateAlertDto, { email: 'a@b.co' })).rejects.toMatchObject({
       message: 'variationId is required.',
     });
+  });
+});
+
+describe('UpdateProfileDto', () => {
+  it('trims names, and blank or missing becomes null', async () => {
+    expect(
+      await body(UpdateProfileDto, { firstName: ' Aki ', lastName: ' Tanaka ' }),
+    ).toMatchObject({ firstName: 'Aki', lastName: 'Tanaka' });
+    expect(await body(UpdateProfileDto, { firstName: '' })).toMatchObject({
+      firstName: null,
+      lastName: null,
+    });
+    expect(await body(UpdateProfileDto, {})).toMatchObject({ firstName: null, lastName: null });
+  });
+
+  it('rejects a name over 80 characters', async () => {
+    await expect(body(UpdateProfileDto, { firstName: 'a'.repeat(81) })).rejects.toMatchObject({
+      message: 'Invalid text value.',
+    });
+  });
+
+  it('drops fields it does not declare, such as role', async () => {
+    expect(await body(UpdateProfileDto, { firstName: 'Aki', role: 'owner' })).not.toHaveProperty(
+      'role',
+    );
   });
 });

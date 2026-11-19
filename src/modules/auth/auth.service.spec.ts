@@ -61,6 +61,55 @@ describe('firstNameFrom (the name shown in greetings)', () => {
   });
 });
 
+describe('userFromAuthorization: where the name shown on /auth/me comes from', () => {
+  const PROJECT = 'https://proj.supabase.co';
+
+  async function setup(profile: { first_name: string | null; last_name: string | null }) {
+    const { exportJWK, generateKeyPair, SignJWT } = await import('jose');
+    const { privateKey, publicKey } = await generateKeyPair('ES256');
+    const jwk = { ...(await exportJWK(publicKey)), kid: 'k1', alg: 'ES256', use: 'sig' };
+    vi.stubGlobal(
+      'fetch',
+      async () =>
+        new Response(JSON.stringify({ keys: [jwk] }), {
+          headers: { 'content-type': 'application/json' },
+        }),
+    );
+    process.env.SUPABASE_URL = PROJECT;
+    delete process.env.SUPABASE_JWT_SECRET;
+    const row = { id: 'user-1', email: 'fan@shop.com', role: 'customer' as const, ...profile };
+    const db = { one: async () => row } as never;
+    const service = new AuthService(db, {} as never);
+    const token = (claims: Record<string, unknown> = {}) =>
+      new SignJWT(claims)
+        .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
+        .setSubject('user-1')
+        .setAudience('authenticated')
+        .setIssuer(`${PROJECT}/auth/v1`)
+        .setExpirationTime('1h')
+        .sign(privateKey);
+    return { service, token };
+  }
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('prefers a saved name over the token when the person has set one', async () => {
+    const { service, token } = await setup({ first_name: 'Saved', last_name: 'Tanaka' });
+    const user = await service.userFromAuthorization(
+      `Bearer ${await token({ user_metadata: { full_name: 'From Token' } })}`,
+    );
+    expect(user).toMatchObject({ firstName: 'Saved', lastName: 'Tanaka' });
+  });
+
+  it('falls back to the token name for people who never set one', async () => {
+    const { service, token } = await setup({ first_name: null, last_name: null });
+    const user = await service.userFromAuthorization(
+      `Bearer ${await token({ user_metadata: { full_name: 'From Token' } })}`,
+    );
+    expect(user).toMatchObject({ firstName: 'From', lastName: null });
+  });
+});
+
 describe("AuthService: verifying sign-in tokens with Supabase's published keys (no shared secret)", () => {
   const PROJECT = 'https://proj.supabase.co';
   const profile = { id: 'user-1', email: 'fan@shop.com', role: 'customer' as const };
