@@ -11,9 +11,6 @@ import { SeriesService } from '../series/series.service.js';
 import { downloadPhoto } from './download-photo.js';
 import type { QuickAddDto } from './dto/quick-add.dto.js';
 
-/** How long to wait before reading a new item's stock from Square again: about 15 seconds in all. */
-export const STOCK_WAITS_MS = [1000, 2000, 3000, 4000, 5000];
-
 /** Square's own message, shown instead of a generic server error. */
 function fromSquare(error: unknown): never {
   if (error instanceof AppError) throw error;
@@ -91,6 +88,7 @@ export class QuickAddService {
     const next = current + quantity;
     await this.square.setInitialInventoryCount(product.variation_id, next).catch(fromSquare);
     await this.sync.syncItems([itemId]).catch(fromSquare);
+    await this.keepStock(product.variation_id, next);
     await this.log.write(adminId, 'product.stock_added', itemId, { quantity, next });
     return next;
   }
@@ -134,9 +132,15 @@ export class QuickAddService {
         if (saved < buffers.length)
           throw new AppError(`Square accepted only ${saved} of ${buffers.length} photos.`, 502);
       }
-      if (dto.stockCount != null)
-        await this.square.setInitialInventoryCount(variationId, dto.stockCount).catch(fromSquare);
-      await this.syncUntilStock(itemId, variationId, dto.stockCount);
+      if (dto.stockCount != null) {
+        const counted = await this.square
+          .setInitialInventoryCount(variationId, dto.stockCount)
+          .catch(fromSquare);
+        if (counted != null && counted !== dto.stockCount)
+          throw new AppError(`Square counted ${counted} in stock, not ${dto.stockCount}.`, 502);
+      }
+      await this.sync.syncItems([itemId]).catch(fromSquare);
+      if (dto.stockCount != null) await this.keepStock(variationId, dto.stockCount);
       await this.checkCopy(itemId, dto, buffers.length);
       await this.saveStorefrontDetails(itemId, dto);
     } catch (error) {
@@ -159,24 +163,16 @@ export class QuickAddService {
   }
 
   /**
-   * Copies the new item from Square, again until the stock just set shows. Square takes a moment to count a new stock entry: read straight
-   * after it, the count can still be 0, and the check below then undid a good item ("the stock differs", the live admin, 2026-11-19).
+   * Our copy of the stock is the count Square confirmed when it was set. Read back from Square straight after, a new item's count could
+   * still be 0 for longer than 15 seconds, and the check after adding then said "the stock differs" and undid a good item (the live admin,
+   * 2026-11-19); the next sync reads Square's count as usual.
    */
-  private async syncUntilStock(
-    itemId: string,
-    variationId: string,
-    stock: number | null | undefined,
-  ) {
-    for (let attempt = 0; ; attempt++) {
-      await this.sync.syncItems([itemId]).catch(fromSquare);
-      if (stock == null || attempt >= STOCK_WAITS_MS.length) return;
-      const row = await this.db.one<{ quantity: number | null }>(
-        'select quantity from public.inventory_snapshots where square_variation_id = $1',
-        [variationId],
-      );
-      if (row && Number(row.quantity) === stock) return;
-      await new Promise((resolve) => setTimeout(resolve, STOCK_WAITS_MS[attempt]));
-    }
+  private async keepStock(variationId: string, quantity: number) {
+    await this.db.exec(
+      `insert into public.inventory_snapshots (square_variation_id, quantity, synced_at) values ($1, $2, now())
+       on conflict (square_variation_id) do update set quantity = excluded.quantity, synced_at = excluded.synced_at`,
+      [variationId, quantity],
+    );
   }
 
   /** What our database now holds for the new item must match what was entered. */

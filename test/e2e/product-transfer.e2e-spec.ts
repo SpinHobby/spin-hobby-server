@@ -233,7 +233,7 @@ describe('move a product into Square', () => {
       .mockImplementation((_id, _name, buffers) =>
         Promise.resolve(photosSaved ? photosSaved(buffers.length) : buffers.length),
       ),
-    stock: vi.spyOn(square, 'setInitialInventoryCount').mockResolvedValue(undefined),
+    stock: vi.spyOn(square, 'setInitialInventoryCount').mockResolvedValue(null),
     remove: vi.spyOn(square, 'deleteItem').mockResolvedValue(undefined),
   });
 

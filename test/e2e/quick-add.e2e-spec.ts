@@ -14,7 +14,7 @@ const PHOTO = (n: number) =>
 const JAN = '4901234567894';
 
 /** Stands in for Square and our photo storage. `name` is what Square reports back for the new item. */
-const fakes = (copy: { name?: string; images?: string[]; upc?: string } = {}) =>
+const fakes = (copy: { name?: string; images?: string[]; upc?: string; stock?: string } = {}) =>
   mockFetch({
     'https://proj.supabase.co/storage/v1/object/public/product-images/': () =>
       new Response(Buffer.from('not-really-a-photo'), {
@@ -64,7 +64,7 @@ const fakes = (copy: { name?: string; images?: string[]; upc?: string } = {}) =>
       objects: [{ id: 'SQCAT', type: 'CATEGORY', category_data: { name: 'Figures' } }],
     }),
     '/v2/inventory/counts/batch-retrieve': () => ({
-      counts: [{ catalog_object_id: 'SQ_QA_V', quantity: '3' }],
+      counts: [{ catalog_object_id: 'SQ_QA_V', quantity: copy.stock ?? '3' }],
     }),
   });
 
@@ -77,7 +77,7 @@ const spies = () => ({
   photos: vi
     .spyOn(square, 'attachPhotos')
     .mockImplementation((_i, _n, buffers) => Promise.resolve(buffers.length)),
-  stock: vi.spyOn(square, 'setInitialInventoryCount').mockResolvedValue(undefined),
+  stock: vi.spyOn(square, 'setInitialInventoryCount').mockResolvedValue(null),
   remove: vi.spyOn(square, 'deleteItem').mockResolvedValue(undefined),
 });
 const restore = (s: ReturnType<typeof spies>, net: { restore: () => void }) => {
@@ -208,6 +208,33 @@ describe('add a product straight into Square', () => {
       .set(as)
       .send(body({ name: '' }))
       .expect(400);
+  });
+});
+
+describe('the stock of a new product', () => {
+  it('keeps the count Square confirmed when set, though reading it back straight after still shows 0 (the live admin, 2026-11-19)', async () => {
+    const s = spies();
+    s.stock.mockResolvedValue(3);
+    const net = fakes({ stock: '0' });
+    try {
+      await http.post('/admin/products/quick-add').set(as).send(body()).expect(200);
+      const listed = (await http.get('/admin/catalog?q=SQ_QA').set(as).expect(200)).body.items[0];
+      expect(listed).toMatchObject({ id: 'SQ_QA', stockCount: 3 });
+    } finally {
+      restore(s, net);
+    }
+  });
+
+  it('undoes the new item when Square counted a different stock than entered', async () => {
+    const s = spies();
+    s.stock.mockResolvedValue(2);
+    const net = fakes();
+    try {
+      const res = await http.post('/admin/products/quick-add').set(as).send(body()).expect(502);
+      expect(res.body.error).toMatch(/Square counted 2 in stock, not 3\. Nothing was added/);
+    } finally {
+      restore(s, net);
+    }
   });
 });
 
