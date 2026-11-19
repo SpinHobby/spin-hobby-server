@@ -17,7 +17,33 @@ export interface PhotoJobOptions {
   clean: boolean;
   /** Drafts: look for the maker's own official photos on its website, offered as photos to choose. On unless turned off. */
   official: boolean;
+  /** How the clean product photo is made (with `clean`). The photo computer decides for each photo whether it is a printed box or a window box. */
+  polish: PolishOptions;
 }
+
+/**
+ * The clean product photo's choices. The photo computer tells a printed box (the character is artwork on the cover) from a window box, bag or
+ * blister (the real figure is behind plastic) for each photo, and makes:
+ * - a printed box: the character with the box art around it as on the cover (`printed: 'boxart'`), or the character alone (`'figure'`);
+ * - a window box, bag or blister: always the figure alone, out of its packaging.
+ */
+export interface PolishOptions {
+  /** A printed box: `boxart` keeps the cover's art around the character, polished; `figure` is the character alone on a backdrop. */
+  printed: 'boxart' | 'figure';
+  /** Take the title lettering, logos, maker marks and other printed text off (the box-art picture; the figure alone never has them). */
+  removeText: boolean;
+  /** Behind a figure alone: a soft backdrop in the box art's colours, a dark spotlight with a floor reflection, or plain white. */
+  backdrop: 'artwork' | 'dark' | 'white';
+  /** A window box, bag or blister: draw the figure from the maker's official photos (its legs and face are hidden by the plastic). */
+  makerPhotos: boolean;
+}
+
+export const DEFAULT_POLISH: PolishOptions = {
+  printed: 'boxart',
+  removeText: true,
+  backdrop: 'artwork',
+  makerPhotos: true,
+};
 
 export const DEFAULT_PHOTO_OPTIONS: PhotoJobOptions = {
   mode: 'product',
@@ -26,7 +52,43 @@ export const DEFAULT_PHOTO_OPTIONS: PhotoJobOptions = {
   look: true,
   clean: true,
   official: true,
+  polish: { ...DEFAULT_POLISH },
 };
+
+const choice = <T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fallback: T,
+  name: string,
+): T => {
+  if (value === undefined || value === null) return fallback;
+  if (typeof value !== 'string' || !(allowed as readonly string[]).includes(value))
+    throw new AppError(`${name} must be ${allowed.join(', ').replace(/, ([^,]*)$/, ' or $1')}.`);
+  return value as T;
+};
+
+function parsePolish(raw: unknown): PolishOptions {
+  if (raw === undefined || raw === null) return { ...DEFAULT_POLISH };
+  if (typeof raw !== 'object' || Array.isArray(raw))
+    throw new AppError('The polish options are not readable.');
+  const p = raw as Record<string, unknown>;
+  return {
+    printed: choice(
+      p.printed,
+      ['boxart', 'figure'] as const,
+      DEFAULT_POLISH.printed,
+      'polish.printed',
+    ),
+    removeText: flag(p.removeText, DEFAULT_POLISH.removeText, 'polish.removeText'),
+    backdrop: choice(
+      p.backdrop,
+      ['artwork', 'dark', 'white'] as const,
+      DEFAULT_POLISH.backdrop,
+      'polish.backdrop',
+    ),
+    makerPhotos: flag(p.makerPhotos, DEFAULT_POLISH.makerPhotos, 'polish.makerPhotos'),
+  };
+}
 
 const flag = (value: unknown, fallback: boolean, name: string): boolean => {
   if (value === undefined || value === null) return fallback;
@@ -51,6 +113,7 @@ export function parsePhotoOptions(raw: unknown): PhotoJobOptions {
     // options saved before the clean photo existed (or sent by an older admin) are read as they were done: no clean photo
     clean: flag(o.clean, false, 'clean'),
     official: flag(o.official, true, 'official'),
+    polish: parsePolish(o.polish),
   };
 }
 

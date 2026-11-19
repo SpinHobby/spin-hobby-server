@@ -24,6 +24,15 @@ export class ProfileService {
     private readonly email: EmailService,
   ) {}
 
+  /** Saves the signed-in person's own name (`PUT /account/profile`). `null` clears a name. */
+  async saveName(userId: string, name: { firstName: string | null; lastName: string | null }) {
+    await this.db.exec('update public.profiles set first_name = $2, last_name = $3 where id = $1', [
+      userId,
+      name.firstName,
+      name.lastName,
+    ]);
+  }
+
   /**
    * Saves what was sent (a field left out stays as it is) and marks the welcome step as seen. The first time it is seen, the
    * welcome email goes out (once per account, after the transaction, never holding up the save).

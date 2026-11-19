@@ -40,6 +40,34 @@ describe('accounts', () => {
     expect(row.rows[0].role).toBe('owner');
   });
 
+  it('lets a shopper change their own name', async () => {
+    const res = await http
+      .put('/account/profile')
+      .set('Authorization', shopper.auth)
+      .send({ firstName: ' Aki ', lastName: ' Tanaka ', role: 'owner' })
+      .expect(200);
+    expect(res.body.user).toMatchObject({
+      firstName: 'Aki',
+      lastName: 'Tanaka',
+      role: 'customer', // role in the body is ignored
+      email: 'fan@example.com',
+    });
+    expect(
+      (await http.get('/auth/me').set('Authorization', shopper.auth).expect(200)).body.user,
+    ).toMatchObject({ firstName: 'Aki', lastName: 'Tanaka' });
+
+    await http
+      .put('/account/profile')
+      .set('Authorization', shopper.auth)
+      .send({ firstName: '' })
+      .expect(200);
+    expect(
+      (await http.get('/auth/me').set('Authorization', shopper.auth).expect(200)).body.user,
+    ).toMatchObject({ firstName: null, lastName: null });
+
+    await http.put('/account/profile').send({ firstName: 'Nope' }).expect(401);
+  });
+
   it('manages a wishlist', async () => {
     await http
       .post('/wishlist')
