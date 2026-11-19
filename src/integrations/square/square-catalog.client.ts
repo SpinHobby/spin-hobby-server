@@ -418,6 +418,8 @@ export class SquareCatalogClient {
                 name: 'Regular',
                 pricing_type: 'FIXED_PRICING',
                 price_money: { amount: item.price, currency: Currency.Cad },
+                // the shop counts what it has: without this the stock set right after is not tracked
+                track_inventory: true,
                 ...(item.upc ? { upc: item.upc } : {}),
               },
             },
@@ -529,10 +531,13 @@ export class SquareCatalogClient {
   // PHYSICAL_COUNT (an absolute snapshot), not an ADJUSTMENT, since there's
   // no prior state to transition from - the cashier tool is the one entering
   // the real-world count for the first time.
-  async setInitialInventoryCount(variationId: string, quantity: number): Promise<void> {
+  //
+  // Returns the in-stock count Square reports for the variation in its answer, or null when it reports none. That answer is the count as
+  // set; reading the count back straight after (batch-retrieve) can still show the old number for a while.
+  async setInitialInventoryCount(variationId: string, quantity: number): Promise<number | null> {
     const locationId = squareLocationId();
 
-    await this.client.inventory.batchCreateChanges({
+    const answer = await this.client.inventory.batchCreateChanges({
       idempotencyKey: randomUUID(),
       changes: [
         {
@@ -547,6 +552,10 @@ export class SquareCatalogClient {
         },
       ],
     });
+    const counted = (answer?.counts ?? []).find(
+      (c) => c.catalogObjectId === variationId && (c.state ?? 'IN_STOCK') === 'IN_STOCK',
+    );
+    return counted?.quantity != null ? Number(counted.quantity) : null;
   }
 
   /**
