@@ -1,8 +1,10 @@
 import sharp, { type OutputInfo, type Sharp } from 'sharp';
 import { AppError } from '../../../common/errors.js';
+import { MAX_PHOTO_SIDE } from '../../cashier/image-processing.js';
 
-/** The finished photo is a square this many pixels wide (what Square gets for an edited photo anyway). */
-export const PHOTO_SIZE = 1600;
+/** The finished photo is a square this many pixels wide: the same as the longest side the shop keeps any photo at (MAX_PHOTO_SIDE), so a
+ *  cut-out on the shop background is as sharp as the photo it came from (it was 1600: spin-hobby#110). */
+export const PHOTO_SIZE = MAX_PHOTO_SIDE;
 /** Space left around the product on each side, as a share of the square (the admin's preview uses the same). */
 export const PHOTO_PADDING = 0.08;
 
