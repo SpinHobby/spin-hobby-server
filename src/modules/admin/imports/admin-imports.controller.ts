@@ -1,3 +1,5 @@
+import { ChangesDrafts } from './wake.interceptors.js';
+import { currentDraftsVersion, waitFor } from './wake.js';
 import {
   StreamableFile,
   Put,
@@ -10,6 +12,7 @@ import {
   ParseUUIDPipe,
   Post,
   Query,
+  UseInterceptors,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
@@ -27,6 +30,7 @@ import { AppError } from '../../../common/errors.js';
 
 /** Drafts sent by Gleamshelf, waiting for a person: look at each, type the price and stock, add it or reject it. */
 @ApiTags('Admin: Gleamshelf imports')
+@UseInterceptors(ChangesDrafts)
 @Controller('admin/imports')
 @Access('staff')
 export class AdminImportsController {
@@ -69,6 +73,19 @@ export class AdminImportsController {
     if (!Number.isInteger(n) || n < 1 || n > 365)
       throw new AppError('Days must be a whole number from 1 to 365.');
     return { success: true, ...(await this.importStats.stats(n)) };
+  }
+
+  /**
+   * Waits until the drafts list changes (or up to `seconds`, at most 200), then says where it is now: the Imports page reloads its list only
+   * when this differs from what it showed, instead of asking for the whole list every few seconds (wake.ts). Answers at once when `since` is
+   * already out of date. Nothing is read from the database while it waits.
+   */
+  @Get('changes')
+  async changes(@Query('since') since?: string, @Query('seconds') seconds?: string) {
+    const now = currentDraftsVersion();
+    if (since !== String(now)) return { success: true, version: now };
+    await waitFor('drafts', Math.min(200, Math.max(1, Number(seconds) || 200)));
+    return { success: true, version: currentDraftsVersion() };
   }
 
   @Get(':id')
