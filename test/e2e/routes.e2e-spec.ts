@@ -296,6 +296,7 @@ const EXPECTED: string[] = [
   'PUT /admin/products/:id/photo-frame [staff]',
   'PUT /admin/products/:id/photos [staff]',
   'PUT /admin/products/:id/visibility [staff]',
+  'PUT /admin/products/:id/website-photo [staff]',
   'PUT /admin/products/front-page-order [staff]',
   'PUT /admin/reviews/:id [staff]',
   'PUT /admin/rewards/products/:id [owner]',

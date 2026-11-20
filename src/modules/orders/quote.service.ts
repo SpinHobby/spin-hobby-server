@@ -165,7 +165,11 @@ export class QuoteService {
               p.name as product_name, p.is_active, p.is_visible,
               m.availability, m.order_by_date, m.max_per_customer,
               i.quantity as stock,
-              (select pi.image_url from public.product_images pi where pi.square_item_id = v.square_item_id order by pi.sort_order limit 1) as image_url
+              (select pi.image_url from public.product_images pi
+                where pi.square_item_id = v.square_item_id
+                  and not exists (select 1 from public.website_hidden_photos w
+                                   where w.square_item_id = pi.square_item_id and w.image_id = coalesce(pi.square_image_id, pi.image_url))
+                order by pi.sort_order limit 1) as image_url
          from public.catalog_variations v
          join public.catalog_products p on p.square_item_id = v.square_item_id
          left join public.product_metadata m on m.square_item_id = v.square_item_id
