@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import sharp from 'sharp';
 import { randomUUID } from 'node:crypto';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -16,6 +17,44 @@ export const IMAGE_TYPES: Record<string, string> = {
 };
 export const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
+/**
+ * An image made smaller in bytes until it fits `limit` (the storage bucket's own limit too): first saved again more tightly at full size,
+ * then a little smaller each time (85% of the width and height), keeping its type and transparency. Photos are kept up to 3072 px since
+ * 2026-11-20 (spin-hobby#110), and a 3072 px cut-out on a transparent square can be a PNG over 5 MB: adding a product then failed with
+ * "Images must be under 5 MB". Null when it cannot be read or still does not fit.
+ */
+export async function fitUnderLimit(
+  bytes: Buffer,
+  contentType: string,
+  limit = MAX_IMAGE_BYTES,
+): Promise<Buffer | null> {
+  if (bytes.length <= limit) return bytes;
+  try {
+    const meta = await sharp(bytes).metadata();
+    if (!meta.width || !meta.height) return null;
+    for (let step = 0; step < 10; step++) {
+      const k = Math.pow(0.85, step);
+      let image = sharp(bytes);
+      if (step > 0)
+        image = image.resize({
+          width: Math.max(1, Math.round(meta.width * k)),
+          height: Math.max(1, Math.round(meta.height * k)),
+          fit: 'inside',
+        });
+      const out =
+        contentType === 'image/png'
+          ? await image.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer()
+          : contentType === 'image/webp'
+            ? await image.webp({ quality: 82 }).toBuffer()
+            : await image.jpeg({ quality: 86, mozjpeg: true }).toBuffer();
+      if (out.length <= limit) return out;
+    }
+  } catch {
+    /* not an image sharp can read */
+  }
+  return null;
+}
+
 /** Writes admin-uploaded photos to the public Supabase Storage bucket (service role only). */
 @Injectable()
 export class StorageService {
@@ -26,8 +65,11 @@ export class StorageService {
   ) {
     const ext = IMAGE_TYPES[contentType];
     if (!ext) throw new AppError('Upload a WebP, JPEG or PNG image.');
-    if (!bytes.length || bytes.length > MAX_IMAGE_BYTES)
-      throw new AppError('Images must be under 5 MB.');
+    if (!bytes.length) throw new AppError('The image is empty.');
+    // too big in bytes: made to fit rather than refused (most are photos the shop made itself, which nobody can shrink by hand)
+    const fitted = await fitUnderLimit(bytes, contentType);
+    if (!fitted) throw new AppError('Images must be under 5 MB.');
+    bytes = fitted;
     const base = supabaseUrl();
     const key = supabaseServiceKey();
     const path = `${folder}/${new Date().toISOString().slice(0, 7)}/${randomUUID()}.${ext}`;
