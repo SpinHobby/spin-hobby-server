@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { WakesWorker } from './wake.interceptors.js';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
@@ -7,6 +18,7 @@ import { ApplyDescriptionDto, DescribeBatchDto } from './dto/describe.dto.js';
 
 /** Descriptions for products already in the shop: a photo computer proposes them, a person applies or skips each one. */
 @ApiTags('Admin: product descriptions')
+@UseInterceptors(WakesWorker)
 @Controller('admin/describe-jobs')
 @Access('staff')
 export class AdminDescribeJobsController {

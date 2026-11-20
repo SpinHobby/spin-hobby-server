@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, Param, ParseUUIDPipe, Post } from '@nestjs/common';
+import { WakesWorker } from './wake.interceptors.js';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseInterceptors,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Access, CurrentUser } from '../../auth/access.js';
 import type { AppUser } from '../../auth/auth.service.js';
@@ -8,6 +18,7 @@ import { PhotoJobsService } from './photo-jobs.service.js';
 
 /** Better photos for many products at once: send photos to the photo computer, look at the results, use the ones that are good. */
 @ApiTags('Admin: photo improvements')
+@UseInterceptors(WakesWorker)
 @Controller('admin/photo-batches')
 @Access('staff')
 export class AdminPhotoJobsController {
