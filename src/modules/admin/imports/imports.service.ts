@@ -26,6 +26,7 @@ import { SeriesService } from '../series/series.service.js';
 import { isOfficialUrl, parseDraft, type DraftInput, type OfficialPhoto } from './draft.js';
 import { likelySameProducts, type ProductMatch, type ShopProduct } from './duplicates.js';
 import { reviewDraft } from './review.js';
+import { WebsitePhotosService } from '../products/website-photos.service.js';
 
 const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 export const TOKEN_PREFIX = 'gst_';
@@ -65,6 +66,8 @@ export interface PhotoChoice {
   key: PhotoKey;
   square: boolean;
   ebay: boolean;
+  /** A Square photo also on the website (the default); false keeps it in Square only (the till, eBay later). */
+  website?: boolean;
 }
 
 /** The photos a draft offers, in the order they are shown. `background` is the cut-out, which is placed on a background chosen when it is used. */
@@ -161,6 +164,7 @@ export class ImportsService {
     private readonly backgrounds: PhotoBackgroundsService,
     private readonly photos: SquarePhotosService,
     private readonly merch: AdminMerchService,
+    private readonly website: WebsitePhotosService,
   ) {}
 
   // ---- connecting an app ------------------------------------------------------------------------------------------------------------
@@ -541,6 +545,10 @@ export class ImportsService {
           409,
         );
     if (!choices.some((c) => c.square || c.ebay)) throw new AppError('Choose at least one photo.');
+    if (choices.some((c) => c.square) && !choices.some((c) => c.square && c.website !== false))
+      throw new AppError(
+        'Keep at least one photo on the website: it is the product’s picture there.',
+      );
     const claimed = await this.db.one<{ id: string }>(
       "update public.product_imports set status = 'added', decided_by = $2, decided_at = now() where id = $1 and status = 'draft' returning id",
       [id, adminId],
@@ -659,7 +667,21 @@ export class ImportsService {
           );
         else await this.storage.deleteImages([row.cutout_url]).catch(() => undefined);
       }
+      // Square photos the admin kept off the website: Square ids by place in the list (a shop-only product's photos: their addresses)
+      const offPlaces = square.flatMap((c, i) => (c.website === false ? [i] : []));
+      if (offPlaces.length) {
+        const ids = inSquare
+          ? await this.photos
+              .list(product.id)
+              .then((l) => l.shown.map((p) => p.id))
+              .catch(() => [] as string[])
+          : dto.imageUrls;
+        const off = offPlaces.map((i) => ids[i]).filter((x): x is string => !!x);
+        // Square could not list them: show every photo rather than guess which is which
+        if (off.length === offPlaces.length) await this.website.hide(product.id, off);
+      }
       await this.log.write(adminId, 'imports.added', id, {
+        offWebsite: offPlaces.length,
         productId: product.id,
         square: square.map((c) => c.key),
         ebay: choices.filter((c) => c.ebay).map((c) => c.key),
