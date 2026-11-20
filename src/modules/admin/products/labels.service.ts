@@ -25,6 +25,7 @@ interface LabelRow {
   sku: string | null;
   upc: string | null;
   stock: number | null;
+  price_cents: number | null;
 }
 
 export interface Label {
@@ -39,6 +40,8 @@ export interface Label {
   inSquare: boolean;
   /** Units in stock (null when Square doesn't track it), for one sticker per unit. */
   stock: number | null;
+  /** The selling price in cents, for a price tag (null when the product has no variation). */
+  priceCents: number | null;
 }
 
 @Injectable()
@@ -52,7 +55,7 @@ export class LabelsService {
   /** The label details for these products, in the order given, giving a SKU to any product without one. */
   async prepare(adminId: string, ids: string[]): Promise<{ labels: Label[]; assigned: number }> {
     const rows = await this.db.many<LabelRow>(
-      `select p.square_item_id as id, p.name, m.series, p.source, p.is_active, p.default_variation_id as variation_id, nullif(btrim(v.sku), '') as sku, nullif(btrim(v.upc), '') as upc, i.quantity as stock
+      `select p.square_item_id as id, p.name, m.series, p.source, p.is_active, p.default_variation_id as variation_id, nullif(btrim(v.sku), '') as sku, nullif(btrim(v.upc), '') as upc, i.quantity as stock, v.price_cents
          from public.catalog_products p
          left join public.catalog_variations v on v.square_variation_id = p.default_variation_id
          left join public.product_metadata m on m.square_item_id = p.square_item_id
@@ -108,6 +111,7 @@ export class LabelsService {
         inSquare: r.source === 'square' && r.is_active,
         upc: r.upc,
         stock: r.stock,
+        priceCents: r.price_cents ?? null,
       }));
     return { labels, assigned: wanted.size };
   }
