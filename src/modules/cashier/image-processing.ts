@@ -4,7 +4,12 @@ import sharp from 'sharp';
 const logger = new Logger('ImageProcessing');
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-const CANVAS_SIZE = 1200;
+/**
+ * The longest side a product photo is kept at. Photos used to go on a 1200 x 1200 square (edited ones at most 1600 px): a tall figure's
+ * photo from Gleamshelf (about 3900 x 4800) then had about 960 px for the figure, and the product page, zooming past the square's bars,
+ * stretched it again (spin-hobby#110, 2026-11-20). 3072 is sharp on a 2x screen at the page's largest zoom, and a JPEG of it is a few MB.
+ */
+export const MAX_PHOTO_SIDE = 3072;
 // Matches the storefront's off-white page background ($neutral-50) so product
 // photos blend into the page instead of showing a hard white/gray box edge.
 const BACKGROUND = { r: 250, g: 250, b: 250, alpha: 1 };
@@ -71,11 +76,16 @@ export async function cropToArtworkRegion(buffer: Buffer, crop: ArtworkCrop): Pr
   }
 }
 
+/**
+ * A product photo for the shop: upright, its plain background edges trimmed, at most MAX_PHOTO_SIDE on the long side (never enlarged), in its
+ * own shape. No square canvas: the storefront frames each photo itself (a tall photo starts at the figure's face and can be dragged), so
+ * bars round it only cost resolution.
+ */
 export async function processProductPhoto(buffer: Buffer): Promise<Buffer> {
   try {
     let working = sharp(buffer).rotate();
     try {
-      working = sharp(await working.trim({ threshold: 24 }).toBuffer()).rotate();
+      working = sharp(await working.trim({ threshold: 24 }).toBuffer());
     } catch {
       // Trim can fail on near-uniform or already-tightly-cropped photos -
       // fall back to the oriented original rather than failing the save.
@@ -83,10 +93,10 @@ export async function processProductPhoto(buffer: Buffer): Promise<Buffer> {
 
     return await working
       .resize({
-        width: CANVAS_SIZE,
-        height: CANVAS_SIZE,
-        fit: 'contain',
-        background: BACKGROUND,
+        width: MAX_PHOTO_SIDE,
+        height: MAX_PHOTO_SIDE,
+        fit: 'inside',
+        withoutEnlargement: true,
       })
       .flatten({ background: BACKGROUND })
       .jpeg({ quality: 90 })
@@ -98,7 +108,7 @@ export async function processProductPhoto(buffer: Buffer): Promise<Buffer> {
 }
 
 /**
- * Prepares a photo the admin edited for Square: upright, at most 1600 px on the long side, nothing cropped or
+ * Prepares a photo the admin edited for Square: upright, at most MAX_PHOTO_SIDE on the long side, nothing cropped or
  * recoloured (the admin already framed it). A picture with a transparent background stays a PNG; anything else
  * becomes a high-quality JPEG. Falls back to the original bytes if it cannot be read.
  */
@@ -109,8 +119,8 @@ export async function processEditedPhoto(
     const image = sharp(buffer).rotate();
     const { hasAlpha } = await image.metadata();
     const resized = image.resize({
-      width: 1600,
-      height: 1600,
+      width: MAX_PHOTO_SIDE,
+      height: MAX_PHOTO_SIDE,
       fit: 'inside',
       withoutEnlargement: true,
     });

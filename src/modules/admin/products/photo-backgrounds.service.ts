@@ -10,7 +10,7 @@ import { downloadPhoto } from './download-photo.js';
 import { SquarePhotosService } from './square-photos.service.js';
 
 const MAX_BACKGROUNDS = 40;
-/** A background smaller than this would look soft behind a 1600-pixel photo. */
+/** A background smaller than this would look too soft behind the product (it is stretched to the photo's square). */
 const MIN_SIDE = 600;
 
 interface BackgroundRow {
