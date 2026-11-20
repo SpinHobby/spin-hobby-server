@@ -12,6 +12,9 @@ RUN npm run build && npm prune --omit=dev
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production PORT=8080
+# sharp on glibc: without this, memory that image work frees is kept by the allocator's many arenas and the server's memory only grows
+# (sharp's docs recommend it). 2026-11-19: from 60% to over 512 MB in a few hours of photo jobs.
+ENV MALLOC_ARENA_MAX=2
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json ./
