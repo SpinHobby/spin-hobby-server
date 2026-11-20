@@ -6,6 +6,7 @@ import {
   Param,
   ParseUUIDPipe,
   Post,
+  Query,
   UploadedFiles,
   UseGuards,
   UseInterceptors,
@@ -13,6 +14,8 @@ import {
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { AppError } from '../../../common/errors.js';
+import { waitFor } from './wake.js';
+import { ChangesDrafts } from './wake.interceptors.js';
 import { RateLimit } from '../../../common/guards/rate-limit.guard.js';
 import { Access } from '../../auth/access.js';
 import type { Upload } from '../../cashier/cashier.service.js';
@@ -111,6 +114,21 @@ export class GleamshelfController {
     return { success: true, ...(await this.imports.pair(dto.code, dto.label)) };
   }
 
+  /**
+   * Waits until a job for the photo computer is queued (or up to `seconds`, at most 200), then answers `work: true` or false: the photo
+   * computer asks for work only then, instead of asking every few seconds around the clock (wake.ts). Nothing is read from the database
+   * while it waits; the token check still marks the photo computer as seen, so it shows as online.
+   */
+  @Get('wait')
+  @UseGuards(GleamshelfTokenGuard)
+  @ApiBearerAuth()
+  async wait(@Query('seconds') seconds?: string) {
+    return {
+      success: true,
+      work: await waitFor('work', Math.min(200, Math.max(1, Number(seconds) || 200))),
+    };
+  }
+
   /** Whether the token still works. */
   @Get('ping')
   @UseGuards(GleamshelfTokenGuard)
@@ -129,6 +147,7 @@ export class GleamshelfController {
 
   /** A draft and its finished photo. Sending the same source photo again replaces the draft while nobody has handled it. */
   @Post('imports')
+  @UseInterceptors(ChangesDrafts)
   @HttpCode(200)
   @UseGuards(GleamshelfTokenGuard)
   @ApiBearerAuth()
@@ -198,6 +217,7 @@ export class GleamshelfController {
 
   /** The draft and finished photo of a listing job the app holds: the draft goes into the Imports inbox. */
   @Post('listing-jobs/:id/result')
+  @UseInterceptors(ChangesDrafts)
   @HttpCode(200)
   @UseGuards(GleamshelfTokenGuard)
   @ApiBearerAuth()
@@ -218,6 +238,7 @@ export class GleamshelfController {
 
   /** The app could not make a listing from this photo. */
   @Post('listing-jobs/:id/fail')
+  @UseInterceptors(ChangesDrafts)
   @HttpCode(200)
   @UseGuards(GleamshelfTokenGuard)
   @ApiBearerAuth()

@@ -1,3 +1,4 @@
+import { WakesWorker } from './wake.interceptors.js';
 import {
   Body,
   Controller,
@@ -19,6 +20,7 @@ import { ListingJobsService } from './listing-jobs.service.js';
 
 /** New listings from photos: upload photos of products that are not in the shop yet, and a photo computer makes a draft listing of each for the Imports inbox. */
 @ApiTags('Admin: new listings from photos')
+@UseInterceptors(WakesWorker)
 @Controller('admin/listing-jobs')
 @Access('staff')
 export class AdminListingJobsController {
