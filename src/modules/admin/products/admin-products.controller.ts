@@ -24,6 +24,8 @@ import { SquarePhotosService } from './square-photos.service.js';
 import { PhotoBackgroundsService } from './photo-backgrounds.service.js';
 import { ChannelPhotosService } from './channel-photos.service.js';
 import { PhotoFramesService } from './photo-frames.service.js';
+import { WebsitePhotosService } from './website-photos.service.js';
+import { WebsitePhotoDto } from './dto/website-photo.dto.js';
 import { PhotoFrameDto } from './dto/photo-frame.dto.js';
 import { ChannelPhotosDto } from './dto/channel-photos.dto.js';
 import { CatalogSearchService } from './catalog-search.service.js';
@@ -54,6 +56,7 @@ export class AdminProductsController {
     private readonly backgrounds: PhotoBackgroundsService,
     private readonly channels: ChannelPhotosService,
     private readonly frames: PhotoFramesService,
+    private readonly website: WebsitePhotosService,
   ) {}
 
   /**
@@ -176,6 +179,22 @@ export class AdminProductsController {
       cutouts: await this.backgrounds.cutouts(squareItemId),
       // the photos picked for eBay (not connected yet: kept for when it is)
       ebay: await this.channels.list(squareItemId, 'ebay'),
+      // the shown photos kept in Square but left off the website (Square ids)
+      offWebsite: await this.website.hidden(squareItemId),
+    };
+  }
+
+  /** Puts one of the product's Square photos on the website or takes it off; it stays in Square either way. */
+  @Put('products/:id/website-photo')
+  @HttpCode(200)
+  async websitePhoto(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Body() dto: WebsitePhotoDto,
+  ) {
+    return {
+      success: true,
+      offWebsite: await this.website.set(admin.id, squareItemId, dto.id, dto.onWebsite),
     };
   }
 

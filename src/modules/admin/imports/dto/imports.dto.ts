@@ -135,8 +135,8 @@ export class AddImportDto extends QuickAddDto {
   backgroundId?: string | null;
 
   /**
-   * Which of the draft's photos go where, in order: each to Square (the website and the till), to eBay (kept until it is connected), or both. Left out,
-   * `photo` decides as before.
+   * Which of the draft's photos go where, in order: each to Square (the website and the till), to eBay (kept until it is connected), or both. A
+   * Square photo with `website: false` stays in Square but is left off the website. Left out, `photo` decides as before.
    */
   @Rule((v) => {
     if (v == null) return null;
@@ -150,10 +150,12 @@ export class AddImportDto extends QuickAddDto {
       new Set(v.map((c: { key: string }) => c.key)).size !== v.length
     )
       throw new AppError("photos must list each of the draft's photos at most once.");
-    return v.map((c: { key: string; square?: unknown; ebay?: unknown }) => ({
+    return v.map((c: { key: string; square?: unknown; ebay?: unknown; website?: unknown }) => ({
       key: c.key,
       square: c.square === true,
       ebay: c.ebay === true,
+      // a Square photo is on the website too unless the admin says no (kept in Square for the till and eBay only)
+      website: c.square === true && c.website !== false,
     }));
   })
   photos:
@@ -161,6 +163,7 @@ export class AddImportDto extends QuickAddDto {
         key: PhotoKey;
         square: boolean;
         ebay: boolean;
+        website?: boolean;
       }[]
     | null = null;
 }
