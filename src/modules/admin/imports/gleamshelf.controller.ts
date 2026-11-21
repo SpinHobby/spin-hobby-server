@@ -44,21 +44,28 @@ import {
 
 /**
  * The finished photo, and (from Gleamshelf 0.2 on) the product alone on a transparent background, so the shop can put it on its own backgrounds.
- * A draft can also carry `clean`: the clean product photo (the figure alone, no box print), offered first among its photos.
+ * A draft can also carry `clean`: the clean product photo (the figure alone, no box print), offered first among its photos; and, for a window
+ * box whose figure was taken out of its box front, `boxfront`: that box front, cleaned, offered next to it.
  */
 const PHOTO_AND_CUTOUT = FileFieldsInterceptor(
   [
     { name: 'photo', maxCount: 1 },
     { name: 'cutout', maxCount: 1 },
     { name: 'clean', maxCount: 1 },
+    { name: 'boxfront', maxCount: 1 },
   ],
   { limits: { fileSize: 6 * 1024 * 1024 } },
 );
-type PhotoFiles = { photo?: Upload[]; cutout?: Upload[]; clean?: Upload[] };
+type PhotoFiles = { photo?: Upload[]; cutout?: Upload[]; clean?: Upload[]; boxfront?: Upload[] };
 const photoFiles = (files: PhotoFiles | undefined) => {
   const file = files?.photo?.[0];
   if (!file) throw new AppError('photo is required');
-  return { file, cutout: files?.cutout?.[0] ?? null, clean: files?.clean?.[0] ?? null };
+  return {
+    file,
+    cutout: files?.cutout?.[0] ?? null,
+    clean: files?.clean?.[0] ?? null,
+    boxFront: files?.boxfront?.[0] ?? null,
+  };
 };
 
 /**
@@ -158,10 +165,10 @@ export class GleamshelfController {
     @UploadedFiles() files: PhotoFiles | undefined,
     @Body() dto: ReceiveDraftDto,
   ) {
-    const { file, cutout, clean } = photoFiles(files);
+    const { file, cutout, clean, boxFront } = photoFiles(files);
     return {
       success: true,
-      ...(await this.imports.receive(tokenId, dto.draft, file, cutout, {}, clean)),
+      ...(await this.imports.receive(tokenId, dto.draft, file, cutout, {}, clean, boxFront)),
     };
   }
 
@@ -229,10 +236,19 @@ export class GleamshelfController {
     @UploadedFiles() files: PhotoFiles | undefined,
     @Body() dto: ListingResultDto,
   ) {
-    const { file, cutout, clean } = photoFiles(files);
+    const { file, cutout, clean, boxFront } = photoFiles(files);
     return {
       success: true,
-      ...(await this.listings.submit(tokenId, id, dto.draft, dto.details, file, cutout, clean)),
+      ...(await this.listings.submit(
+        tokenId,
+        id,
+        dto.draft,
+        dto.details,
+        file,
+        cutout,
+        clean,
+        boxFront,
+      )),
     };
   }
 

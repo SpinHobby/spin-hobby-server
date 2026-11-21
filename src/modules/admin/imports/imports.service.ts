@@ -60,7 +60,14 @@ interface ImportRow {
 
 /** The draft's photos: the clean product photo, the studio photo, the cut-out on a background, the crop, the photo as taken, and the maker's photos (`official`, `official2`...). */
 export type PhotoKey =
-  'clean' | 'studio' | 'background' | 'original' | 'cropped' | 'official' | `official${number}`;
+  | 'clean'
+  | 'boxfront'
+  | 'studio'
+  | 'background'
+  | 'original'
+  | 'cropped'
+  | 'official'
+  | `official${number}`;
 const isOfficialKey = (key: PhotoKey) => /^official\d*$/.test(key);
 export interface PhotoChoice {
   key: PhotoKey;
@@ -70,6 +77,13 @@ export interface PhotoChoice {
   website?: boolean;
 }
 
+/**
+ * A window box's front, cleaned by the photo computer: sent next to the figure it took out of that box (`clean_url`), for a person to check one
+ * against the other. Kept in the draft's details (no column of its own).
+ */
+const boxFrontOf = (r: Pick<ImportRow, 'details'>): string | null =>
+  (r.details as { boxFrontUrl?: string | null } | null)?.boxFrontUrl ?? null;
+
 /** The photos a draft offers, in the order they are shown. `background` is the cut-out, which is placed on a background chosen when it is used. */
 function draftPhotos(r: ImportRow): { key: PhotoKey; url: string; edited: boolean }[] {
   const official = (r.details as { official?: OfficialPhoto | null }).official ?? null;
@@ -77,6 +91,7 @@ function draftPhotos(r: ImportRow): { key: PhotoKey; url: string; edited: boolea
   // a photo a person edited in the admin's photo editor is offered as edited (the cut-out is placed on a background instead, so it is not edited)
   return [
     r.clean_url && { key: 'clean' as const, url: r.clean_url },
+    boxFrontOf(r) && { key: 'boxfront' as const, url: boxFrontOf(r)! },
     r.image_url && { key: 'studio' as const, url: r.image_url },
     r.cutout_url && { key: 'background' as const, url: r.cutout_url },
     r.cropped_url && { key: 'cropped' as const, url: r.cropped_url },
@@ -307,6 +322,7 @@ export class ImportsService {
     cutout: { buffer: Buffer; mimetype: string } | null = null,
     source: { originalUrl?: string | null; productRect?: ProductRect | null } = {},
     clean: { buffer: Buffer; mimetype: string } | null = null,
+    boxFront: { buffer: Buffer; mimetype: string } | null = null,
   ): Promise<{ id: string; created: boolean; status: ImportStatus; keptOriginal: boolean }> {
     const draft: DraftInput = parseDraft(rawDraft);
     if (!IMAGE_TYPES[image.mimetype])
@@ -314,6 +330,8 @@ export class ImportsService {
     await checkCutout(cutout);
     if (clean && !IMAGE_TYPES[clean.mimetype])
       throw new AppError('The clean photo must be a WebP, JPEG or PNG image.');
+    if (boxFront && !IMAGE_TYPES[boxFront.mimetype])
+      throw new AppError('The box front photo must be a WebP, JPEG or PNG image.');
     const existing = await this.db.one<ImportRow>(
       'select * from public.product_imports where source_key = $1',
       [draft.sourceKey],
@@ -327,6 +345,11 @@ export class ImportsService {
     const storedClean = clean
       ? (await this.storage.uploadImage(clean.buffer, clean.mimetype, 'imports')).url
       : null;
+    // with the clean photo only: the figure was taken out of this box front, so they go together
+    const storedBoxFront =
+      boxFront && storedClean
+        ? (await this.storage.uploadImage(boxFront.buffer, boxFront.mimetype, 'imports')).url
+        : null;
     // the photo as taken, and that photo cropped to the product (no AI): offered next to the photo computer's own, for a person to choose
     const originalUrl = source.originalUrl ?? null;
     const croppedUrl =
@@ -334,7 +357,11 @@ export class ImportsService {
         ? await this.cropped(originalUrl, source.productRect)
         : null;
     // when the app sent it: a draft sent again for the same photo is a new draft to review, which the admin tells apart by this
-    const details = JSON.stringify({ ...draft.details, receivedAt: new Date().toISOString() });
+    const details = JSON.stringify({
+      ...draft.details,
+      receivedAt: new Date().toISOString(),
+      ...(storedBoxFront ? { boxFrontUrl: storedBoxFront } : {}),
+    });
     if (existing) {
       await this.db.exec(
         'update public.product_imports set title = $2, description = $3, category = $4, series = $5, details = $6, image_url = $7, token_id = $8, cutout_url = $9, original_url = $10, cropped_url = $11, clean_url = $12 where id = $1',
@@ -361,6 +388,7 @@ export class ImportsService {
             existing.original_url,
             existing.cropped_url,
             existing.clean_url,
+            boxFrontOf(existing),
           ].filter((u): u is string => !!u && u !== originalUrl),
         )
         .catch(() => undefined);
@@ -484,13 +512,18 @@ export class ImportsService {
       const stockCount = await this.quickAdd.addStock(adminId, productId, quantity);
       await this.storage
         .deleteImages(
-          [row.image_url, row.cutout_url, row.original_url, row.cropped_url, row.clean_url].filter(
-            (u): u is string => !!u,
-          ),
+          [
+            row.image_url,
+            row.cutout_url,
+            row.original_url,
+            row.cropped_url,
+            row.clean_url,
+            boxFrontOf(row),
+          ].filter((u): u is string => !!u),
         )
         .catch(() => undefined);
       await this.db.exec(
-        "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb where id = $1",
+        "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb, details = details - 'boxFrontUrl' where id = $1",
         [id],
       );
       await this.log.write(adminId, 'imports.restocked', id, { productId, quantity, stockCount });
@@ -579,6 +612,7 @@ export class ImportsService {
         else if (c.key === 'original') urls.set(c.key, row.original_url!);
         else if (c.key === 'cropped') urls.set(c.key, row.cropped_url!);
         else if (c.key === 'clean') urls.set(c.key, row.clean_url!);
+        else if (c.key === 'boxfront') urls.set(c.key, boxFrontOf(row)!);
         else if (isOfficialKey(c.key)) {
           const offered = draftPhotos({ ...row, edited_photos: {} }).find(
             (p) => p.key === c.key,
@@ -632,7 +666,7 @@ export class ImportsService {
         ? await this.quickAdd.add(adminId, dto)
         : await this.merch.create(adminId, dto);
       await this.db.exec(
-        "update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb where id = $1",
+        "update public.product_imports set square_item_id = $2, image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb, details = details - 'boxFrontUrl' where id = $1",
         [id, product.id],
       );
       for (const [i, e] of ebay.entries())
@@ -647,6 +681,7 @@ export class ImportsService {
         row.original_url,
         row.cropped_url,
         row.clean_url,
+        boxFrontOf(row),
         ...Object.values(editsOf(row)),
         ...made.filter((u) => !ebay.some((e) => e.url === u)),
       ].filter((u): u is string => !!u && !sent.has(u));
@@ -814,13 +849,18 @@ export class ImportsService {
     }
     await this.storage
       .deleteImages(
-        [row.image_url, row.cutout_url, row.original_url, row.cropped_url, row.clean_url].filter(
-          (u): u is string => !!u,
-        ),
+        [
+          row.image_url,
+          row.cutout_url,
+          row.original_url,
+          row.cropped_url,
+          row.clean_url,
+          boxFrontOf(row),
+        ].filter((u): u is string => !!u),
       )
       .catch(() => undefined);
     await this.db.exec(
-      "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb where id = $1",
+      "update public.product_imports set image_url = null, cutout_url = null, original_url = null, cropped_url = null, clean_url = null, edited_photos = '{}'::jsonb, details = details - 'boxFrontUrl' where id = $1",
       [id],
     );
     await this.log.write(adminId, 'imports.rejected', id, { reason });
