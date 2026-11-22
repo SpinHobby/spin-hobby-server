@@ -39,6 +39,19 @@ export class AdminListingJobsController {
     return { success: true, ...(await this.jobs.createBatch(admin.id, files ?? [], dto.options)) };
   }
 
+  /** Makes a draft again with base photos of the figure (a window box whose maker's photos were not found). Up to 4 photos, 5 MB each. */
+  @Post('drafts/:importId')
+  @HttpCode(200)
+  @ApiConsumes('multipart/form-data')
+  @UseInterceptors(FilesInterceptor('photos', 4, { limits: { fileSize: 5 * 1024 * 1024 } }))
+  async tryDraftAgain(
+    @CurrentUser() admin: AppUser,
+    @Param('importId', ParseUUIDPipe) importId: string,
+    @UploadedFiles() files: Upload[] | undefined,
+  ) {
+    return { success: true, ...(await this.jobs.tryDraftAgain(admin.id, importId, files ?? [])) };
+  }
+
   /** Recent photos with how far each has got, and whether a photo computer that can write listings is connected. */
   @Get()
   async list() {
