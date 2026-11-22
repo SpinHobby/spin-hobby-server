@@ -276,7 +276,6 @@ export class ListingJobsService {
     image: { buffer: Buffer; mimetype: string },
     cutout: { buffer: Buffer; mimetype: string } | null = null,
     clean: { buffer: Buffer; mimetype: string } | null = null,
-    boxFront: { buffer: Buffer; mimetype: string } | null = null,
   ) {
     const job = await this.db.one<JobRow>('select * from public.listing_jobs where id = $1', [
       jobId,
@@ -296,7 +295,6 @@ export class ListingJobsService {
       cutout,
       { originalUrl: job.source_url, productRect: details.productRect },
       clean,
-      boxFront,
     );
     const done = await this.db.one<{ source_url: string | null }>(
       `update public.listing_jobs set status = 'done', import_id = $2, details = $3, error = null, lease_until = null, source_url = null

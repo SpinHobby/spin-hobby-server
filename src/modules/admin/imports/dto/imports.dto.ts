@@ -140,7 +140,7 @@ export class AddImportDto extends QuickAddDto {
    */
   @Rule((v) => {
     if (v == null) return null;
-    const known = /^(clean|boxfront|studio|background|original|cropped|official\d?)$/;
+    const known = /^(clean|studio|background|original|cropped|official\d?)$/;
     if (
       !Array.isArray(v) ||
       v.length > 12 ||
