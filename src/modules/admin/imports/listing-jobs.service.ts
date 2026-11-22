@@ -15,6 +15,8 @@ import {
 const LEASE_MINUTES = 60;
 const MAX_ATTEMPTS = 3;
 const MAX_PHOTOS = 40;
+/** At most this many base photos for a draft tried again (the photo computer uses four of the maker's photos at most). */
+const MAX_BASE_PHOTOS = 4;
 /** A worker that has asked for work in the last five minutes counts as connected. */
 const ONLINE_SECONDS = 300;
 
@@ -65,6 +67,14 @@ const present = (r: JobRow) => ({
       : null,
   createdAt: r.created_at,
 });
+
+/** The base photos a person added on a draft to make it again (set by the shop only, never from an upload's options). */
+const basePhotos = (options: unknown): { references?: string[] } => {
+  const refs = (options as { references?: unknown } | null)?.references;
+  return Array.isArray(refs) && refs.length && refs.every((r) => typeof r === 'string')
+    ? { references: refs.slice(0, MAX_BASE_PHOTOS) }
+    : {};
+};
 
 /**
  * New listings from photos. An admin uploads photos of products that are not in the shop yet; a Gleamshelf app takes them one at a time (a job is leased to one
@@ -118,6 +128,74 @@ export class ListingJobsService {
       options,
     });
     return { batchId, queued: files.length };
+  }
+
+  /**
+   * A draft whose window box had no maker's photos, made again from the same photo with base photos of the figure a person added (out of
+   * its box, from anywhere): the photo computer cuts the figure out of the first and redraws it sharper when it is small, instead of the
+   * cleaned box front. The draft is replaced when it comes back (same photo), while nobody has handled it.
+   */
+  async tryDraftAgain(
+    adminId: string,
+    importId: string,
+    files: { buffer: Buffer; mimetype: string; originalname?: string }[],
+  ) {
+    if (!files.length) throw new AppError('Add at least one base photo of the figure.');
+    if (files.length > MAX_BASE_PHOTOS)
+      throw new AppError(`Add at most ${MAX_BASE_PHOTOS} base photos.`);
+    const bad = files.find((f) => !IMAGE_TYPES[f.mimetype]);
+    if (bad)
+      throw new AppError(
+        `${bad.originalname ?? 'A file'} is not a WebP, JPEG or PNG photo. Save it as a JPEG first.`,
+      );
+    const draft = await this.db.one<{ status: string; original_url: string | null; title: string }>(
+      'select status, original_url, title from public.product_imports where id = $1',
+      [importId],
+    );
+    if (!draft) throw notFound('Draft');
+    if (draft.status !== 'draft')
+      throw new AppError(`This draft was already ${draft.status}.`, 409);
+    if (!draft.original_url)
+      throw new AppError('This draft has no photo as taken to make it again from.', 409);
+    if (
+      await this.db.one(
+        "select 1 from public.listing_jobs where source_url = $1 and status in ('queued', 'running')",
+        [draft.original_url],
+      )
+    )
+      throw new AppError('This draft is already being made again.', 409);
+    // the same choices as the upload it came from
+    const earlier = await this.db.one<{ options: PhotoJobOptions; file_name: string }>(
+      'select options, file_name from public.listing_jobs where import_id = $1 order by created_at desc limit 1',
+      [importId],
+    );
+    const stored: string[] = [];
+    try {
+      for (const f of files)
+        stored.push((await this.storage.uploadImage(f.buffer, f.mimetype, 'uploads')).url);
+      const options = {
+        ...parsePhotoOptions(earlier?.options ?? {}),
+        clean: true,
+        references: stored,
+      };
+      await this.db.exec(
+        'insert into public.listing_jobs (batch_id, created_by, file_name, options, source_url) values ($1, $2, $3, $4, $5)',
+        [
+          randomUUID(),
+          adminId,
+          (earlier?.file_name ?? draft.title).slice(0, 200),
+          JSON.stringify(options),
+          draft.original_url,
+        ],
+      );
+    } catch (error) {
+      await this.storage.deleteImages(stored).catch(() => undefined);
+      throw error;
+    }
+    await this.log.write(adminId, 'listings.draft_tried_again', importId, {
+      basePhotos: files.length,
+    });
+    return { queued: 1 };
   }
 
   // ---- what the admin sees ----------------------------------------------------------------------------------------------------------
@@ -251,7 +329,7 @@ export class ListingJobsService {
         id: next.id,
         sourceUrl: next.source_url!,
         fileName: next.file_name,
-        options: parsePhotoOptions(next.options),
+        options: { ...parsePhotoOptions(next.options), ...basePhotos(next.options) },
       };
     });
   }
@@ -304,6 +382,10 @@ export class ListingJobsService {
     if (!done) throw new AppError('This job is not yours any more.', 409);
     if (job.source_url && !draft.keptOriginal)
       await this.storage.deleteImages([job.source_url]).catch(() => undefined);
+    // the base photos added on a draft were for this one run
+    await this.storage
+      .deleteImages(basePhotos(job.options).references ?? [])
+      .catch(() => undefined);
     return { draftId: draft.id };
   }
 
