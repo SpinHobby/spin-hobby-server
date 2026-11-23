@@ -2,6 +2,10 @@ import { AppError } from '../../../../common/errors.js';
 import { OptionalText, Provided, Rule, Text } from '../../../../common/validation/decorators.js';
 import { categoryId } from '../../categories/category-id.js';
 
+/** The parts of a product a describe job can redo; "details" is the series and the maker. */
+export const DESCRIBE_PARTS = ['title', 'description', 'details', 'category'] as const;
+export type DescribePart = (typeof DESCRIBE_PARTS)[number];
+
 /** Which products to describe: the ones picked, or every product shoppers can see that has no description yet. */
 export class DescribeBatchDto {
   @Rule((v) => {
@@ -19,6 +23,22 @@ export class DescribeBatchDto {
   /** Every visible product without a real description (ignored when ids are given). */
   @Rule((v) => v === true || v === 'true')
   missing = false;
+
+  /**
+   * Which parts the person wants redone (title, description, details = series and maker, category); the review ticks these
+   * first. Left out: the description (and the details), as the Descriptions screen asks.
+   */
+  @Rule((v) => {
+    if (v === undefined || v === null) return null;
+    if (
+      !Array.isArray(v) ||
+      !v.length ||
+      v.some((x) => !(DESCRIBE_PARTS as readonly unknown[]).includes(x))
+    )
+      throw new AppError(`parts must be some of: ${DESCRIBE_PARTS.join(', ')}.`);
+    return [...new Set(v as DescribePart[])];
+  })
+  parts: DescribePart[] | null = null;
 
   /** At most this many products in one go (default 200, up to 2000). */
   @Rule((v) => {

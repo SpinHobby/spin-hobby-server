@@ -73,7 +73,8 @@ Most products came from Square with no description. The photo computer can write
 
 1. **Send.** Admin, **Descriptions**: "Describe every product without one", or Admin, **Products**: tick products and **Redo with Gleamshelf**
    (title, description, series, maker, category). Each product with a photo becomes a job (`POST /admin/describe-jobs`, `{ missing: true }` or
-   `{ ids }`); a product is in the queue once.
+   `{ ids }`, with `parts`: some of `title`, `description`, `details` (series and maker), `category`, kept on the job so the review ticks them
+   first); a product is in the queue once.
 2. **Work.** `npm run worker` takes the jobs that need the vision model and web search (`POST /gleamshelf/describe-jobs/claim` with the feature `describe`):
    it reads the product's main photo, looks the product up with the shop's own product name as extra search words, and sends back a proposed title,
    description, series, maker and category (`/gleamshelf/describe-jobs/:id/result`, JSON; apps from before November 2026 send no title). Nothing is

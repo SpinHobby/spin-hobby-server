@@ -101,6 +101,7 @@ interface JobRow {
   step: string | null;
   started_at: string | null;
   result: Partial<DescribeProposal>;
+  parts: string[] | null;
   error: string | null;
   created_at: string;
   updated_at: string;
@@ -142,7 +143,7 @@ export class DescribeJobsService {
 
   async createBatch(
     adminId: string,
-    choice: { ids: string[] | null; missing: boolean; limit: number },
+    choice: { ids: string[] | null; missing: boolean; limit: number; parts?: string[] | null },
   ) {
     if (!choice.ids?.length && !choice.missing)
       throw new AppError('Choose products, or every product without a description.');
@@ -164,9 +165,9 @@ export class DescribeJobsService {
     const ready = rows.filter((r) => r.photo && !r.open);
     for (const r of ready)
       await this.db.exec(
-        `insert into public.describe_jobs (batch_id, created_by, square_item_id, product_name, photo_url) values ($1, $2, $3, $4, $5)
+        `insert into public.describe_jobs (batch_id, created_by, square_item_id, product_name, photo_url, parts) values ($1, $2, $3, $4, $5, $6)
          on conflict do nothing`,
-        [batchId, adminId, r.id, r.name.slice(0, 300), r.photo],
+        [batchId, adminId, r.id, r.name.slice(0, 300), r.photo, choice.parts ?? null],
       );
     const result = {
       batchId,
@@ -208,6 +209,8 @@ export class DescribeJobsService {
         step: r.status === 'running' ? r.step : null,
         startedAt: r.status === 'running' ? r.started_at : null,
         error: r.error,
+        // what the person asked to redo (null: the description, from the Descriptions screen)
+        parts: r.parts,
         proposal:
           r.status === 'queued' || r.status === 'running' ? null : (r.result as DescribeProposal),
         current: {

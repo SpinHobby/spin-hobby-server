@@ -247,7 +247,12 @@ describe('product descriptions from the photo computer', () => {
     await http
       .post('/admin/describe-jobs')
       .set(asStaff)
-      .send({ ids: ['CHB1'] })
+      .send({ ids: ['CHB1'], parts: ['title', 'nonsense'] })
+      .expect(400);
+    await http
+      .post('/admin/describe-jobs')
+      .set(asStaff)
+      .send({ ids: ['CHB1'], parts: ['title', 'category', 'title'] })
       .expect(200);
     const w = await worker('Fourth PC');
     const job = await w.claim();
@@ -264,6 +269,7 @@ describe('product descriptions from the photo computer', () => {
     );
     expect(done.proposal.title).toBe('Nendoroid Frieren (Frieren: Beyond Journey’s End)');
     expect(done.current).toMatchObject({ name: 'Chibi Figure', categoryId: null });
+    expect(done.parts).toEqual(['title', 'category']); // what the person asked to redo, once each
 
     const chibis = (
       await http.post('/admin/categories').set(asStaff).send({ name: 'Nendoroids' }).expect(200)
