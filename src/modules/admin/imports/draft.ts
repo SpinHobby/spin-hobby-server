@@ -15,6 +15,9 @@ export interface DraftDetails {
   official: OfficialPhoto | null;
   /** When the product fits none of the shop's categories: the new category the app suggests, and the existing one it would go under (null: top level). */
   suggestedCategory: { name: string; under: string | null } | null;
+  /** The maker and product line the app read off the box or a product page (null when it could not: nothing is guessed). */
+  maker?: string | null;
+  line?: string | null;
   /** How sure the app's cut-out is (0-1, with its reasons), and the share of the product still as photographed (0-1). */
   quality: DraftQuality | null;
   /** The app's listing health: a 0-100 score and the top fixes. */
@@ -284,6 +287,8 @@ export function parseDraft(raw: unknown): DraftInput {
       market: parseMarket(d.market),
       official: parseOfficial(d.official),
       suggestedCategory: parseSuggestedCategory(d.newCategory),
+      maker: text(d.maker, 'maker', 120),
+      line: text(d.line, 'product line', 120),
       quality: parseQuality(d.quality),
       health: parseHealth(d.health),
       generator: text(d.generator, 'generator', 60),

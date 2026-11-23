@@ -154,6 +154,8 @@ export interface ProductMetadataRow {
   series_id: string | null;
   character: string | null;
   manufacturer: string | null;
+  /** The product line ("Relax Time", "Luminasta"): the range the maker sells it in. */
+  product_line?: string | null;
   jan_code: string | null;
   compare_at_cents: number | null;
   max_per_customer: number | null;
@@ -203,6 +205,8 @@ export interface StorefrontProductRow {
   photo_frames?: Record<string, { x: number; y: number; zoom: number }>;
   /** The maker (brand), for search engines. */
   manufacturer?: string | null;
+  /** The product line ("Relax Time", "Luminasta"). */
+  product_line?: string | null;
   price_cents: number;
   compare_at_cents: number | null;
   currency: string;

@@ -102,7 +102,11 @@ describe('add a product straight into Square', () => {
     const s = spies();
     const net = fakes();
     try {
-      const res = await http.post('/admin/products/quick-add').set(as).send(body()).expect(200);
+      const res = await http
+        .post('/admin/products/quick-add')
+        .set(as)
+        .send(body({ manufacturer: 'Banpresto', productLine: 'Relax Time' }))
+        .expect(200);
       expect(res.body).toMatchObject({ success: true, product: { id: 'SQ_QA', photos: 2 } });
       expect(s.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -127,9 +131,32 @@ describe('add a product straight into Square', () => {
         janCode: JAN,
         stockCount: 3,
         photoSource: 'square',
+        manufacturer: 'Banpresto',
+        productLine: 'Relax Time',
       });
       const shop = (await http.get('/products?ids=SQ_QA')).body.items;
       expect(shop.map((p: { id: string }) => p.id)).toEqual(['SQ_QA']);
+      // the product's page has them
+      expect((await http.get('/square/catalog/SQ_QA').expect(200)).body.item).toMatchObject({
+        manufacturer: 'Banpresto',
+        productLine: 'Relax Time',
+      });
+      // collectors search for the line
+      const found = (await http.get('/products?q=relax%20time')).body.items;
+      expect(found.map((p: { id: string }) => p.id)).toContain('SQ_QA');
+      // the product editor changes or clears it
+      await http
+        .patch('/admin/products/SQ_QA')
+        .set(as)
+        .send({ product_line: 'Relax Time Vol. 2' })
+        .expect(200);
+      expect((await http.get('/admin/catalog?q=SQ_QA').set(as)).body.items[0].productLine).toBe(
+        'Relax Time Vol. 2',
+      );
+      await http.patch('/admin/products/SQ_QA').set(as).send({ product_line: '' }).expect(200);
+      expect(
+        (await http.get('/admin/catalog?q=SQ_QA').set(as)).body.items[0].productLine,
+      ).toBeNull();
       // The temporary uploads are removed from our storage; the photos live in Square now.
       const deletes = net.calls.filter((c) => c.url.endsWith('/storage/v1/object/product-images'));
       expect(deletes).toHaveLength(1);
