@@ -239,4 +239,83 @@ describe('product descriptions from the photo computer', () => {
     });
     await http.post('/admin/describe-jobs/cancel-queued').set(asStaff).expect(200);
   });
+
+  it('applies only the parts chosen: a new title goes to Square (the description stays) and the product moves category', async () => {
+    await pglite.query(
+      "insert into public.product_images (square_item_id, image_url) values ('CHB1', 'https://img/chb1.jpg')",
+    );
+    await http
+      .post('/admin/describe-jobs')
+      .set(asStaff)
+      .send({ ids: ['CHB1'], parts: ['title', 'nonsense'] })
+      .expect(400);
+    await http
+      .post('/admin/describe-jobs')
+      .set(asStaff)
+      .send({ ids: ['CHB1'], parts: ['title', 'category', 'title'] })
+      .expect(200);
+    const w = await worker('Fourth PC');
+    const job = await w.claim();
+    expect(job.productId).toBe('CHB1');
+    await w
+      .submit(job.id, {
+        title: '  Nendoroid Frieren\n(Frieren: Beyond Journey’s End)  ',
+        description:
+          'A chibi figure of Frieren from Frieren: Beyond Journey’s End, about 10 cm tall.',
+      })
+      .expect(200);
+    const done = (await http.get('/admin/describe-jobs?status=done').set(asStaff)).body.jobs.find(
+      (j: any) => j.id === job.id,
+    );
+    expect(done.proposal.title).toBe('Nendoroid Frieren (Frieren: Beyond Journey’s End)');
+    expect(done.current).toMatchObject({ name: 'Chibi Figure', categoryId: null });
+    expect(done.parts).toEqual(['title', 'category']); // what the person asked to redo, once each
+
+    const chibis = (
+      await http.post('/admin/categories').set(asStaff).send({ name: 'Nendoroids' }).expect(200)
+    ).body.category.id as string;
+    await http.post(`/admin/describe-jobs/${job.id}/apply`).set(asStaff).send({}).expect(400);
+    await http
+      .post(`/admin/describe-jobs/${job.id}/apply`)
+      .set(asStaff)
+      .send({ title: 'x' })
+      .expect(400);
+    const square = mockFetch({
+      '/v2/catalog/batch-retrieve': () => ({
+        objects: [
+          {
+            type: 'ITEM',
+            id: 'CHB1',
+            version: 3,
+            item_data: { name: 'Chibi Figure', description_html: '<p>kept</p>', variations: [] },
+          },
+        ],
+      }),
+      '/v2/catalog/batch-upsert': () => ({ objects: [] }),
+    });
+    try {
+      await http
+        .post(`/admin/describe-jobs/${job.id}/apply`)
+        .set(asStaff)
+        .send({ title: 'Nendoroid Frieren (Frieren: Beyond Journey’s End)', category_id: chibis })
+        .expect(200);
+      const sent = square.calls.find((c) => c.url.includes('batch-upsert'))!.body.batches[0]
+        .objects[0];
+      expect(sent.item_data).toMatchObject({
+        name: 'Nendoroid Frieren (Frieren: Beyond Journey’s End)',
+        description_html: '<p>kept</p>', // not chosen: unchanged
+      });
+    } finally {
+      square.restore();
+    }
+    const item = (await http.get('/square/catalog/CHB1').expect(200)).body.item;
+    expect(item.name).toBe('Nendoroid Frieren (Frieren: Beyond Journey’s End)');
+    expect(item.description).toBeNull();
+    const [meta] = (
+      await pglite.query<{ category_id: string }>(
+        "select category_id from public.product_metadata where square_item_id = 'CHB1'",
+      )
+    ).rows;
+    expect(meta.category_id).toBe(chibis);
+  });
 });

@@ -1,5 +1,10 @@
 import { AppError } from '../../../../common/errors.js';
 import { OptionalText, Provided, Rule, Text } from '../../../../common/validation/decorators.js';
+import { categoryId } from '../../categories/category-id.js';
+
+/** The parts of a product a describe job can redo; "details" is the series and the maker. */
+export const DESCRIBE_PARTS = ['title', 'description', 'details', 'category'] as const;
+export type DescribePart = (typeof DESCRIBE_PARTS)[number];
 
 /** Which products to describe: the ones picked, or every product shoppers can see that has no description yet. */
 export class DescribeBatchDto {
@@ -18,6 +23,22 @@ export class DescribeBatchDto {
   /** Every visible product without a real description (ignored when ids are given). */
   @Rule((v) => v === true || v === 'true')
   missing = false;
+
+  /**
+   * Which parts the person wants redone (title, description, details = series and maker, category); the review ticks these
+   * first. Left out: the description (and the details), as the Descriptions screen asks.
+   */
+  @Rule((v) => {
+    if (v === undefined || v === null) return null;
+    if (
+      !Array.isArray(v) ||
+      !v.length ||
+      v.some((x) => !(DESCRIBE_PARTS as readonly unknown[]).includes(x))
+    )
+      throw new AppError(`parts must be some of: ${DESCRIBE_PARTS.join(', ')}.`);
+    return [...new Set(v as DescribePart[])];
+  })
+  parts: DescribePart[] | null = null;
 
   /** At most this many products in one go (default 200, up to 2000). */
   @Rule((v) => {
@@ -40,10 +61,25 @@ export class DescribeResultDto {
   result!: Record<string, unknown>;
 }
 
-/** Applying a proposal: the description as a person left it, and optionally the series and maker. */
+/**
+ * Applying a proposal: the parts a person chose, as they left them. Each part left out stays as the product has it; at least one
+ * part must be sent.
+ */
 export class ApplyDescriptionDto {
+  /** Left out: the description stays as it is. */
+  @Provided()
   @Text('description', 4000)
-  description!: string;
+  description?: string;
+
+  /** The product's name (Square's item name). Left out: it stays as it is. */
+  @Provided()
+  @Text('title', 255)
+  title?: string;
+
+  /** A shop category id. Left out: the category stays as it is; null or blank: no category. */
+  @Provided()
+  @Rule((value) => categoryId(value))
+  category_id?: string | null;
 
   /** Left out: the series stays as it is. Blank: the product has none. */
   @Provided()

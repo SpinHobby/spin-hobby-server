@@ -248,10 +248,27 @@ export class SquareCatalogClient {
    * the description replaced (plain text, kept as paragraphs).
    */
   async setItemDescription(itemId: string, description: string): Promise<void> {
+    await this.setItemText(itemId, { description });
+  }
+
+  /**
+   * Changes an item's name, description or both, and nothing else: the item is read from Square and saved back as it
+   * was, with only the parts given replaced (the description is plain text, kept as paragraphs).
+   */
+  async setItemText(itemId: string, text: { name?: string; description?: string }): Promise<void> {
+    const { name, description } = text;
+    if (name === undefined && description === undefined) return;
     const existing = await this.retrieveObject(itemId);
     if (!existing || existing.type !== 'ITEM' || !existing.item_data)
       throw new AppError('This item was not found in Square.', 404);
     const { updated_at: _updatedAt, created_at: _createdAt, ...writable } = existing; // read-only in Square
+    if (description === undefined) {
+      await this.batchUpsert(
+        { ...writable, item_data: { ...existing.item_data, name } },
+        'Failed to update the name in Square',
+      );
+      return;
+    }
     const {
       description: _description,
       description_plaintext: _plain, // read-only: Square makes it from the HTML
@@ -264,8 +281,13 @@ export class SquareCatalogClient {
       .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
       .join('');
     await this.batchUpsert(
-      { ...writable, item_data: { ...itemData, description_html: html } },
-      'Failed to update the description in Square',
+      {
+        ...writable,
+        item_data: { ...itemData, ...(name !== undefined ? { name } : {}), description_html: html },
+      },
+      name !== undefined
+        ? 'Failed to update the name and description in Square'
+        : 'Failed to update the description in Square',
     );
   }
 
