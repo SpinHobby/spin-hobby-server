@@ -2,7 +2,7 @@ import { AppError } from '../../../../common/errors.js';
 import { OptionalText, Provided, Rule, Text } from '../../../../common/validation/decorators.js';
 import { categoryId } from '../../categories/category-id.js';
 
-/** The parts of a product a describe job can redo; "details" is the series and the maker. */
+/** The parts of a product a describe job can redo; "details" is the series, the maker and the product line. */
 export const DESCRIBE_PARTS = ['title', 'description', 'details', 'category'] as const;
 export type DescribePart = (typeof DESCRIBE_PARTS)[number];
 
@@ -90,4 +90,9 @@ export class ApplyDescriptionDto {
   @Provided()
   @OptionalText(120)
   manufacturer?: string | null;
+
+  /** The product line. Left out: it stays as it is. Blank: none. */
+  @Provided()
+  @OptionalText(120)
+  product_line?: string | null;
 }

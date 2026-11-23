@@ -260,6 +260,7 @@ describe('product descriptions from the photo computer', () => {
     await w
       .submit(job.id, {
         title: '  Nendoroid Frieren\n(Frieren: Beyond Journey’s End)  ',
+        line: 'Nendoroid',
         description:
           'A chibi figure of Frieren from Frieren: Beyond Journey’s End, about 10 cm tall.',
       })
@@ -268,6 +269,8 @@ describe('product descriptions from the photo computer', () => {
       (j: any) => j.id === job.id,
     );
     expect(done.proposal.title).toBe('Nendoroid Frieren (Frieren: Beyond Journey’s End)');
+    expect(done.proposal.line).toBe('Nendoroid');
+    expect(done.current.line).toBeNull();
     expect(done.current).toMatchObject({ name: 'Chibi Figure', categoryId: null });
     expect(done.parts).toEqual(['title', 'category']); // what the person asked to redo, once each
 
@@ -297,7 +300,11 @@ describe('product descriptions from the photo computer', () => {
       await http
         .post(`/admin/describe-jobs/${job.id}/apply`)
         .set(asStaff)
-        .send({ title: 'Nendoroid Frieren (Frieren: Beyond Journey’s End)', category_id: chibis })
+        .send({
+          title: 'Nendoroid Frieren (Frieren: Beyond Journey’s End)',
+          category_id: chibis,
+          product_line: 'Nendoroid',
+        })
         .expect(200);
       const sent = square.calls.find((c) => c.url.includes('batch-upsert'))!.body.batches[0]
         .objects[0];
@@ -312,10 +319,10 @@ describe('product descriptions from the photo computer', () => {
     expect(item.name).toBe('Nendoroid Frieren (Frieren: Beyond Journey’s End)');
     expect(item.description).toBeNull();
     const [meta] = (
-      await pglite.query<{ category_id: string }>(
-        "select category_id from public.product_metadata where square_item_id = 'CHB1'",
+      await pglite.query<{ category_id: string; product_line: string }>(
+        "select category_id, product_line from public.product_metadata where square_item_id = 'CHB1'",
       )
     ).rows;
-    expect(meta.category_id).toBe(chibis);
+    expect(meta).toMatchObject({ category_id: chibis, product_line: 'Nendoroid' });
   });
 });

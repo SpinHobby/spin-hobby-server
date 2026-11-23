@@ -54,6 +54,16 @@ export class UpdateProductDto {
   @Rule(clearable)
   manufacturer?: string | null;
 
+  /** The product line ("Relax Time", "Luminasta"); blank clears it. */
+  @Provided()
+  @Rule((value) => {
+    const line = clearable(value);
+    if (typeof line === 'string' && line.trim().length > 120)
+      throw new AppError('The product line is too long (120 characters at most).');
+    return typeof line === 'string' ? line.trim() || null : line;
+  })
+  product_line?: string | null;
+
   @Provided()
   @Rule(clearable)
   jan_code?: string | null;

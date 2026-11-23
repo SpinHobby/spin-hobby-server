@@ -45,7 +45,7 @@ export const GROUPS: Record<string, { status?: string[]; sale?: boolean; pattern
 // Everything a shopper might type to find a product, as one text, so a search's words can match across fields.
 // Folded like the search words (lower case, no accents, punctuation as spaces): see foldSearch in search.ts.
 const SEARCH_TEXT =
-  searchableSql(`concat_ws(' ', name, series, character, manufacturer, jan_code, category,
+  searchableSql(`concat_ws(' ', name, series, character, manufacturer, product_line, jan_code, category,
   (select path from cat_paths where cat_paths.id = sp.category_id))`);
 /** How many products, and how many series or categories, the search box offers while typing. */
 const SUGGEST_PRODUCTS = 6;
@@ -345,7 +345,7 @@ export class CatalogService {
   private async words(): Promise<Set<string>> {
     if (!this.vocab || Date.now() - this.vocab.at > VOCAB_TTL_MS) {
       const rows = await this.db.many<{ text: string }>(
-        `select concat_ws(' ', name, series, character, manufacturer, category) as text from public.storefront_products`,
+        `select concat_ws(' ', name, series, character, manufacturer, product_line, category) as text from public.storefront_products`,
       );
       this.vocab = {
         words: vocabulary([...rows.map((r) => r.text), ...(await this.synonyms()).terms.keys()]),

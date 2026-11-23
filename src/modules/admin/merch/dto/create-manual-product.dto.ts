@@ -45,6 +45,14 @@ export class CreateManualProductDto {
   @OptionalText(120)
   series: string | null = null;
 
+  /** The maker (Good Smile Company, Banpresto...). */
+  @OptionalText(120)
+  manufacturer: string | null = null;
+
+  /** The product line ("Relax Time", "Luminasta"). */
+  @OptionalText(120)
+  productLine: string | null = null;
+
   @OptionalText(20)
   janCode: string | null = null;
 

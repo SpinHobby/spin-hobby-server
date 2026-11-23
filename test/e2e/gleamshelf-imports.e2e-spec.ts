@@ -419,7 +419,7 @@ describe('market prices on a draft', () => {
 describe('drafts', () => {
   it('stores a draft with its photo, keeps only what it understands, and shows it to staff', async () => {
     const { token } = await connectedApp();
-    const sent = await send(token, draft()).expect(200);
+    const sent = await send(token, draft({ maker: 'Banpresto', line: 'Relax Time' })).expect(200);
     expect(sent.body).toMatchObject({ success: true, created: true, status: 'draft' });
     const got = (
       await http
@@ -435,6 +435,7 @@ describe('drafts', () => {
     });
     expect(got.imageUrl).toMatch(/^https?:\/\//);
     expect(got.details.sources).toEqual(['https://shop.example/p/1']); // the insecure address is dropped
+    expect(got.details).toMatchObject({ maker: 'Banpresto', line: 'Relax Time' });
     expect(got.details.lookup.state).toBe('found');
     await http
       .get(`/admin/imports/${sent.body.id}`)
@@ -498,6 +499,8 @@ describe('deciding on a draft', () => {
       stockCount: 1,
       category: 'Bishoujo Figures',
       series: 'hololive',
+      manufacturer: 'Banpresto',
+      productLine: 'Relax Time',
       hidden: true,
     };
     await http
@@ -518,6 +521,8 @@ describe('deciding on a draft', () => {
       stockCount: 1,
       imageUrls: [imageUrl],
       hidden: true,
+      manufacturer: 'Banpresto',
+      productLine: 'Relax Time',
     });
     const after = (await http.get(`/admin/imports/${id}`).set({ Authorization: staff.auth })).body
       .draft;

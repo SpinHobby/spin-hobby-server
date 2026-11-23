@@ -69,7 +69,7 @@ items as (
     p.square_item_id as id, p.default_variation_id as variation_id, p.name, p.description, p.source,
     p.is_active, p.is_visible, p.replaced_by, coalesce(p.square_created_at, p.created_at) as created_at, p.square_created_at, p.created_at as added_here_at, p.updated_at, p.synced_at, p.square_updated_at,
     v.price_cents, v.sku, coalesce(v.is_sellable, false) as sellable,
-    coalesce(m.availability, 'auto') as availability, m.series, m.series_id, m.character, m.manufacturer, coalesce(m.jan_code, v.upc) as jan_code,
+    coalesce(m.availability, 'auto') as availability, m.series, m.series_id, m.character, m.manufacturer, m.product_line, coalesce(m.jan_code, v.upc) as jan_code,
     m.compare_at_cents, m.order_by_date, m.release_month, m.max_per_customer,
     coalesce(m.is_featured, false) as is_featured, coalesce(m.sort_order, 0) as sort_order, m.category_id,
     coalesce(sc.name, p.category) as category,
@@ -121,6 +121,7 @@ export type ItemRow = Pick<
     | 'series_id'
     | 'character'
     | 'manufacturer'
+    | 'product_line'
     | 'jan_code'
     | 'compare_at_cents'
     | 'order_by_date'
@@ -221,7 +222,7 @@ export class CatalogSearchService {
       params.push(likePattern(term), term);
       const like = `$${params.length - 1}`,
         exact = `$${params.length}`;
-      where.push(`(name ilike ${like} or series ilike ${like} or character ilike ${like} or manufacturer ilike ${like} or jan_code ilike ${like}
+      where.push(`(name ilike ${like} or series ilike ${like} or character ilike ${like} or manufacturer ilike ${like} or product_line ilike ${like} or jan_code ilike ${like}
         or category ilike ${like} or id = ${exact} or variation_id = ${exact}
         or exists (select 1 from public.catalog_variations cv where cv.square_item_id = items.id
                     and (cv.sku ilike ${like} or cv.name ilike ${like} or cv.square_variation_id = ${exact})))`);
@@ -369,6 +370,7 @@ export class CatalogSearchService {
       seriesId: r.series_id,
       character: r.character,
       manufacturer: r.manufacturer,
+      productLine: r.product_line ?? null,
       category: r.category,
       categoryId: r.category_id ?? null,
       images: photosByItem.get(r.id) ?? [],

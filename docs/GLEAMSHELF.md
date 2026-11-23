@@ -11,7 +11,8 @@ shop's own computer. This is how its drafts reach the admin. Nothing it sends is
 2. **Run photos.** `npm run batch -- <photos> --out <folder> --write-listing` (it uses this shop's categories and series for the listings once connected).
 3. **Send them.** `npm run push -- <folder>` (`--dry-run` shows what would be sent). One draft per source photo: sending the same photo again replaces the
    draft while nobody has handled it.
-4. **Review.** Admin, Imports. Each draft has the cleaned photo, title, description, category, series, whether the product was found online, and flags
+4. **Review.** Admin, Imports. Each draft has the cleaned photo, title, description, category, series, maker and product line (when the box or a
+   product page gives them; the line is in the title too, the maker only in its field, both saved with the product), whether the product was found online, and flags
    worth a look. A person types the **price and stock** (Gleamshelf never guesses them), then adds it or rejects it.
 
 ## What "add" does
@@ -73,7 +74,7 @@ Most products came from Square with no description. The photo computer can write
 
 1. **Send.** Admin, **Descriptions**: "Describe every product without one", or Admin, **Products**: tick products and **Redo with Gleamshelf**
    (title, description, series, maker, category). Each product with a photo becomes a job (`POST /admin/describe-jobs`, `{ missing: true }` or
-   `{ ids }`, with `parts`: some of `title`, `description`, `details` (series and maker), `category`, kept on the job so the review ticks them
+   `{ ids }`, with `parts`: some of `title`, `description`, `details` (series, maker and product line), `category`, kept on the job so the review ticks them
    first); a product is in the queue once.
 2. **Work.** `npm run worker` takes the jobs that need the vision model and web search (`POST /gleamshelf/describe-jobs/claim` with the feature `describe`):
    it reads the product's main photo, looks the product up with the shop's own product name as extra search words, and sends back a proposed title,
