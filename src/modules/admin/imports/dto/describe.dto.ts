@@ -1,5 +1,6 @@
 import { AppError } from '../../../../common/errors.js';
 import { OptionalText, Provided, Rule, Text } from '../../../../common/validation/decorators.js';
+import { categoryId } from '../../categories/category-id.js';
 
 /** Which products to describe: the ones picked, or every product shoppers can see that has no description yet. */
 export class DescribeBatchDto {
@@ -40,10 +41,25 @@ export class DescribeResultDto {
   result!: Record<string, unknown>;
 }
 
-/** Applying a proposal: the description as a person left it, and optionally the series and maker. */
+/**
+ * Applying a proposal: the parts a person chose, as they left them. Each part left out stays as the product has it; at least one
+ * part must be sent.
+ */
 export class ApplyDescriptionDto {
+  /** Left out: the description stays as it is. */
+  @Provided()
   @Text('description', 4000)
-  description!: string;
+  description?: string;
+
+  /** The product's name (Square's item name). Left out: it stays as it is. */
+  @Provided()
+  @Text('title', 255)
+  title?: string;
+
+  /** A shop category id. Left out: the category stays as it is; null or blank: no category. */
+  @Provided()
+  @Rule((value) => categoryId(value))
+  category_id?: string | null;
 
   /** Left out: the series stays as it is. Blank: the product has none. */
   @Provided()

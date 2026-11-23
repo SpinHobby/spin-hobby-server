@@ -13,8 +13,8 @@ import { BarcodeFindingsService } from './barcode-findings.service.js';
  * screen and the photo computer's hints. Used by list() and claim(), which add `where`, `order by` and `limit`.
  */
 const JOBS_WITH_PRODUCT = `
-  select j.*, p.description as current_description, m.series as current_series, m.manufacturer as current_manufacturer,
-         p.category, m.character
+  select j.*, p.name as current_name, p.description as current_description, m.series as current_series,
+         m.manufacturer as current_manufacturer, p.category, m.category_id as current_category_id, m.character
     from public.describe_jobs j
     join public.catalog_products p on p.square_item_id = j.square_item_id
     left join public.product_metadata m on m.square_item_id = j.square_item_id`;
@@ -38,6 +38,8 @@ const STATUSES: DescribeJobStatus[] = [
 
 /** The proposal as the shop keeps it: cleaned, short, plain text. */
 export interface DescribeProposal {
+  /** The title the listing would have (Gleamshelf apps from November 2026 send it; older proposals have none). */
+  title: string | null;
   description: string;
   series: string | null;
   manufacturer: string | null;
@@ -72,6 +74,7 @@ export function parseProposal(raw: Record<string, unknown>): DescribeProposal {
       : text(raw.lookup, 300);
   const seconds = Number(raw.seconds);
   return {
+    title: text(raw.title, 255)?.replace(/\n+/g, ' ') ?? null,
     description,
     series: text(raw.series, 120),
     manufacturer: text(raw.manufacturer, 120),
@@ -102,7 +105,9 @@ interface JobRow {
   created_at: string;
   updated_at: string;
   // the product as it is now
+  current_name: string;
   current_description: string | null;
+  current_category_id: string | null;
   current_series: string | null;
   current_manufacturer: string | null;
   category: string | null;
@@ -206,6 +211,8 @@ export class DescribeJobsService {
         proposal:
           r.status === 'queued' || r.status === 'running' ? null : (r.result as DescribeProposal),
         current: {
+          name: r.current_name,
+          categoryId: r.current_category_id,
           description: r.current_description,
           series: r.current_series,
           manufacturer: r.current_manufacturer,
@@ -222,11 +229,17 @@ export class DescribeJobsService {
     };
   }
 
-  /** Writes a proposal (as a person left it) to the product, and marks it applied. */
+  /** Writes the parts of a proposal a person chose (as they left them) to the product, and marks it applied. */
   async apply(
     adminId: string,
     jobId: string,
-    edits: { description: string; series?: string | null; manufacturer?: string | null },
+    edits: {
+      title?: string;
+      description?: string;
+      series?: string | null;
+      manufacturer?: string | null;
+      category_id?: string | null;
+    },
   ) {
     const job = await this.db.one<{
       status: DescribeJobStatus;
@@ -238,25 +251,44 @@ export class DescribeJobsService {
     );
     if (!job) throw notFound('Proposal');
     if (job.status !== 'done') throw new AppError('Only a finished proposal can be applied.', 409);
-    const description = edits.description.replace(/\r\n/g, '\n').trim();
-    if (description.length < 20) throw new AppError('Write a description of at least a sentence.');
-    // Square first: if it refuses, nothing here changes and the proposal stays ready to apply
-    if (job.source === 'square')
-      await this.square.setItemDescription(job.square_item_id, description);
-    await this.db.exec(
-      'update public.catalog_products set description = $2 where square_item_id = $1',
-      [job.square_item_id, description],
-    );
+    const description =
+      edits.description === undefined ? undefined : edits.description.replace(/\r\n/g, '\n').trim();
+    if (description !== undefined && description.length < 20)
+      throw new AppError('Write a description of at least a sentence.');
+    const title = edits.title === undefined ? undefined : edits.title.replace(/\s+/g, ' ').trim();
+    if (title !== undefined && title.length < 3)
+      throw new AppError('Write a title of at least a few letters.');
     const details: Record<string, string | null> = {};
     if (edits.series !== undefined) details.series = edits.series;
     if (edits.manufacturer !== undefined) details.manufacturer = edits.manufacturer;
+    if (edits.category_id !== undefined) details.category_id = edits.category_id;
+    if (title === undefined && description === undefined && !Object.keys(details).length)
+      throw new AppError('Choose at least one part of the proposal to apply.');
+    // Square first: if it refuses, nothing here changes and the proposal stays ready to apply
+    if (job.source === 'square' && (title !== undefined || description !== undefined))
+      await this.square.setItemText(job.square_item_id, { name: title, description });
+    if (title !== undefined)
+      await this.db.exec('update public.catalog_products set name = $2 where square_item_id = $1', [
+        job.square_item_id,
+        title,
+      ]);
+    if (description !== undefined)
+      await this.db.exec(
+        'update public.catalog_products set description = $2 where square_item_id = $1',
+        [job.square_item_id, description],
+      );
     if (Object.keys(details).length)
       await this.products.updateDetails(adminId, job.square_item_id, details);
     await this.db.exec(
       "update public.describe_jobs set status = 'applied', reviewed_by = $2, reviewed_at = now() where id = $1",
       [jobId, adminId],
     );
-    await this.log.write(adminId, 'describe.applied', job.square_item_id, { jobId, ...details });
+    await this.log.write(adminId, 'describe.applied', job.square_item_id, {
+      jobId,
+      ...(title !== undefined ? { title } : {}),
+      description: description !== undefined,
+      ...details,
+    });
   }
 
   /** Skips a proposal: the product stays as it was. */

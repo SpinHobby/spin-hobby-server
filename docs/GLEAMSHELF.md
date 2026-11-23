@@ -71,13 +71,17 @@ Tables: `photo_backgrounds`, `product_cutouts`, and `cutout_url` on `photo_jobs`
 
 Most products came from Square with no description. The photo computer can write them, for free, on the shop's own computer.
 
-1. **Send.** Admin, **Descriptions**: "Describe every product without one" (or pick products). Each product with a photo becomes a job
-   (`POST /admin/describe-jobs`, `{ missing: true }` or `{ ids }`); a product is in the queue once.
+1. **Send.** Admin, **Descriptions**: "Describe every product without one", or Admin, **Products**: tick products and **Redo with Gleamshelf**
+   (title, description, series, maker, category). Each product with a photo becomes a job (`POST /admin/describe-jobs`, `{ missing: true }` or
+   `{ ids }`); a product is in the queue once.
 2. **Work.** `npm run worker` takes the jobs that need the vision model and web search (`POST /gleamshelf/describe-jobs/claim` with the feature `describe`):
-   it reads the product's main photo, looks the product up with the shop's own product name as extra search words, and sends back a proposed description,
-   series, maker and category (`/gleamshelf/describe-jobs/:id/result`, JSON). Nothing is written to the product.
+   it reads the product's main photo, looks the product up with the shop's own product name as extra search words, and sends back a proposed title,
+   description, series, maker and category (`/gleamshelf/describe-jobs/:id/result`, JSON; apps from before November 2026 send no title). Nothing is
+   written to the product.
 3. **Review.** Each proposal shows the photo, the current description and the proposed one (editable), with the sources and what the lookup found.
-   **Apply** writes the description to Square (only the description: the item is read and sent back as it was) and the series and maker to the product;
+   **Apply** writes the parts a person ticks (`POST /admin/describe-jobs/:id/apply`, each of `title`, `description`, `series`, `manufacturer`,
+   `category_id` optional, at least one): the title and description to Square (only those: the item is read and sent back as it was), the series,
+   maker and shop category to the product;
    **Skip** leaves the product as it is; **Ask again** queues it once more.
 
 Table: `describe_jobs` (migration `20261022120000_describe_jobs.sql`).
