@@ -158,6 +158,8 @@ export interface ProductMetadataRow {
   product_line?: string | null;
   /** What kind of product it is ("Prize Figure", "Plush", "Keychain"). */
   product_type?: string | null;
+  /** The version its box names ("Flower Dress", "SUMMER ver."). */
+  product_version?: string | null;
   jan_code: string | null;
   compare_at_cents: number | null;
   max_per_customer: number | null;
@@ -211,6 +213,8 @@ export interface StorefrontProductRow {
   product_line?: string | null;
   /** What kind of product it is ("Prize Figure", "Plush", "Keychain"). */
   product_type?: string | null;
+  /** The version its box names ("Flower Dress", "SUMMER ver."). */
+  product_version?: string | null;
   price_cents: number;
   compare_at_cents: number | null;
   currency: string;

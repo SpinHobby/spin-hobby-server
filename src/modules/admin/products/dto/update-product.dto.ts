@@ -74,6 +74,16 @@ export class UpdateProductDto {
   })
   product_type?: string | null;
 
+  /** The version its box names ("Flower Dress", "SUMMER ver."); blank clears it. */
+  @Provided()
+  @Rule((value) => {
+    const version = clearable(value);
+    if (typeof version === 'string' && version.trim().length > 80)
+      throw new AppError('The version is too long (80 characters at most).');
+    return typeof version === 'string' ? version.trim() || null : version;
+  })
+  product_version?: string | null;
+
   @Provided()
   @Rule(clearable)
   jan_code?: string | null;

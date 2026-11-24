@@ -12,7 +12,7 @@ shop's own computer. This is how its drafts reach the admin. Nothing it sends is
 3. **Send them.** `npm run push -- <folder>` (`--dry-run` shows what would be sent). One draft per source photo: sending the same photo again replaces the
    draft while nobody has handled it.
 4. **Review.** Admin, Imports. Each draft has the cleaned photo, title, description, category, series, maker and product line (when the box or a
-   product page gives them; the line is in the title too, the maker only in its field, both saved with the product), the product type ("Prize Figure", "Plush", "Keychain": worked out by the app, never guessed; `product_metadata.product_type`), whether the product was found online, and flags
+   product page gives them; the line is in the title too, the maker only in its field, both saved with the product), the product type ("Prize Figure", "Plush", "Keychain": worked out by the app, never guessed; `product_metadata.product_type`), the character's name alone and the version on the box ("Rem", "Flower Dress": `product_metadata.character` and `product_version`), whether the product was found online, and flags
    worth a look. A person types the **price and stock** (Gleamshelf never guesses them), then adds it or rejects it.
 
 ## What "add" does

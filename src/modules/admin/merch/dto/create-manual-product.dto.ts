@@ -57,6 +57,13 @@ export class CreateManualProductDto {
   @OptionalText(60)
   productType: string | null = null;
 
+  /** The character's name alone ("Rem"), and the version on the box ("Flower Dress"). */
+  @OptionalText(120)
+  character: string | null = null;
+
+  @OptionalText(80)
+  version: string | null = null;
+
   @OptionalText(20)
   janCode: string | null = null;
 

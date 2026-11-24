@@ -100,4 +100,14 @@ export class ApplyDescriptionDto {
   @Provided()
   @OptionalText(60)
   product_type?: string | null;
+
+  /** The character's name alone. Left out: it stays as it is. Blank: none. */
+  @Provided()
+  @OptionalText(120)
+  character?: string | null;
+
+  /** The version on the box. Left out: it stays as it is. Blank: none. */
+  @Provided()
+  @OptionalText(80)
+  product_version?: string | null;
 }

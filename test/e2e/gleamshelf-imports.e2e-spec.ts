@@ -421,7 +421,13 @@ describe('drafts', () => {
     const { token } = await connectedApp();
     const sent = await send(
       token,
-      draft({ maker: 'Banpresto', line: 'Relax Time', productType: 'Prize Figure' }),
+      draft({
+        maker: 'Banpresto',
+        line: 'Relax Time',
+        productType: 'Prize Figure',
+        character: 'Yukihana Lamy',
+        version: 'Relax Time',
+      }),
     ).expect(200);
     expect(sent.body).toMatchObject({ success: true, created: true, status: 'draft' });
     const got = (
@@ -442,6 +448,8 @@ describe('drafts', () => {
       maker: 'Banpresto',
       line: 'Relax Time',
       productType: 'Prize Figure',
+      character: 'Yukihana Lamy',
+      version: 'Relax Time',
     });
     expect(got.details.lookup.state).toBe('found');
     await http
@@ -509,6 +517,8 @@ describe('deciding on a draft', () => {
       manufacturer: 'Banpresto',
       productLine: 'Relax Time',
       productType: 'Prize Figure',
+      character: 'Yukihana Lamy',
+      version: 'Relax Time',
       hidden: true,
     };
     await http
@@ -532,6 +542,8 @@ describe('deciding on a draft', () => {
       manufacturer: 'Banpresto',
       productLine: 'Relax Time',
       productType: 'Prize Figure',
+      character: 'Yukihana Lamy',
+      version: 'Relax Time',
     });
     const after = (await http.get(`/admin/imports/${id}`).set({ Authorization: staff.auth })).body
       .draft;

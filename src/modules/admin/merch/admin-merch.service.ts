@@ -87,8 +87,8 @@ export class AdminMerchService {
         tx,
       );
       await this.db.exec(
-        `insert into public.product_metadata (square_item_id, availability, release_month, order_by_date, series, series_id, jan_code, compare_at_cents, max_per_customer, is_featured, category_id, manufacturer, product_line, product_type)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        `insert into public.product_metadata (square_item_id, availability, release_month, order_by_date, series, series_id, jan_code, compare_at_cents, max_per_customer, is_featured, category_id, manufacturer, product_line, product_type, character, product_version)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`,
         [
           itemId,
           dto.availability,
@@ -104,6 +104,8 @@ export class AdminMerchService {
           dto.manufacturer ?? null,
           dto.productLine ?? null,
           dto.productType ?? null,
+          dto.character ?? null,
+          dto.version ?? null,
         ],
         tx,
       );
