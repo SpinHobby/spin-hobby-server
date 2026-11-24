@@ -14,7 +14,7 @@ import { BarcodeFindingsService } from './barcode-findings.service.js';
  */
 const JOBS_WITH_PRODUCT = `
   select j.*, p.name as current_name, p.description as current_description, m.series as current_series,
-         m.manufacturer as current_manufacturer, m.product_line as current_line, p.category, m.category_id as current_category_id, m.character
+         m.manufacturer as current_manufacturer, m.product_line as current_line, m.product_type as current_product_type, p.category, m.category_id as current_category_id, m.character
     from public.describe_jobs j
     join public.catalog_products p on p.square_item_id = j.square_item_id
     left join public.product_metadata m on m.square_item_id = j.square_item_id`;
@@ -45,6 +45,8 @@ export interface DescribeProposal {
   manufacturer: string | null;
   /** The product line, when the box or a product page gives it (Gleamshelf apps from November 2026). */
   line: string | null;
+  /** What kind of product it is ("Prize Figure", "Plush"), when the app could tell. */
+  productType: string | null;
   category: string | null;
   highlights: string[];
   unsupported: string[];
@@ -81,6 +83,7 @@ export function parseProposal(raw: Record<string, unknown>): DescribeProposal {
     series: text(raw.series, 120),
     manufacturer: text(raw.manufacturer, 120),
     line: text(raw.line, 120),
+    productType: text(raw.productType, 60),
     category: text(raw.category, 120),
     highlights: list(raw.highlights, 10, 200),
     unsupported: list(raw.unsupported, 10, 200),
@@ -115,6 +118,7 @@ interface JobRow {
   current_series: string | null;
   current_manufacturer: string | null;
   current_line: string | null;
+  current_product_type: string | null;
   category: string | null;
   character: string | null;
 }
@@ -224,6 +228,7 @@ export class DescribeJobsService {
           series: r.current_series,
           manufacturer: r.current_manufacturer,
           line: r.current_line,
+          productType: r.current_product_type,
           category: r.category,
         },
         createdAt: r.created_at,
@@ -247,6 +252,7 @@ export class DescribeJobsService {
       series?: string | null;
       manufacturer?: string | null;
       product_line?: string | null;
+      product_type?: string | null;
       category_id?: string | null;
     },
   ) {
@@ -271,6 +277,7 @@ export class DescribeJobsService {
     if (edits.series !== undefined) details.series = edits.series;
     if (edits.manufacturer !== undefined) details.manufacturer = edits.manufacturer;
     if (edits.product_line !== undefined) details.product_line = edits.product_line;
+    if (edits.product_type !== undefined) details.product_type = edits.product_type;
     if (edits.category_id !== undefined) details.category_id = edits.category_id;
     if (title === undefined && description === undefined && !Object.keys(details).length)
       throw new AppError('Choose at least one part of the proposal to apply.');

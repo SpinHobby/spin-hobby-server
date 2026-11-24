@@ -47,6 +47,7 @@ export class CatalogController {
         janCode: row.jan_code ?? null,
         manufacturer: row.manufacturer ?? null,
         productLine: row.product_line ?? null,
+        productType: row.product_type ?? null,
         categoryPath: row.category_path ?? null,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
@@ -145,6 +146,7 @@ export class CatalogController {
         janCode: row.jan_code ?? null,
         manufacturer: row.manufacturer ?? null,
         productLine: row.product_line ?? null,
+        productType: row.product_type ?? null,
       },
     };
   }

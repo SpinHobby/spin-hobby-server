@@ -219,14 +219,15 @@ export class QuickAddService {
       await this.db.exec(
         `insert into public.product_metadata
            (square_item_id, series, series_id, jan_code, category_id, availability, order_by_date, release_month,
-            compare_at_cents, max_per_customer, is_featured, sort_order, manufacturer, product_line)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+            compare_at_cents, max_per_customer, is_featured, sort_order, manufacturer, product_line, product_type)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          on conflict (square_item_id) do update set series = excluded.series, series_id = excluded.series_id, jan_code = excluded.jan_code,
            category_id = excluded.category_id, availability = excluded.availability,
            order_by_date = excluded.order_by_date, release_month = excluded.release_month,
            compare_at_cents = excluded.compare_at_cents, max_per_customer = excluded.max_per_customer,
            is_featured = excluded.is_featured, sort_order = excluded.sort_order,
-           manufacturer = excluded.manufacturer, product_line = excluded.product_line`,
+           manufacturer = excluded.manufacturer, product_line = excluded.product_line,
+           product_type = excluded.product_type`,
         [
           itemId,
           series?.name ?? null,
@@ -242,6 +243,7 @@ export class QuickAddService {
           last?.next ?? 0,
           dto.manufacturer ?? null,
           dto.productLine ?? null,
+          dto.productType ?? null,
         ],
         tx,
       );
