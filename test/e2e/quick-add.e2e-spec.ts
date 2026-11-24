@@ -110,6 +110,8 @@ describe('add a product straight into Square', () => {
             manufacturer: 'Banpresto',
             productLine: 'Relax Time',
             productType: 'Prize Figure',
+            character: 'Rem',
+            version: 'Flower Dress',
           }),
         )
         .expect(200);
@@ -147,6 +149,8 @@ describe('add a product straight into Square', () => {
         manufacturer: 'Banpresto',
         productLine: 'Relax Time',
         productType: 'Prize Figure',
+        character: 'Rem',
+        version: 'Flower Dress',
       });
       // collectors search for the line
       const found = (await http.get('/products?q=relax%20time')).body.items;
@@ -173,6 +177,24 @@ describe('add a product straight into Square', () => {
         .patch('/admin/products/SQ_QA')
         .set(as)
         .send({ product_type: 'x'.repeat(61) })
+        .expect(400);
+      // and the version its box names, beside the character
+      await http
+        .patch('/admin/products/SQ_QA')
+        .set(as)
+        .send({ product_version: 'SUMMER ver.', character: 'Rem' })
+        .expect(200);
+      expect((await http.get('/admin/catalog?q=SQ_QA').set(as)).body.items[0]).toMatchObject({
+        character: 'Rem',
+        version: 'SUMMER ver.',
+      });
+      expect((await http.get('/square/catalog/SQ_QA').expect(200)).body.item.version).toBe(
+        'SUMMER ver.',
+      );
+      await http
+        .patch('/admin/products/SQ_QA')
+        .set(as)
+        .send({ product_version: 'x'.repeat(81) })
         .expect(400);
       await http.patch('/admin/products/SQ_QA').set(as).send({ product_line: '' }).expect(200);
       expect(

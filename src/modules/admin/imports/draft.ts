@@ -20,6 +20,9 @@ export interface DraftDetails {
   line?: string | null;
   /** What kind of product it is ("Prize Figure", "Plush"), when the app could tell (Gleamshelf apps from late November 2026). */
   productType?: string | null;
+  /** The character's name alone ("Rem") and the version on the box ("Flower Dress"), when the app could tell them (Gleamshelf apps from late November 2026). */
+  character?: string | null;
+  version?: string | null;
   /** How sure the app's cut-out is (0-1, with its reasons), and the share of the product still as photographed (0-1). */
   quality: DraftQuality | null;
   /** The app's listing health: a 0-100 score and the top fixes. */
@@ -292,6 +295,8 @@ export function parseDraft(raw: unknown): DraftInput {
       maker: text(d.maker, 'maker', 120),
       line: text(d.line, 'product line', 120),
       productType: text(d.productType, 'product type', 60),
+      character: text(d.character, 'character', 120),
+      version: text(d.version, 'version', 80),
       quality: parseQuality(d.quality),
       health: parseHealth(d.health),
       generator: text(d.generator, 'generator', 60),
