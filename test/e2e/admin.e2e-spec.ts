@@ -297,6 +297,62 @@ describe('admin', () => {
       (await http.get('/admin/homepage/slides').set('Authorization', staff.auth)).body.slides,
     ).toHaveLength(1);
 
+    // A banner ad: a label, a button, dates, and what shows behind it.
+    const ad = (
+      await http
+        .post('/admin/homepage/slides')
+        .set('Authorization', staff.auth)
+        .send({
+          headline: 'Christmas orders',
+          label: 'Holiday',
+          buttonText: 'Shop gifts',
+          isVisible: true,
+          sortOrder: 5,
+          backdrop: 'chosen',
+          productIds: ['no-such-product'],
+          startsAt: '2020-01-01T00:00:00Z',
+        })
+        .expect(200)
+    ).body.slide;
+    expect(ad).toMatchObject({
+      label: 'Holiday',
+      button_text: 'Shop gifts',
+      backdrop: 'chosen',
+      product_ids: ['no-such-product'],
+    });
+    const liveAd = (await http.get('/homepage')).body.slides.find((s: any) => s.id === ad.id);
+    expect(liveAd).toMatchObject({ label: 'Holiday', button_text: 'Shop gifts' });
+    expect(Array.isArray(liveAd.products)).toBe(true);
+    // An ad whose dates have passed, or have not come yet, is not on the home page.
+    await http
+      .put(`/admin/homepage/slides/${ad.id}`)
+      .set('Authorization', staff.auth)
+      .send({ endsAt: '2020-02-01T00:00:00Z' })
+      .expect(200);
+    expect((await http.get('/homepage')).body.slides.map((s: any) => s.id)).not.toContain(ad.id);
+    await http
+      .put(`/admin/homepage/slides/${ad.id}`)
+      .set('Authorization', staff.auth)
+      .send({ endsAt: '2019-01-01T00:00:00Z' })
+      .expect(400);
+    await http
+      .put(`/admin/homepage/slides/${ad.id}`)
+      .set('Authorization', staff.auth)
+      .send({ backdrop: 'video' })
+      .expect(400);
+    // The banner holds at most ten ads.
+    for (let i = 0; i < 8; i += 1)
+      await http
+        .post('/admin/homepage/slides')
+        .set('Authorization', staff.auth)
+        .send({ headline: `Extra ${i}` })
+        .expect(200);
+    await http
+      .post('/admin/homepage/slides')
+      .set('Authorization', staff.auth)
+      .send({ headline: 'One too many' })
+      .expect(400);
+
     const ev = (
       await http
         .post('/admin/events')

@@ -3,6 +3,12 @@ import { AppError } from '../../common/errors.js';
 import { likePattern } from '../../common/validation/rules.js';
 import { Db } from '../../database/db.service.js';
 import type { HeroSlideRow, StoreEventRow, StorefrontProductRow } from '../../database/rows.js';
+import {
+  BACKDROP_PHOTOS,
+  MAX_ADS,
+  dealBackdrops,
+  type Backdrop,
+} from '../admin/homepage/banner.js';
 import type { ProductQuery } from './dto/product-query.dto.js';
 import { FRONT_PAGE_SLOTS } from './front-page.js';
 import { publicProduct } from './product.mapper.js';
@@ -107,6 +113,12 @@ function defaultSlides(freeShippingDollars: number) {
     subheading,
     image_url: null,
     link_url: null,
+    label: null,
+    button_text: null,
+    starts_at: null,
+    ends_at: null,
+    backdrop: 'products' as const,
+    product_ids: [] as string[],
     sort_order: i,
     is_visible: true,
     is_default: true,
@@ -439,7 +451,9 @@ export class CatalogService {
     const [slides, featured, preorders, ranking, newInStock, events, categories, settings, promo] =
       await Promise.all([
         this.db.many<HeroSlideRow>(
-          'select * from public.hero_slides where is_visible order by sort_order, created_at',
+          `select * from public.hero_slides
+            where is_visible and (starts_at is null or starts_at <= now()) and (ends_at is null or ends_at > now())
+            order by sort_order, created_at limit ${MAX_ADS}`,
         ),
         this.db.many<StorefrontProductRow>(
           `select * from public.storefront_products where is_featured order by sort_order, id limit ${FRONT_PAGE_SLOTS}`,
@@ -467,10 +481,13 @@ export class CatalogService {
         ),
       ]);
     const free = Number(settings?.free_shipping_threshold_cents ?? 7500) / 100;
+    // Until staff add their own, the storefront shows these welcome slides and convention list.
+    const ads: (HeroSlideRow | ReturnType<typeof defaultSlides>[number])[] = slides.length
+      ? slides
+      : defaultSlides(free);
     return {
       success: true as const,
-      // Until staff add their own, the storefront shows these welcome slides and convention list.
-      slides: slides.length ? slides : defaultSlides(free),
+      slides: await this.withBackdrops(ads),
       featuredItems: featured.map(publicProduct),
       preorders: preorders.map(publicProduct),
       ranking: ranking.map(publicProduct),
@@ -481,6 +498,32 @@ export class CatalogService {
       promos: { closingSoon: promo?.closing_soon ?? 0, maxDiscountPct: promo?.max_discount ?? 0 },
       freeShippingThresholdCents: Math.round(free * 100),
     };
+  }
+
+  /** Adds to each banner ad the products whose photos show behind it (`products`; none for an ad with its own photo). */
+  private async withBackdrops<A extends { backdrop: Backdrop; product_ids: string[] }>(ads: A[]) {
+    const picked = [
+      ...new Set(ads.flatMap((ad) => (ad.backdrop === 'chosen' ? ad.product_ids : []))),
+    ];
+    const wanted = ads.filter((ad) => ad.backdrop !== 'photo').length * BACKDROP_PHOTOS;
+    const [chosen, pool] = await Promise.all([
+      picked.length
+        ? this.db.many<StorefrontProductRow>(
+            'select * from public.storefront_products where id = any($1::text[]) and cardinality(images) > 0',
+            [picked],
+          )
+        : [],
+      wanted
+        ? this.db.many<StorefrontProductRow>(
+            `select * from public.storefront_products where status in ('in','low','pre') and cardinality(images) > 0
+              order by created_at desc, id limit $1`,
+            [wanted],
+          )
+        : [],
+    ]);
+    const byId = new Map(chosen.map((p) => [p.id, publicProduct(p)]));
+    const dealt = dealBackdrops(ads, byId, pool.map(publicProduct));
+    return ads.map((ad, i) => ({ ...ad, products: dealt[i] }));
   }
 
   /** The spellings of a series whose address form is `slug` ("Re:Zero" and "Re: Zero" are both `re-zero`). */
