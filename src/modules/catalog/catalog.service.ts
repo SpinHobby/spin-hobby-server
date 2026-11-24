@@ -448,38 +448,52 @@ export class CatalogService {
   }
 
   async homepage() {
-    const [slides, featured, preorders, ranking, newInStock, events, categories, settings, promo] =
-      await Promise.all([
-        this.db.many<HeroSlideRow>(
-          `select * from public.hero_slides
+    const [
+      slides,
+      featured,
+      preorders,
+      ranking,
+      newInStock,
+      events,
+      categories,
+      settings,
+      promo,
+      sold,
+    ] = await Promise.all([
+      this.db.many<HeroSlideRow>(
+        `select * from public.hero_slides
             where is_visible and (starts_at is null or starts_at <= now()) and (ends_at is null or ends_at > now())
             order by sort_order, created_at limit ${MAX_ADS}`,
-        ),
-        this.db.many<StorefrontProductRow>(
-          `select * from public.storefront_products where is_featured order by sort_order, id limit ${FRONT_PAGE_SLOTS}`,
-        ),
-        this.db.many<StorefrontProductRow>(
-          "select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12",
-        ),
-        this.db.many<StorefrontProductRow>(
-          'select * from public.storefront_products where rank is not null order by rank, id limit 5',
-        ),
-        this.db.many<StorefrontProductRow>(
-          "select * from public.storefront_products where status in ('in','low') order by created_at desc, id limit 5",
-        ),
-        this.db.many<StoreEventRow>(
-          'select * from public.store_events where is_visible order by sort_order, created_at',
-        ),
-        this.categories(),
-        this.db.one<{ free_shipping_threshold_cents: number }>(
-          'select free_shipping_threshold_cents from public.store_settings where id = true',
-        ),
-        this.db.one<{ closing_soon: number; max_discount: number }>(
-          `select count(*) filter (where status = 'pre' and order_by_date between now() - interval '1 day' and now() + interval '30 days')::int as closing_soon,
+      ),
+      this.db.many<StorefrontProductRow>(
+        `select * from public.storefront_products where is_featured order by sort_order, id limit ${FRONT_PAGE_SLOTS}`,
+      ),
+      this.db.many<StorefrontProductRow>(
+        "select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12",
+      ),
+      this.db.many<StorefrontProductRow>(
+        'select * from public.storefront_products where rank is not null order by rank, id limit 5',
+      ),
+      this.db.many<StorefrontProductRow>(
+        "select * from public.storefront_products where status in ('in','low') order by created_at desc, id limit 5",
+      ),
+      this.db.many<StoreEventRow>(
+        'select * from public.store_events where is_visible order by sort_order, created_at',
+      ),
+      this.categories(),
+      this.db.one<{ free_shipping_threshold_cents: number }>(
+        'select free_shipping_threshold_cents from public.store_settings where id = true',
+      ),
+      this.db.one<{ closing_soon: number; max_discount: number }>(
+        `select count(*) filter (where status = 'pre' and order_by_date between now() - interval '1 day' and now() + interval '30 days')::int as closing_soon,
                 coalesce(max(round((1 - price_cents::numeric / compare_at_cents) * 100)) filter (where compare_at_cents > price_cents), 0)::int as max_discount
            from public.storefront_products`,
-        ),
-      ]);
+      ),
+      // what sold lately, with a photo: proof the shop sells, and where a shopper can ask for another (POST /requests)
+      this.db.many<StorefrontProductRow>(
+        "select * from public.storefront_products where status = 'out' and cardinality(images) > 0 order by updated_at desc, id limit 12",
+      ),
+    ]);
     const free = Number(settings?.free_shipping_threshold_cents ?? 7500) / 100;
     // Until staff add their own, the storefront shows these welcome slides and convention list.
     const ads: (HeroSlideRow | ReturnType<typeof defaultSlides>[number])[] = slides.length
@@ -492,6 +506,7 @@ export class CatalogService {
       preorders: preorders.map(publicProduct),
       ranking: ranking.map(publicProduct),
       newInStock: newInStock.map(publicProduct),
+      recentlySold: sold.map(publicProduct),
       events: events.length ? events : DEFAULT_EVENTS,
       categories,
       // Numbers for the two promo cards beside the hero.

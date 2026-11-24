@@ -3,6 +3,7 @@ import { EmailModule } from '../../integrations/email/email.module.js';
 import { AuthModule } from '../auth/auth.module.js';
 import { AccountController } from './account.controller.js';
 import { ProfileService } from './profile.service.js';
+import { ItemRequestService } from './item-request.service.js';
 import { RestockAlertService } from './restock-alert.service.js';
 import { WishlistService } from './wishlist.service.js';
 
@@ -10,6 +11,6 @@ import { WishlistService } from './wishlist.service.js';
 @Module({
   imports: [AuthModule, EmailModule],
   controllers: [AccountController],
-  providers: [WishlistService, RestockAlertService, ProfileService],
+  providers: [WishlistService, RestockAlertService, ItemRequestService, ProfileService],
 })
 export class AccountModule {}

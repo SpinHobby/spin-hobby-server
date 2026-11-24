@@ -8,6 +8,7 @@ export const LAYOUT_SECTIONS = [
   'lists',
   'recent',
   'shop',
+  'sold',
   'about',
   'events',
 ] as const;
