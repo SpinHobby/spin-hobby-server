@@ -3,6 +3,12 @@ import { AppError } from '../../common/errors.js';
 import { likePattern } from '../../common/validation/rules.js';
 import { Db } from '../../database/db.service.js';
 import type { HeroSlideRow, StoreEventRow, StorefrontProductRow } from '../../database/rows.js';
+import {
+  BACKDROP_PHOTOS,
+  MAX_ADS,
+  dealBackdrops,
+  type Backdrop,
+} from '../admin/homepage/banner.js';
 import type { ProductQuery } from './dto/product-query.dto.js';
 import { FRONT_PAGE_SLOTS } from './front-page.js';
 import { publicProduct } from './product.mapper.js';
@@ -107,6 +113,12 @@ function defaultSlides(freeShippingDollars: number) {
     subheading,
     image_url: null,
     link_url: null,
+    label: null,
+    button_text: null,
+    starts_at: null,
+    ends_at: null,
+    backdrop: 'products' as const,
+    product_ids: [] as string[],
     sort_order: i,
     is_visible: true,
     is_default: true,
@@ -436,51 +448,118 @@ export class CatalogService {
   }
 
   async homepage() {
-    const [slides, featured, preorders, ranking, newInStock, events, categories, settings, promo] =
-      await Promise.all([
-        this.db.many<HeroSlideRow>(
-          'select * from public.hero_slides where is_visible order by sort_order, created_at',
-        ),
-        this.db.many<StorefrontProductRow>(
-          `select * from public.storefront_products where is_featured order by sort_order, id limit ${FRONT_PAGE_SLOTS}`,
-        ),
-        this.db.many<StorefrontProductRow>(
-          "select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12",
-        ),
-        this.db.many<StorefrontProductRow>(
-          'select * from public.storefront_products where rank is not null order by rank, id limit 5',
-        ),
-        this.db.many<StorefrontProductRow>(
-          "select * from public.storefront_products where status in ('in','low') order by created_at desc, id limit 5",
-        ),
-        this.db.many<StoreEventRow>(
-          'select * from public.store_events where is_visible order by sort_order, created_at',
-        ),
-        this.categories(),
-        this.db.one<{ free_shipping_threshold_cents: number }>(
-          'select free_shipping_threshold_cents from public.store_settings where id = true',
-        ),
-        this.db.one<{ closing_soon: number; max_discount: number }>(
-          `select count(*) filter (where status = 'pre' and order_by_date between now() - interval '1 day' and now() + interval '30 days')::int as closing_soon,
+    const [
+      slides,
+      featured,
+      preorders,
+      ranking,
+      newInStock,
+      events,
+      categories,
+      settings,
+      promo,
+      sold,
+    ] = await Promise.all([
+      this.db.many<HeroSlideRow>(
+        `select * from public.hero_slides
+            where is_visible and (starts_at is null or starts_at <= now()) and (ends_at is null or ends_at > now())
+            order by sort_order, created_at limit ${MAX_ADS}`,
+      ),
+      this.db.many<StorefrontProductRow>(
+        `select * from public.storefront_products where is_featured order by sort_order, id limit ${FRONT_PAGE_SLOTS}`,
+      ),
+      this.db.many<StorefrontProductRow>(
+        "select * from public.storefront_products where status = 'pre' order by order_by_date asc nulls last, id limit 12",
+      ),
+      this.db.many<StorefrontProductRow>(
+        'select * from public.storefront_products where rank is not null order by rank, id limit 5',
+      ),
+      this.db.many<StorefrontProductRow>(
+        "select * from public.storefront_products where status in ('in','low') order by created_at desc, id limit 5",
+      ),
+      this.db.many<StoreEventRow>(
+        'select * from public.store_events where is_visible order by sort_order, created_at',
+      ),
+      this.categories(),
+      this.db.one<{ free_shipping_threshold_cents: number }>(
+        'select free_shipping_threshold_cents from public.store_settings where id = true',
+      ),
+      this.db.one<{ closing_soon: number; max_discount: number }>(
+        `select count(*) filter (where status = 'pre' and order_by_date between now() - interval '1 day' and now() + interval '30 days')::int as closing_soon,
                 coalesce(max(round((1 - price_cents::numeric / compare_at_cents) * 100)) filter (where compare_at_cents > price_cents), 0)::int as max_discount
            from public.storefront_products`,
-        ),
-      ]);
+      ),
+      // what sold lately, with a photo: proof the shop sells, and where a shopper can ask for another (POST /requests)
+      this.db.many<StorefrontProductRow>(
+        "select * from public.storefront_products where status = 'out' and cardinality(images) > 0 order by updated_at desc, id limit 12",
+      ),
+    ]);
     const free = Number(settings?.free_shipping_threshold_cents ?? 7500) / 100;
+    // Until staff add their own, the storefront shows these welcome slides and convention list.
+    const ads: (HeroSlideRow | ReturnType<typeof defaultSlides>[number])[] = slides.length
+      ? slides
+      : defaultSlides(free);
     return {
       success: true as const,
-      // Until staff add their own, the storefront shows these welcome slides and convention list.
-      slides: slides.length ? slides : defaultSlides(free),
+      slides: await this.withBackdrops(ads),
       featuredItems: featured.map(publicProduct),
       preorders: preorders.map(publicProduct),
       ranking: ranking.map(publicProduct),
       newInStock: newInStock.map(publicProduct),
+      recentlySold: sold.map(publicProduct),
       events: events.length ? events : DEFAULT_EVENTS,
       categories,
       // Numbers for the two promo cards beside the hero.
       promos: { closingSoon: promo?.closing_soon ?? 0, maxDiscountPct: promo?.max_discount ?? 0 },
       freeShippingThresholdCents: Math.round(free * 100),
     };
+  }
+
+  /** Adds to each banner ad the products whose photos show behind it (`products`; none for an ad with its own photo). */
+  private async withBackdrops<A extends { backdrop: Backdrop; product_ids: string[] }>(ads: A[]) {
+    const picked = [
+      ...new Set(ads.flatMap((ad) => (ad.backdrop === 'chosen' ? ad.product_ids : []))),
+    ];
+    const wanted = ads.filter((ad) => ad.backdrop !== 'photo').length * BACKDROP_PHOTOS;
+    const [chosen, pool] = await Promise.all([
+      picked.length
+        ? this.db.many<StorefrontProductRow>(
+            'select * from public.storefront_products where id = any($1::text[]) and cardinality(images) > 0',
+            [picked],
+          )
+        : [],
+      wanted
+        ? this.db.many<StorefrontProductRow>(
+            `select * from public.storefront_products where status in ('in','low','pre') and cardinality(images) > 0
+              order by created_at desc, id limit $1`,
+            [wanted],
+          )
+        : [],
+    ]);
+    // a banner picture is framed on the face: each product carries the focus points an admin set for its photos (photo_focus)
+    const shown = [...chosen, ...pool];
+    const points = shown.length
+      ? await this.db.many<{
+          square_item_id: string;
+          image_url: string;
+          x: number;
+          y: number;
+          zoom: number;
+        }>(
+          'select square_item_id, image_url, x, y, zoom from public.photo_focus where square_item_id = any($1::text[])',
+          [shown.map((p) => p.id)],
+        )
+      : [];
+    const focusOf = (id: string) =>
+      Object.fromEntries(
+        points
+          .filter((r) => r.square_item_id === id)
+          .map((r) => [r.image_url, { x: r.x, y: r.y, zoom: r.zoom }]),
+      );
+    const withFocus = (p: StorefrontProductRow) => ({ ...publicProduct(p), focus: focusOf(p.id) });
+    const byId = new Map(chosen.map((p) => [p.id, withFocus(p)]));
+    const dealt = dealBackdrops(ads, byId, pool.map(withFocus));
+    return ads.map((ad, i) => ({ ...ad, products: dealt[i] }));
   }
 
   /** The spellings of a series whose address form is `slug` ("Re:Zero" and "Re: Zero" are both `re-zero`). */

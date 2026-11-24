@@ -18,6 +18,9 @@ import { CreateAlertDto } from './dto/create-alert.dto.js';
 import { ProfileDto, SaveAddressDto } from './dto/profile.dto.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { ProfileService } from './profile.service.js';
+import { RateLimit } from '../../common/guards/rate-limit.guard.js';
+import { ItemRequestDto } from './dto/item-request.dto.js';
+import { ItemRequestService } from './item-request.service.js';
 import { RestockAlertService } from './restock-alert.service.js';
 import { WishlistService } from './wishlist.service.js';
 
@@ -29,6 +32,7 @@ export class AccountController {
     private readonly auth: AuthService,
     private readonly wishlist: WishlistService,
     private readonly alerts: RestockAlertService,
+    private readonly requests: ItemRequestService,
     private readonly profiles: ProfileService,
   ) {}
 
@@ -112,6 +116,15 @@ export class AccountController {
   @HttpCode(200)
   async createAlert(@CurrentUser() user: AppUser | null, @Body() dto: CreateAlertDto) {
     await this.alerts.subscribe(dto.email, dto.variationId, user?.id ?? null);
+    return { success: true };
+  }
+
+  /** "Ask us to find one" on a sold item. Open to guests; signed-in customers are linked to the request. No payment, no promise. */
+  @Post('requests')
+  @RateLimit({ limit: 10, windowMs: 10 * 60_000 })
+  @HttpCode(200)
+  async askToFind(@CurrentUser() user: AppUser | null, @Body() dto: ItemRequestDto) {
+    await this.requests.ask(dto.email, dto.productId, dto.note, user?.id ?? null);
     return { success: true };
   }
 }

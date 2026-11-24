@@ -292,6 +292,30 @@ export class EmailService implements OnModuleInit, OnModuleDestroy {
     );
   }
 
+  /** The shop's answer to "Ask us to find one": found (the listing to buy and the shop's note), or not found. */
+  requestAnswerHtml(
+    productName: string,
+    found: boolean,
+    message: string | null,
+    listing?: StorefrontProductRow | null,
+  ) {
+    const note = message ? `<p>${escape(message)}</p>` : '';
+    if (!found)
+      return (
+        `<p>You asked us to find <strong>${escape(productName)}</strong>. We looked, and we could not find one this time.</p>` +
+        note +
+        emailButton(site(), "See what's new") +
+        `<p style="font-size:12px">You asked us about this item on Spin Hobby. This is the only email about it.</p>`
+      );
+    return (
+      `<p>You asked us to find <strong>${escape(productName)}</strong>. We have one.</p>` +
+      note +
+      (listing ? `<table style="border-collapse:collapse">${productRow(listing)}</table>` : '') +
+      emailButton(listing ? productUrl(listing) : site(), listing ? 'View it' : 'Shop now') +
+      `<p style="font-size:12px">It is not held for you: the first to check out gets it. You asked us about this item on Spin Hobby; this is the only email about it.</p>`
+    );
+  }
+
   /** "You left something in your cart": the items still for sale, a link that opens the same cart again, and a stop link. */
   cartReminderHtml(items: { product: StorefrontProductRow; quantity: number }[], token: string) {
     return (

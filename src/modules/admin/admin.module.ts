@@ -1,6 +1,9 @@
 import { ChannelPhotosService } from './products/channel-photos.service.js';
 import { RewardsModule } from '../rewards/rewards.module.js';
 import { PhotoFramesService } from './products/photo-frames.service.js';
+import { PhotoFocusService } from './products/photo-focus.service.js';
+import { AdminRequestsController } from './requests/admin-requests.controller.js';
+import { AdminRequestsService } from './requests/admin-requests.service.js';
 import { WebsitePhotosService } from './products/website-photos.service.js';
 import { AdminPhotoBackgroundsController } from './products/admin-photo-backgrounds.controller.js';
 import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js';
@@ -100,6 +103,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminMerchController,
     AdminSettingsController,
     AdminHomepageController,
+    AdminRequestsController,
     AdminEventsController,
     AdminReviewsController,
     AdminSearchController,
@@ -138,6 +142,8 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     ProductBackgroundsService,
     ChannelPhotosService,
     PhotoFramesService,
+    PhotoFocusService,
+    AdminRequestsService,
     WebsitePhotosService,
     AdminMerchService,
     AdminCategoriesService,

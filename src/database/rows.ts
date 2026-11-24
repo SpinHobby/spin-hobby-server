@@ -226,6 +226,15 @@ export interface HeroSlideRow {
   subheading: string | null;
   image_url: string | null;
   link_url: string | null;
+  /** The small tag above the headline ("Pre-orders"). */
+  label: string | null;
+  button_text: string | null;
+  /** The ad shows from here to there; null is "no limit" on that side. */
+  starts_at: string | null;
+  ends_at: string | null;
+  /** What shows behind the words: product photos, the one photo in `image_url`, or the products in `product_ids`. */
+  backdrop: 'products' | 'photo' | 'chosen';
+  product_ids: string[];
   sort_order: number;
   is_visible: boolean;
   created_at: string;
