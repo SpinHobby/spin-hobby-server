@@ -17,6 +17,8 @@ describe('storefront catalog', () => {
       name: 'Rem 1/7 Scale Figure',
       series: 'Re:Zero',
       character: null,
+      version: null,
+      productType: null,
       category: 'Scale Figures',
       categoryId: null,
       images: ['https://img/fig1.jpg'],
