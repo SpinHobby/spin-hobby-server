@@ -4,6 +4,8 @@ import { PhotoFramesService } from './products/photo-frames.service.js';
 import { WebsitePhotosService } from './products/website-photos.service.js';
 import { AdminPhotoBackgroundsController } from './products/admin-photo-backgrounds.controller.js';
 import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js';
+import { AdminProductBackgroundsController } from './products/admin-product-backgrounds.controller.js';
+import { ProductBackgroundsService } from './products/product-backgrounds.service.js';
 import { ProductPhotosController } from './products/product-photos.controller.js';
 import { Module } from '@nestjs/common';
 import { GoogleDriveModule } from '../../integrations/google-drive/google-drive.module.js';
@@ -107,6 +109,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminImportsController,
     AdminPhotoJobsController,
     AdminPhotoBackgroundsController,
+    AdminProductBackgroundsController,
     AdminListingJobsController,
     AdminDescribeJobsController,
     AdminBarcodesController,
@@ -132,6 +135,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     QuickAddService,
     SquarePhotosService,
     PhotoBackgroundsService,
+    ProductBackgroundsService,
     ChannelPhotosService,
     PhotoFramesService,
     WebsitePhotosService,
@@ -147,6 +151,12 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     AdminSquareService,
   ],
   // what the eBay module builds on: product photos, the photos picked for eBay, and the admin log
-  exports: [AdminLog, SquarePhotosService, ChannelPhotosService, PhotoBackgroundsService],
+  exports: [
+    AdminLog,
+    SquarePhotosService,
+    ChannelPhotosService,
+    PhotoBackgroundsService,
+    ProductBackgroundsService,
+  ],
 })
 export class AdminModule {}

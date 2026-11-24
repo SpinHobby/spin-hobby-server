@@ -4,6 +4,7 @@ import type { Response } from 'express';
 import { notFound } from '../../../common/errors.js';
 import { Access } from '../../auth/access.js';
 import { PhotoBackgroundsService } from './photo-backgrounds.service.js';
+import { ProductBackgroundsService } from './product-backgrounds.service.js';
 
 /**
  * A transparent product photo on the shop background, for the places that cannot show transparency: eBay (which fetches a listing's photos
@@ -13,7 +14,20 @@ import { PhotoBackgroundsService } from './photo-backgrounds.service.js';
 @Controller('product-photos')
 @Access('public')
 export class ProductPhotosController {
-  constructor(private readonly backgrounds: PhotoBackgroundsService) {}
+  constructor(
+    private readonly backgrounds: PhotoBackgroundsService,
+    private readonly productBackgrounds: ProductBackgroundsService,
+  ) {}
+
+  /**
+   * The products that show on a background of their own (not the shop background): product id to the background's address, null for plain
+   * white. The website asks once and draws each transparent photo on it.
+   */
+  @Get('backgrounds')
+  @Header('Cache-Control', 'public, max-age=30')
+  async ownBackgrounds() {
+    return { success: true, items: await this.productBackgrounds.publicBackgrounds() };
+  }
 
   /** The photo by its Square id (`image`) or its address (`src`: in Square, or an eBay copy); `b` only tells caches the background changed. */
   @Get('on-background')
