@@ -7,6 +7,7 @@ import { IMAGE_TYPES, StorageService } from '../../../integrations/storage/stora
 import { AdminLog } from '../admin-log.service.js';
 import { composeOnBackground, transparentPhoto } from './compose-photo.js';
 import { downloadPhoto } from './download-photo.js';
+import { ProductBackgroundsService } from './product-backgrounds.service.js';
 import { SquarePhotosService } from './square-photos.service.js';
 
 const MAX_BACKGROUNDS = 40;
@@ -55,7 +56,11 @@ export class PhotoBackgroundsService {
     private readonly storage: StorageService,
     private readonly photos: SquarePhotosService,
     private readonly log: AdminLog,
-  ) {}
+    private readonly productBackgrounds: ProductBackgroundsService,
+  ) {
+    // a product's own background changed: the copies made on the old one are not kept
+    photoEvents.on(() => this.composed.clear());
+  }
 
   private readonly composed = new Map<string, Buffer>();
 
@@ -136,6 +141,9 @@ export class PhotoBackgroundsService {
     );
     if (!row) throw notFound('Background');
     await this.storage.deleteImages([row.image_url]).catch(() => undefined);
+    // products that had chosen it show on the shop background again
+    this.productBackgrounds.forget();
+    this.composed.clear();
     if (row.is_default) {
       this.composed.clear();
       photoEvents.backgroundChanged();
@@ -273,21 +281,30 @@ export class PhotoBackgroundsService {
    * previews, which cannot show transparency. Null when the address is no such photo. Made on demand and kept for a while.
    */
   async onShopBackground(wanted: { src?: string; imageId?: string }): Promise<Buffer | null> {
-    const found = await this.db.one<{ cutout_url: string }>(
-      `select c.cutout_url from public.product_cutouts c
+    const found = await this.db.one<{ cutout_url: string; square_item_id: string | null }>(
+      `select c.cutout_url, c.square_item_id from public.product_cutouts c
         where c.transparent and (c.image_id = $2 or c.image_id = $1
           or c.image_id in (select pi.square_image_id from public.product_images pi where pi.image_url = $1))
        union all
-       select image_url as cutout_url from public.channel_photos where image_url = $1 and cutout
+       select image_url as cutout_url, null as square_item_id from public.channel_photos where image_url = $1 and cutout
        limit 1`,
       [wanted.src ?? null, wanted.imageId ?? null],
     );
     if (!found) return null;
-    const background = await this.shopBackground();
-    const key = `${found.cutout_url}|${background?.id ?? 'white'}`;
+    // the product's own background (white, one of the library, its box art) when it has one, else the shop background
+    const own = found.square_item_id
+      ? await this.productBackgrounds.ownBackgroundOf(found.square_item_id)
+      : undefined;
+    const shop = own ? null : await this.shopBackground();
+    const backgroundUrl = own ? own.url : (shop?.image_url ?? null);
+    const key = `${found.cutout_url}|${backgroundUrl ?? 'white'}`;
     const kept = this.composed.get(key);
     if (kept) return kept;
-    const photo = await this.compose(found.cutout_url, background);
+    const [cutout, back] = await Promise.all([
+      downloadPhoto(found.cutout_url),
+      backgroundUrl ? downloadPhoto(backgroundUrl) : Promise.resolve(null),
+    ]);
+    const photo = await composeOnBackground(cutout, back);
     if (this.composed.size >= COMPOSED_CACHE)
       this.composed.delete(this.composed.keys().next().value!);
     this.composed.set(key, photo);
