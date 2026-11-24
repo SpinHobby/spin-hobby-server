@@ -24,6 +24,7 @@ import { SquarePhotosService } from './square-photos.service.js';
 import { PhotoBackgroundsService } from './photo-backgrounds.service.js';
 import { ChannelPhotosService } from './channel-photos.service.js';
 import { PhotoFramesService } from './photo-frames.service.js';
+import { PhotoFocusService } from './photo-focus.service.js';
 import { WebsitePhotosService } from './website-photos.service.js';
 import { WebsitePhotoDto } from './dto/website-photo.dto.js';
 import { PhotoFrameDto } from './dto/photo-frame.dto.js';
@@ -56,6 +57,7 @@ export class AdminProductsController {
     private readonly backgrounds: PhotoBackgroundsService,
     private readonly channels: ChannelPhotosService,
     private readonly frames: PhotoFramesService,
+    private readonly focus: PhotoFocusService,
     private readonly website: WebsitePhotosService,
   ) {}
 
@@ -217,6 +219,38 @@ export class AdminProductsController {
       success: true,
       frames: await this.frames.set(admin.id, squareItemId, url, { x, y, zoom }),
     };
+  }
+
+  /** Where the face is in each of the product's photos (the ones an admin has set), by address. */
+  @Get('products/:id/photo-focus')
+  async photoFocus(@Param('id') squareItemId: string) {
+    return { success: true, focus: await this.focus.list(squareItemId) };
+  }
+
+  /** Sets where the face is in one photo: a large, cropped picture of it (a banner ad's) is framed on that point. */
+  @Put('products/:id/photo-focus')
+  @HttpCode(200)
+  async setPhotoFocus(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Body() dto: PhotoFrameDto,
+  ) {
+    const { url, x, y, zoom } = dto;
+    return {
+      success: true,
+      focus: await this.focus.set(admin.id, squareItemId, url, { x, y, zoom }),
+    };
+  }
+
+  /** Forgets one photo's focus point (`?url=`): the shop goes back to its own guess. */
+  @Delete('products/:id/photo-focus')
+  async clearPhotoFocus(
+    @CurrentUser() admin: AppUser,
+    @Param('id') squareItemId: string,
+    @Query('url') url: string,
+  ) {
+    if (typeof url !== 'string' || !url) throw new AppError("Send the photo's address.");
+    return { success: true, focus: await this.focus.clear(admin.id, squareItemId, url) };
   }
 
   /** Which of the product's photos go on eBay, in order (eBay is not connected yet: they are kept for when it is). */

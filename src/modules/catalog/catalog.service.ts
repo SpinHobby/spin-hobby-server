@@ -521,8 +521,29 @@ export class CatalogService {
           )
         : [],
     ]);
-    const byId = new Map(chosen.map((p) => [p.id, publicProduct(p)]));
-    const dealt = dealBackdrops(ads, byId, pool.map(publicProduct));
+    // a banner picture is framed on the face: each product carries the focus points an admin set for its photos (photo_focus)
+    const shown = [...chosen, ...pool];
+    const points = shown.length
+      ? await this.db.many<{
+          square_item_id: string;
+          image_url: string;
+          x: number;
+          y: number;
+          zoom: number;
+        }>(
+          'select square_item_id, image_url, x, y, zoom from public.photo_focus where square_item_id = any($1::text[])',
+          [shown.map((p) => p.id)],
+        )
+      : [];
+    const focusOf = (id: string) =>
+      Object.fromEntries(
+        points
+          .filter((r) => r.square_item_id === id)
+          .map((r) => [r.image_url, { x: r.x, y: r.y, zoom: r.zoom }]),
+      );
+    const withFocus = (p: StorefrontProductRow) => ({ ...publicProduct(p), focus: focusOf(p.id) });
+    const byId = new Map(chosen.map((p) => [p.id, withFocus(p)]));
+    const dealt = dealBackdrops(ads, byId, pool.map(withFocus));
     return ads.map((ad, i) => ({ ...ad, products: dealt[i] }));
   }
 

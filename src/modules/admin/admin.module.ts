@@ -1,6 +1,7 @@
 import { ChannelPhotosService } from './products/channel-photos.service.js';
 import { RewardsModule } from '../rewards/rewards.module.js';
 import { PhotoFramesService } from './products/photo-frames.service.js';
+import { PhotoFocusService } from './products/photo-focus.service.js';
 import { WebsitePhotosService } from './products/website-photos.service.js';
 import { AdminPhotoBackgroundsController } from './products/admin-photo-backgrounds.controller.js';
 import { PhotoBackgroundsService } from './products/photo-backgrounds.service.js';
@@ -134,6 +135,7 @@ import { AssistantModule } from '../assistant/assistant.module.js';
     PhotoBackgroundsService,
     ChannelPhotosService,
     PhotoFramesService,
+    PhotoFocusService,
     WebsitePhotosService,
     AdminMerchService,
     AdminCategoriesService,
