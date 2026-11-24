@@ -8,6 +8,9 @@ export function publicProduct(p: StorefrontProductRow) {
     name: p.name,
     series: p.series,
     character: p.character,
+    // the version its box names and the kind of product: with the character they make the short name a product card shows
+    version: p.product_version ?? null,
+    productType: p.product_type ?? null,
     category: p.category,
     categoryId: p.category_id ?? null,
     images: p.images ?? [],
