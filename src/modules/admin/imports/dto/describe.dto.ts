@@ -95,4 +95,9 @@ export class ApplyDescriptionDto {
   @Provided()
   @OptionalText(120)
   product_line?: string | null;
+
+  /** The product type. Left out: it stays as it is. Blank: none. */
+  @Provided()
+  @OptionalText(60)
+  product_type?: string | null;
 }

@@ -156,6 +156,8 @@ export interface ProductMetadataRow {
   manufacturer: string | null;
   /** The product line ("Relax Time", "Luminasta"): the range the maker sells it in. */
   product_line?: string | null;
+  /** What kind of product it is ("Prize Figure", "Plush", "Keychain"). */
+  product_type?: string | null;
   jan_code: string | null;
   compare_at_cents: number | null;
   max_per_customer: number | null;
@@ -207,6 +209,8 @@ export interface StorefrontProductRow {
   manufacturer?: string | null;
   /** The product line ("Relax Time", "Luminasta"). */
   product_line?: string | null;
+  /** What kind of product it is ("Prize Figure", "Plush", "Keychain"). */
+  product_type?: string | null;
   price_cents: number;
   compare_at_cents: number | null;
   currency: string;

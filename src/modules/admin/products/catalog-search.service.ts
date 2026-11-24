@@ -69,7 +69,7 @@ items as (
     p.square_item_id as id, p.default_variation_id as variation_id, p.name, p.description, p.source,
     p.is_active, p.is_visible, p.replaced_by, coalesce(p.square_created_at, p.created_at) as created_at, p.square_created_at, p.created_at as added_here_at, p.updated_at, p.synced_at, p.square_updated_at,
     v.price_cents, v.sku, coalesce(v.is_sellable, false) as sellable,
-    coalesce(m.availability, 'auto') as availability, m.series, m.series_id, m.character, m.manufacturer, m.product_line, coalesce(m.jan_code, v.upc) as jan_code,
+    coalesce(m.availability, 'auto') as availability, m.series, m.series_id, m.character, m.manufacturer, m.product_line, m.product_type, coalesce(m.jan_code, v.upc) as jan_code,
     m.compare_at_cents, m.order_by_date, m.release_month, m.max_per_customer,
     coalesce(m.is_featured, false) as is_featured, coalesce(m.sort_order, 0) as sort_order, m.category_id,
     coalesce(sc.name, p.category) as category,
@@ -122,6 +122,7 @@ export type ItemRow = Pick<
     | 'character'
     | 'manufacturer'
     | 'product_line'
+    | 'product_type'
     | 'jan_code'
     | 'compare_at_cents'
     | 'order_by_date'
@@ -371,6 +372,7 @@ export class CatalogSearchService {
       character: r.character,
       manufacturer: r.manufacturer,
       productLine: r.product_line ?? null,
+      productType: r.product_type ?? null,
       category: r.category,
       categoryId: r.category_id ?? null,
       images: photosByItem.get(r.id) ?? [],

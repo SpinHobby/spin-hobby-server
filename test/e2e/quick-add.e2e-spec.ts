@@ -105,7 +105,13 @@ describe('add a product straight into Square', () => {
       const res = await http
         .post('/admin/products/quick-add')
         .set(as)
-        .send(body({ manufacturer: 'Banpresto', productLine: 'Relax Time' }))
+        .send(
+          body({
+            manufacturer: 'Banpresto',
+            productLine: 'Relax Time',
+            productType: 'Prize Figure',
+          }),
+        )
         .expect(200);
       expect(res.body).toMatchObject({ success: true, product: { id: 'SQ_QA', photos: 2 } });
       expect(s.create).toHaveBeenCalledWith(
@@ -140,6 +146,7 @@ describe('add a product straight into Square', () => {
       expect((await http.get('/square/catalog/SQ_QA').expect(200)).body.item).toMatchObject({
         manufacturer: 'Banpresto',
         productLine: 'Relax Time',
+        productType: 'Prize Figure',
       });
       // collectors search for the line
       const found = (await http.get('/products?q=relax%20time')).body.items;
@@ -153,6 +160,20 @@ describe('add a product straight into Square', () => {
       expect((await http.get('/admin/catalog?q=SQ_QA').set(as)).body.items[0].productLine).toBe(
         'Relax Time Vol. 2',
       );
+      // and the product type the same way
+      await http
+        .patch('/admin/products/SQ_QA')
+        .set(as)
+        .send({ product_type: 'Scale Figure' })
+        .expect(200);
+      expect((await http.get('/admin/catalog?q=SQ_QA').set(as)).body.items[0].productType).toBe(
+        'Scale Figure',
+      );
+      await http
+        .patch('/admin/products/SQ_QA')
+        .set(as)
+        .send({ product_type: 'x'.repeat(61) })
+        .expect(400);
       await http.patch('/admin/products/SQ_QA').set(as).send({ product_line: '' }).expect(200);
       expect(
         (await http.get('/admin/catalog?q=SQ_QA').set(as)).body.items[0].productLine,

@@ -64,6 +64,16 @@ export class UpdateProductDto {
   })
   product_line?: string | null;
 
+  /** What kind of product it is ("Prize Figure", "Plush", "Keychain"); blank clears it. */
+  @Provided()
+  @Rule((value) => {
+    const kind = clearable(value);
+    if (typeof kind === 'string' && kind.trim().length > 60)
+      throw new AppError('The product type is too long (60 characters at most).');
+    return typeof kind === 'string' ? kind.trim() || null : kind;
+  })
+  product_type?: string | null;
+
   @Provided()
   @Rule(clearable)
   jan_code?: string | null;

@@ -53,6 +53,10 @@ export class CreateManualProductDto {
   @OptionalText(120)
   productLine: string | null = null;
 
+  /** What kind of product it is ("Prize Figure", "Plush", "Keychain"). */
+  @OptionalText(60)
+  productType: string | null = null;
+
   @OptionalText(20)
   janCode: string | null = null;
 
