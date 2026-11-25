@@ -4,7 +4,7 @@ import { startShop } from '../support/shop.js';
 
 const shop = await startShop();
 afterAll(() => shop.close());
-const { http, staff, shopper } = shop;
+const { http, staff, shopper, pglite } = shop;
 const asStaff = { Authorization: staff.auth };
 
 const products = (await http.get('/products?limit=100').expect(200)).body.items as {
@@ -107,5 +107,31 @@ describe('"Ask us to find one" on sold items', () => {
     const home = (await http.get('/homepage').expect(200)).body;
     expect(Array.isArray(home.recentlySold)).toBe(true);
     for (const p of home.recentlySold) expect(p.status).toBe('out');
+  });
+
+  it('puts the series with the most to buy on the home page, each with a photo', async () => {
+    // two things to buy in one series, each with a photo
+    const two = products.filter((p) => p.status === 'in' || p.status === 'low').slice(0, 2);
+    expect(two).toHaveLength(2);
+    for (const [i, p] of two.entries()) {
+      await pglite.query(
+        `insert into public.product_metadata (square_item_id, series) values ($1, 'Test Series')
+         on conflict (square_item_id) do update set series = excluded.series`,
+        [p.id],
+      );
+      await pglite.query(
+        'insert into public.product_images (square_item_id, image_url, sort_order) values ($1, $2, $3)',
+        [p.id, `https://sq.example/series-${i}.jpg`, 90 + i],
+      );
+    }
+    const home = (await http.get('/homepage').expect(200)).body;
+    expect(home.topSeries.map((s: { name: string }) => s.name)).toContain('Test Series');
+    const counts = home.topSeries.map((s: { count: number }) => s.count);
+    expect(counts).toEqual([...counts].sort((a: number, b: number) => b - a));
+    for (const s of home.topSeries) {
+      expect(s.count).toBeGreaterThanOrEqual(2);
+      expect(typeof s.name).toBe('string');
+      expect(typeof s.image).toBe('string');
+    }
   });
 });
