@@ -251,6 +251,8 @@ const EXPECTED: string[] = [
   'POST /auth/refresh [public] limit 30/60s',
   'POST /auth/reset [public] limit 5/3600s',
   'POST /auth/signup [public]',
+  'POST /auth/staging/device [owner]',
+  'POST /auth/staging/quick [public] limit 10/60s',
   'POST /cart/quote [public] limit 60/60s',
   'POST /cashier/identify [staff]',
   'POST /cashier/polish [staff]',

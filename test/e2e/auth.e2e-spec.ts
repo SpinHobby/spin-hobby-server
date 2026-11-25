@@ -152,6 +152,124 @@ describe('sign-in through the API', () => {
     }
   });
 
+  it('remembers a staging device and signs it in with one click, as owner or staff', async () => {
+    const stagingEnv = {
+      APP_ENV: 'staging',
+      STAGING_ADMIN_USERNAME: 'QuickBoss',
+      STAGING_ADMIN_PASSWORD: 'quick-secret',
+      SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_test',
+    };
+    const ids: Record<string, string> = {
+      'quickboss@staging.spinhobby.com': '00000000-0000-4000-8000-00000000b055',
+      'quick-staff@staging.spinhobby.com': '00000000-0000-4000-8000-000000005aff',
+    };
+    const auth = mockFetch({
+      '/auth/v1/settings': () => ({ external: { email: true } }),
+      '/auth/v1/admin/users': async (init) => {
+        const body = JSON.parse(String(init?.body));
+        await pglite.query(
+          'insert into auth.users (id, email, raw_user_meta_data) values ($1, $2, $3)',
+          [ids[body.email], body.email, JSON.stringify(body.user_metadata)],
+        );
+        return gotrue(200, { id: ids[body.email], email: body.email })();
+      },
+      'grant_type=password': async (init) => {
+        const body = JSON.parse(String(init?.body));
+        if (ids[body.email] && body.password === process.env.STAGING_ADMIN_PASSWORD)
+          return gotrue(200, {
+            access_token: await tokenFor(ids[body.email], body.email, {}),
+            refresh_token: `quick:${body.email}`,
+            expires_in: 3600,
+          })();
+        return gotrue(400, {
+          error_code: 'invalid_credentials',
+          msg: 'Invalid login credentials',
+        })();
+      },
+    });
+    const before = Object.fromEntries(Object.keys(stagingEnv).map((k) => [k, process.env[k]]));
+    try {
+      // Not staging: the route does not exist for anyone.
+      await http.post('/auth/staging/quick').send({ key: '1.abc', role: 'owner' }).expect(404);
+
+      Object.assign(process.env, stagingEnv);
+      expect((await http.get('/auth/providers').expect(200)).body).toMatchObject({ quick: true });
+      // No key yet, a made-up key, and a bad role are all refused.
+      await http.post('/auth/staging/quick').send({ key: '1.abc', role: 'owner' }).expect(401);
+      await http
+        .post('/auth/staging/quick')
+        .send({ key: `${Date.now() + 60_000}.${'0'.repeat(64)}`, role: 'owner' })
+        .expect(401);
+
+      // Signing in once with the password lets this browser ask for a device key.
+      const owner = await http
+        .post('/auth/login')
+        .send({ email: 'QuickBoss', password: 'quick-secret' })
+        .expect(200);
+      await http.post('/auth/staging/device').expect(401);
+      const device = await http
+        .post('/auth/staging/device')
+        .set('Authorization', `Bearer ${owner.body.accessToken}`)
+        .expect(200);
+      expect(device.body.key).toMatch(/^\d+\.[0-9a-f]{64}$/);
+      await http
+        .post('/auth/staging/quick')
+        .send({ key: device.body.key, role: 'boss' })
+        .expect(400);
+
+      // One click as the owner, and as the staff account (made on first use, kept staff).
+      const asOwner = await http
+        .post('/auth/staging/quick')
+        .send({ key: device.body.key, role: 'owner' })
+        .expect(200);
+      expect(asOwner.body.user).toMatchObject({
+        email: 'quickboss@staging.spinhobby.com',
+        role: 'owner',
+      });
+      const asStaff = await http
+        .post('/auth/staging/quick')
+        .send({ key: device.body.key, role: 'staff' })
+        .expect(200);
+      expect(asStaff.body.user).toMatchObject({
+        email: 'quick-staff@staging.spinhobby.com',
+        role: 'staff',
+      });
+      // The staff account cannot hand out device keys, and nobody can sign up with a reserved address.
+      await http
+        .post('/auth/staging/device')
+        .set('Authorization', `Bearer ${asStaff.body.accessToken}`)
+        .expect(403);
+      resetSignupLimits();
+      await http
+        .post('/auth/signup')
+        .send({
+          email: 'quick-staff@staging.spinhobby.com',
+          password: 'longenough',
+          firstName: 'X',
+        })
+        .expect(409);
+
+      // A tampered key, and every key once the staging password changes, stop working.
+      const [expiry, signature] = device.body.key.split('.');
+      await http
+        .post('/auth/staging/quick')
+        .send({ key: `${Number(expiry) + 1}.${signature}`, role: 'owner' })
+        .expect(401);
+      process.env.STAGING_ADMIN_PASSWORD = 'changed';
+      await http
+        .post('/auth/staging/quick')
+        .send({ key: device.body.key, role: 'owner' })
+        .expect(401);
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+      auth.restore();
+      resetSignupLimits();
+    }
+  });
+
   it('signs the staging admin in by username, creating and repairing its owner account', async () => {
     const stagingEnv = {
       APP_ENV: 'staging',
