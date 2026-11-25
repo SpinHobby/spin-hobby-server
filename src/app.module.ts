@@ -29,6 +29,7 @@ import { SampleModule } from './modules/sample/sample.module.js';
 import { SquareSyncModule } from './modules/square-sync/square-sync.module.js';
 import { StoreModule } from './modules/store/store.module.js';
 import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
+import { NotesModule } from './modules/notes/notes.module.js';
 
 /**
  * The root module: lists the feature modules and registers the two things that apply to every
@@ -64,6 +65,7 @@ import { WebhooksModule } from './modules/webhooks/webhooks.module.js';
     SquareSyncModule,
     StoreModule,
     WebhooksModule,
+    NotesModule,
   ],
   providers: [
     // Guards run in the order they are listed: rate limits first, so abusive traffic never costs a profile lookup.
