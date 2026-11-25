@@ -459,6 +459,7 @@ export class CatalogService {
       settings,
       promo,
       sold,
+      series,
     ] = await Promise.all([
       this.db.many<HeroSlideRow>(
         `select * from public.hero_slides
@@ -493,6 +494,7 @@ export class CatalogService {
       this.db.many<StorefrontProductRow>(
         "select * from public.storefront_products where status = 'out' and cardinality(images) > 0 order by updated_at desc, id limit 12",
       ),
+      this.topSeries(),
     ]);
     const free = Number(settings?.free_shipping_threshold_cents ?? 7500) / 100;
     // Until staff add their own, the storefront shows these welcome slides and convention list.
@@ -507,12 +509,62 @@ export class CatalogService {
       ranking: ranking.map(publicProduct),
       newInStock: newInStock.map(publicProduct),
       recentlySold: sold.map(publicProduct),
+      // "Shop by series": the series with the most to buy now, each with a photo of its newest product
+      topSeries: series,
       events: events.length ? events : DEFAULT_EVENTS,
       categories,
       // Numbers for the two promo cards beside the hero.
       promos: { closingSoon: promo?.closing_soon ?? 0, maxDiscountPct: promo?.max_discount ?? 0 },
       freeShippingThresholdCents: Math.round(free * 100),
     };
+  }
+
+  /**
+   * The series with the most products a shopper can buy now (at least two, with a photo), most first: the name, how many, and the
+   * newest product's first photo with where the face is in it, for the home page's "Shop by series" tiles.
+   */
+  private async topSeries() {
+    const rows = await this.db.many<{
+      series: string;
+      count: number;
+      product_id: string;
+      image: string;
+      cutout: boolean;
+    }>(
+      `select series, count(*)::int as count,
+              (array_agg(id order by created_at desc, id))[1] as product_id,
+              (array_agg(images[1] order by created_at desc, id))[1] as image,
+              (array_agg(coalesce(images[1] = any(cutout_images), false) order by created_at desc, id))[1] as cutout
+         from public.storefront_products
+        where series is not null and btrim(series) <> '' and status in ('in','low','pre') and cardinality(images) > 0
+        group by series having count(*) >= 2
+        order by count(*) desc, series limit 12`,
+    );
+    const points = rows.length
+      ? await this.db.many<{
+          square_item_id: string;
+          image_url: string;
+          x: number;
+          y: number;
+          zoom: number;
+        }>(
+          'select square_item_id, image_url, x, y, zoom from public.photo_focus where square_item_id = any($1::text[])',
+          [rows.map((r) => r.product_id)],
+        )
+      : [];
+    return rows.map((r) => {
+      const point = points.find(
+        (f) => f.square_item_id === r.product_id && f.image_url === r.image,
+      );
+      return {
+        name: r.series,
+        count: r.count,
+        productId: r.product_id,
+        image: r.image,
+        cutout: r.cutout,
+        focus: point ? { x: point.x, y: point.y, zoom: point.zoom } : null,
+      };
+    });
   }
 
   /** Adds to each banner ad the products whose photos show behind it (`products`; none for an ad with its own photo). */
