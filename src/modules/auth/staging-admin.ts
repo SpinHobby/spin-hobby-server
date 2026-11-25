@@ -1,4 +1,4 @@
-import { timingSafeEqual } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { supabaseUrl } from '../../config/supabase.config.js';
 import {
   stagingAdminLoginEnabled,
@@ -49,4 +49,36 @@ export function secretsMatch(given: string, expected: string) {
   const a = Buffer.from(given);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/* ---------- Quick sign-in on a remembered device ----------
+ * Staging is public, so there is no open "sign in as owner" button: anyone with the address could use it. Instead, a browser that has
+ * signed in once with the staging admin password is given a device key, and from then on signs in with one click (as the owner, or as
+ * a staff account kept for trying the staff view). The key is signed with the staging admin password, so changing
+ * STAGING_ADMIN_PASSWORD forgets every device, and it stops working by itself after DEVICE_KEY_DAYS. */
+
+/** The reserved staff account for quick sign-in (no email is ever sent to it). */
+export const STAGING_STAFF_EMAIL = `quick-staff@${STAGING_ADMIN_DOMAIN}`;
+export const DEVICE_KEY_DAYS = 90;
+export type QuickRole = 'owner' | 'staff';
+
+const sign = (admin: StagingAdmin, expiresAt: number) =>
+  createHmac('sha256', `staging-device:${admin.password}`).update(String(expiresAt)).digest('hex');
+
+/** A device key for a browser that just signed in as the staging admin: "<expiry in ms>.<signature>". */
+export function deviceKey(admin: StagingAdmin, now = Date.now()) {
+  const expiresAt = now + DEVICE_KEY_DAYS * 86_400_000;
+  return {
+    key: `${expiresAt}.${sign(admin, expiresAt)}`,
+    expiresAt: new Date(expiresAt).toISOString(),
+  };
+}
+
+/** True for a key this server signed that has not run out. */
+export function deviceKeyValid(admin: StagingAdmin, key: string, now = Date.now()) {
+  const [expiry, signature, ...rest] = key.split('.');
+  const expiresAt = Number(expiry);
+  if (rest.length || !signature || !Number.isSafeInteger(expiresAt) || expiresAt <= now)
+    return false;
+  return secretsMatch(signature, sign(admin, expiresAt));
 }

@@ -7,6 +7,7 @@ import { EmailCodeDto } from './dto/email-code.dto.js';
 import { EmailCheckService } from './email-check.service.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { LoginDto } from './dto/login.dto.js';
+import { QuickLoginDto } from './dto/quick-login.dto.js';
 import { OauthUrlQuery } from './dto/oauth-url.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { ResetDto } from './dto/reset.dto.js';
@@ -37,6 +38,22 @@ export class AuthController {
   @HttpCode(200)
   login(@Body() dto: LoginDto) {
     return this.signIn.login(dto.email, dto.password);
+  }
+
+  /** Staging only: remembers this browser (signed in as the staging admin) for one-click sign-in. */
+  @Post('staging/device')
+  @Access('owner')
+  @HttpCode(200)
+  stagingDevice(@CurrentUser() user: AppUser) {
+    return this.signIn.stagingDeviceKey(user.email);
+  }
+
+  /** Staging only: one-click sign-in from a remembered device, as the owner or the staff account. */
+  @RateLimit({ limit: 10, windowMs: 60_000 })
+  @Post('staging/quick')
+  @HttpCode(200)
+  stagingQuick(@Body() dto: QuickLoginDto) {
+    return this.signIn.stagingQuickLogin(dto.key, dto.role);
   }
 
   /** Creates a customer account, signs it in and emails a 6-digit code to confirm the address. */

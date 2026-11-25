@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { AppError } from '../../common/errors.js';
+import { AppError, notFound } from '../../common/errors.js';
 import { RateLimiter } from '../../common/guards/rate-limit.guard.js';
 import { SupabaseAuthClient } from '../../integrations/supabase/supabase-auth.client.js';
 import { DevLogin } from './dev-login.service.js';
@@ -7,7 +7,14 @@ import { EmailCheckService } from './email-check.service.js';
 import type { SignupDto } from './dto/signup.dto.js';
 import { SessionService, type Session } from './session.service.js';
 import { StagingAdminLogin } from './staging-admin-login.service.js';
-import { isStagingAdminLogin, stagingAdmin } from './staging-admin.js';
+import {
+  STAGING_ADMIN_DOMAIN,
+  deviceKey,
+  deviceKeyValid,
+  isStagingAdminLogin,
+  stagingAdmin,
+  type QuickRole,
+} from './staging-admin.js';
 
 /** Sign-ups per IP address per hour; keeps bots from mass-creating accounts. */
 const signupLimiter = new RateLimiter();
@@ -56,7 +63,8 @@ export class SignInService {
       signup: password && Boolean(this.supabase.serviceKey()),
       google: Boolean(settings.external?.google),
       discord: Boolean(settings.external?.discord),
-      ...(admin && { username: true }),
+      // `quick`: a browser holding a device key may sign in with one click (POST /auth/staging/quick)
+      ...(admin && { username: true, quick: true }),
     };
   }
 
@@ -69,6 +77,28 @@ export class SignInService {
   }
 
   /**
+   * Staging only: a device key for the browser of someone signed in as the staging admin, so it can sign in with one click from now
+   * on. Not found anywhere else, and for any other account.
+   */
+  stagingDeviceKey(email: string) {
+    const admin = stagingAdmin();
+    if (!admin || email !== admin.email) throw notFound('Page');
+    return { success: true as const, ...deviceKey(admin) };
+  }
+
+  /** Staging only: one-click sign-in from a remembered device, as the owner or the staff account. */
+  stagingQuickLogin(key: string, role: QuickRole): Promise<Session> {
+    const admin = stagingAdmin();
+    if (!admin) throw notFound('Page');
+    if (!deviceKeyValid(admin, key))
+      throw new AppError(
+        'This device is no longer remembered. Sign in with the password once.',
+        401,
+      );
+    return this.stagingAdminLogin.quick(admin, role);
+  }
+
+  /**
    * Creates a customer account, signs it in and emails a 6-digit code to confirm the address. The account can shop at once (Supabase
    * marks it confirmed so it can sign in); the shop's own `email_verified_at` waits for the code.
    */
@@ -77,7 +107,7 @@ export class SignInService {
     if (!local && (!this.supabase.config() || !this.supabase.serviceKey()))
       throw new AppError('Creating accounts is not available right now.', 503);
     // The staging admin's reserved address can't be claimed through sign-up.
-    if (dto.email === stagingAdmin()?.email)
+    if (stagingAdmin() && dto.email.endsWith(`@${STAGING_ADMIN_DOMAIN}`))
       throw new AppError(
         'An account with this email already exists. Sign in instead.',
         409,
