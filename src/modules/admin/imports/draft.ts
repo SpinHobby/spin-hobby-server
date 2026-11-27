@@ -19,8 +19,16 @@ export interface DraftDetails {
   quality: DraftQuality | null;
   /** The app's listing health: a 0-100 score and the top fixes. */
   health: DraftHealth | null;
+  /**
+   * Where the clean product photo came from: `redraw` (drawn by the photo computer's model from the box), `maker` (the maker's own photo,
+   * cut out: real pixels) or `shop` (an established shop's photo of it). Null: not said (older apps), shown as a redraw to be safe.
+   */
+  cleanFrom: CleanFrom | null;
   generator: string | null;
 }
+
+export const CLEAN_FROM = ['redraw', 'maker', 'shop'] as const;
+export type CleanFrom = (typeof CLEAN_FROM)[number];
 
 export interface DraftQuality {
   cutout: number;
@@ -286,6 +294,7 @@ export function parseDraft(raw: unknown): DraftInput {
       suggestedCategory: parseSuggestedCategory(d.newCategory),
       quality: parseQuality(d.quality),
       health: parseHealth(d.health),
+      cleanFrom: CLEAN_FROM.find((c) => c === d.cleanFrom) ?? null,
       generator: text(d.generator, 'generator', 60),
     },
   };
