@@ -64,6 +64,24 @@ describe('composeOnBackground', () => {
     ).toBeLessThan(20);
   });
 
+  it('blends the product into a background: standing low on it, a shadow under it, no outline shadow round it', async () => {
+    const back = await sharp({
+      create: { width: 1000, height: 1000, channels: 3, background: { r: 200, g: 180, b: 150 } },
+    })
+      .png()
+      .toBuffer();
+    const out = await composeOnBackground(await boxCutout(), back, 1000);
+    // the box (840 × 630 inside the padding) is moved down from the middle until its base is 88% down
+    expect((await grey(out, 500, 870))[2]).toBeGreaterThan(150);
+    expect((await grey(out, 500, 220))[2]).toBeLessThan(160);
+    // just under its base: clearly darker than the same background further down
+    const under = (await grey(out, 500, 888))[0];
+    const away = (await grey(out, 500, 995))[0];
+    expect(under).toBeLessThan(away - 25);
+    // beside the box, level with its top: the background as it was (no outline shadow there)
+    expect(Math.abs((await grey(out, 40, 260))[0] - 200)).toBeLessThan(6);
+  });
+
   it('tells a cut-out from a photo with no see-through pixels', async () => {
     expect(await hasTransparency(await boxCutout())).toBe(true);
     expect(
