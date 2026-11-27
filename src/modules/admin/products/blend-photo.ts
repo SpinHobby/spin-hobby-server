@@ -31,6 +31,10 @@ const BAKED_SHADOW_DARK = 12;
 const CAST_LENGTH = 0.22;
 const CAST_SKEW = 0.12;
 const CAST_DARKNESS = 0.3;
+/** The share of the product's height (from its base) that casts that shadow. */
+const CAST_FROM = 0.45;
+/** How far above the lowest point (share of the square) a part still touches the table: more is a raised foot or an arm, with no contact shadow. */
+const TOUCH = 0.025;
 
 /** A Gaussian-like blur of one channel (three box blurs), sigma in pixels. */
 export function blur1(src: Float32Array, w: number, h: number, sigma: number): Float32Array {
@@ -150,7 +154,7 @@ export function blendOnBackground(cut: Rgba, bg: Rgba): Rgba | null {
 
   // where each column of the product meets the table; only columns near the lowest point touch it (an outstretched arm does not)
   const foot = new Int32Array(N).fill(-1);
-  const reach = Math.max(2, Math.round(0.06 * H));
+  const reach = Math.max(2, Math.round(TOUCH * H));
   for (let x = 0; x < N; x++)
     for (let y = H - 1; y >= 0; y--)
       if (A[y * N + x] > 0.5) {
@@ -182,16 +186,27 @@ export function blendOnBackground(cut: Rgba, bg: Rgba): Rgba | null {
   );
   // the cast shadow: the product's outline laid back across the table behind it (light from the front, a little from the left),
   // short and fading with height, blurred more than the contact shadow
+  // only from the lower part of the product, and only above where it stands: a sleeve or a robe held out to the side is up in the
+  // air, and laying its shadow on the table beside it looked like the shadow of a raised foot (Nezuko, 2026-11-27)
   const cast = new Float32Array(n);
   const tall = Math.max(1, bottom - (top + dy)); // the product's height, as placed
-  for (let y = 0; y <= bottom; y++)
-    for (let x = 0; x < N; x++) {
+  let footLeft = N;
+  let footRight = -1;
+  for (let x = 0; x < N; x++)
+    if (foot[x] >= 0) {
+      footLeft = Math.min(footLeft, x);
+      footRight = Math.max(footRight, x);
+    }
+  const margin = Math.round(0.03 * N);
+  const lower = tall * CAST_FROM;
+  for (let y = Math.max(0, Math.round(bottom - lower)); y <= bottom; y++)
+    for (let x = Math.max(0, footLeft - margin); x <= Math.min(N - 1, footRight + margin); x++) {
       if (A[y * N + x] <= 0.5) continue;
       const d = bottom - y;
       const py = Math.round(bottom - d * CAST_LENGTH);
       const px = Math.round(x + d * CAST_SKEW);
       if (px < 0 || px >= N || py < 0) continue;
-      const fade = 1 - d / tall;
+      const fade = (1 - d / lower) ** 1.5;
       const j = py * N + px;
       if (fade > cast[j]) cast[j] = fade;
     }
