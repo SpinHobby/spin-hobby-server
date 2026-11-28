@@ -39,6 +39,19 @@ describe('blendOnBackground', () => {
     expect(out.d[(70 * N + 74) * 4]).toBe(180);
   });
 
+  it('keeps the soft edge of a black product (black hair is not the baked shadow)', () => {
+    const cut = square((x, y) => {
+      if (x > 80 && x < 120 && y > 16 && y < 190) return [5, 5, 5, 255];
+      if (x === 120 && y > 16 && y < 190) return [5, 5, 5, 40];
+      if (x > 124 && x < 130 && y > 16 && y < 190) return [0, 0, 0, 40];
+      return [0, 0, 0, 0];
+    });
+    const out = blendOnBackground(cut, plain())!;
+    const at = (x: number, y: number) => out.d[(y * N + x) * 4];
+    expect(at(120, 100)).toBeLessThan(175); // the edge pixel is kept
+    expect(at(127, 100)).toBe(180); // the shadow further out still goes
+  });
+
   it('gives nothing for a photo with no product in it', () => {
     expect(
       blendOnBackground(

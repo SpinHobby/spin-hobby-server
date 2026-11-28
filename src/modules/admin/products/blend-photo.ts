@@ -78,6 +78,35 @@ function box(
   }
 }
 
+/** A faint black pixel this near (pixels at 2000 px) to the solid dark product is the product's own soft edge (black hair, a black box), not the baked shadow. */
+const DARK_EDGE_REACH = 3;
+/** The brightest a solid product pixel can be and still count as dark. */
+const DARK_PRODUCT = 60;
+
+/** Which pixels are within `r` of a solid, dark product pixel: taking those out as baked shadow thinned black hair and black boxes. */
+function nearDarkProduct(cd: ArrayLike<number>, N: number, H: number, r: number): Uint8Array {
+  const n = N * H;
+  const across = new Uint8Array(n);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < N; x++) {
+      const o = (y * N + x) * 4;
+      if (
+        cd[o + 3] <= 128 ||
+        cd[o] > DARK_PRODUCT ||
+        cd[o + 1] > DARK_PRODUCT ||
+        cd[o + 2] > DARK_PRODUCT
+      )
+        continue;
+      for (let d = Math.max(0, x - r); d <= Math.min(N - 1, x + r); d++) across[y * N + d] = 1;
+    }
+  const near = new Uint8Array(n);
+  for (let y = 0; y < H; y++)
+    for (let x = 0; x < N; x++)
+      if (across[y * N + x])
+        for (let d = Math.max(0, y - r); d <= Math.min(H - 1, y + r); d++) near[d * N + x] = 1;
+  return near;
+}
+
 /** The background's light: its mean colour and how bright it is (0-1). */
 export function lightOf(bg: Rgba): { mean: [number, number, number]; lum: number } {
   const s = [0, 0, 0];
@@ -119,6 +148,7 @@ export function blendOnBackground(cut: Rgba, bg: Rgba): Rgba | null {
   const cd = cut.d;
 
   // the product's see-through-ness, without the baked outline shadow
+  const darkEdge = nearDarkProduct(cd, N, H, Math.max(1, Math.round(DARK_EDGE_REACH * k)));
   const alpha = new Float32Array(n);
   let top = H;
   let bottom = -1;
@@ -129,7 +159,8 @@ export function blendOnBackground(cut: Rgba, bg: Rgba): Rgba | null {
       a <= BAKED_SHADOW_ALPHA &&
       cd[o] <= BAKED_SHADOW_DARK &&
       cd[o + 1] <= BAKED_SHADOW_DARK &&
-      cd[o + 2] <= BAKED_SHADOW_DARK
+      cd[o + 2] <= BAKED_SHADOW_DARK &&
+      !darkEdge[i]
     )
       a = 0;
     alpha[i] = a / 255;
