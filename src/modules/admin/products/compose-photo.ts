@@ -1,6 +1,7 @@
 import sharp, { type OutputInfo, type Sharp } from 'sharp';
 import { AppError } from '../../../common/errors.js';
 import { MAX_PHOTO_SIDE } from '../../cashier/image-processing.js';
+import { blendOnBackground } from './blend-photo.js';
 
 /** The finished photo is a square this many pixels wide: the same as the longest side the shop keeps any photo at (MAX_PHOTO_SIDE), so a
  *  cut-out on the shop background is as sharp as the photo it came from (it was 1600: spin-hobby#110). */
@@ -10,8 +11,9 @@ export const PHOTO_PADDING = 0.08;
 
 /**
  * A product photo made from Gleamshelf's cut-out (the product alone on a transparent background): the product, scaled to fit inside the padding and
- * centred, with a soft shadow below it, on the shop's background (scaled to fill the square, cropped from the centre) or on white. The product's
- * own pixels are never changed: they are only scaled and placed.
+ * centred, with a soft shadow below it, on white; or blended into the shop's background (scaled to fill the square, cropped from the centre) the
+ * way the website shows it (blend-photo.ts: standing low on the table, contact and cast shadows, light gently matched). The product's own pixels
+ * are only scaled, placed and (on a background) gently tinted, never redrawn.
  */
 export async function composeOnBackground(
   cutout: Buffer,
@@ -50,6 +52,8 @@ async function placeCutout(
   const { width, height } = product.info;
   const left = Math.round((size - width) / 2);
   const top = Math.round((size - height) / 2);
+  if (background && !transparent)
+    return blendedOnBackground(product.data, left, top, background, size);
 
   // the shadow: the product's outline, faint and blurred, a little lower (as on Gleamshelf's own studio square)
   const blur = Math.max(2, Math.round(size / 80));
@@ -107,6 +111,47 @@ async function placeCutout(
     { input: product.data, left, top },
   ]);
   return transparent ? placed.png().toBuffer() : placed.jpeg({ quality: 92 }).toBuffer();
+}
+
+/**
+ * The product blended into a background, as the website shows it (blend-photo.ts): standing low on the table with a contact and a cast shadow, its
+ * light matched to the background, no outline shadow.
+ */
+async function blendedOnBackground(
+  product: Buffer,
+  left: number,
+  top: number,
+  background: Buffer,
+  size: number,
+): Promise<Buffer> {
+  const square = await sharp({
+    create: { width: size, height: size, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },
+  })
+    .composite([{ input: product, left, top }])
+    .raw()
+    .toBuffer();
+  let back: Buffer;
+  try {
+    back = await sharp(background)
+      .rotate()
+      .resize(size, size, { fit: 'cover' })
+      .flatten({ background: '#ffffff' })
+      .ensureAlpha()
+      .raw()
+      .toBuffer();
+  } catch {
+    throw new AppError('The background picture could not be read.', 422);
+  }
+  const pixels = (b: Buffer) => ({ w: size, h: size, d: new Uint8ClampedArray(b) });
+  const out = blendOnBackground(pixels(square), pixels(back));
+  if (!out)
+    return sharp(back, { raw: { width: size, height: size, channels: 4 } })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+  return sharp(Buffer.from(out.d.buffer), { raw: { width: size, height: size, channels: 4 } })
+    .removeAlpha()
+    .jpeg({ quality: 92 })
+    .toBuffer();
 }
 
 /** Whether a picture has see-through pixels: a cut-out must (a photo on its white square is not one). */
